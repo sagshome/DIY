@@ -1,9 +1,38 @@
-{% if latest_question_list %}
-    <ul>
-    {% for question in latest_question_list %}
-        <li><a href="/polls/{{ question.id }}/">{{ question.question_text }}</a></li>
-    {% endfor %}
-    </ul>
-{% else %}
-    <p>No polls are available.</p>
-{% endif %}
+{# tutorial/templates/tutorial/people.html #}
+{% load render_table from django_tables2 %}
+<!doctype html>
+<html>
+    <head>
+        <title>List of persons</title>
+    </head>
+    <body>
+    <table>
+    <tr>
+        <td>Name</td>
+        <td>Cost</td>
+        <td>Value</td>
+        <td>Growth</td>
+        <td>Dividends</td>
+        <td>Return</td>
+        <td>% Gain</td>
+    </tr>
+    {% for portfolio in portfolios %}
+    <tr>
+        <td>Portfolio {{portfolio.name}}</td>
+        <td>${{portfolio.cost|floatformat:'2g'}}</td>
+        <td>${{portfolio.value|floatformat:'2g'}}</td>
+        <td>${{portfolio.growth|floatformat:'2g'}}</td>
+        <td>${{portfolio.dividends|floatformat:'2g'}}</td>
+        <td>${{portfolio.returns|floatformat:'2g'}}</td>
+    </tr>
+            {% for equity in portfolio.equities %}
+                <tr>
+        <td>Equity {{equity.key}}</td>
+
+    </tr>
+       {% endfor %}
+{% endfor %}
+    </table>
+    </body>
+</table>
+</html>

@@ -1,0 +1,92 @@
+
+<!doctype html>
+<html>
+    <head>
+        <title>List of persons</title>
+        {% load static %}
+        <link rel="stylesheet" href="/static/css/webui-components-standard.min.css">
+
+        <style>
+            body {background-color: powderblue;}
+            h1   {color: blue;}
+            p    {color: red;}
+            th, td {padding: 10px;}
+
+            .button {
+                 border: none;
+                 border-radius: 12px;
+                 text-align: center;
+                 text-decoration: none;
+                 display: inline-block;
+            }
+            .green {background-color: #4CAF50;} /* Green */
+            .blue {background-color: #008CBA;} /* Blue */
+            .red {background-color: #f44336;} /* Red */
+            .gray {background-color: #e7e7e7; color: black;} /* Gray */
+            .black {background-color: #555555;} /* Black */
+            .yellow {
+                background-color: yellow;
+                color: black} /* Black */
+        </style>
+
+    </head>
+    <body>
+
+        <table>
+            <tr>
+
+                <th>Name</th>
+                <th>Cost</th>
+                <th>Value</th>
+                <th>Growth</th>
+                <th>Dividends</th>
+                <th>Yield</th>
+                <th>% Gain</th>
+                <th>Actions</th>
+            </tr>
+            {% for portfolio in object_list %}
+                <tr>
+                    <td><a href="{% url 'portfolio_details' portfolio.id %}">
+                        <button class="button button-xs button-success">{{portfolio.name}}</button>
+                    </a></td>
+                    <td>${{portfolio.cost|floatformat:'2g'}}</td>
+                    <td>${{portfolio.value|floatformat:'2g'}}</td>
+                    <td>${{portfolio.growth|floatformat:'2g'}}</td>
+                    <td>${{portfolio.dividends|floatformat:'2g'}}</td>
+                    <td>${{portfolio.returns|floatformat:'2g'}}</td>
+                    <td></td>
+                    <td>
+                        <a href="{% url 'portfolio_copy' portfolio.id %}"><button class="button button-xs button-info">Copy</button></a>
+                        <a href="{% url 'portfolio_delete' portfolio.id %}"><button class="button button-xs button-danger">Delete</button></a>
+                        <button id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}") class="button button-xs button-warning">Update</button>
+
+
+                    </td>
+                </tr>
+           {% endfor %}
+        </table>
+        <hr>
+        <a href='/admin/stocks/equity/add/'><button class="button button-xs button-success">Add Equity</button></a>
+        <a href="{% url 'portfolio_add' %}"><button class="button button-xs button-success">New Portfolio</button></a>
+
+    </body>
+    <script>
+        function update(id) {
+            var xhttp = new XMLHttpRequest();
+            var tag_id = "update-" + id
+            xhttp.onreadystatechange = function() {
+              if (this.readyState == 4 && this.status == 200) {
+                setTimeout(function(){
+                  document.getElementById(tag_id).innerHTML = 'Update';
+                }, 2000);
+                window.location.href = window.location.href;
+              } else {
+                document.getElementById(tag_id).innerHTML = 'Loading...';
+              }
+            };
+            xhttp.open("get", "/stocks/portfolio/"+id+"/update/", true);
+            xhttp.setRequestHeader("Content-type", "application/json");
+            xhttp.send();
+        }
+    </script>
+</html>

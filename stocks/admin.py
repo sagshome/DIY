@@ -2,12 +2,12 @@ from django.contrib import admin
 
 # Register your models here.
 
-from .models import Equity, Portfolio, Transaction, EquityValue, EquityDividend
+from .models import Equity, Portfolio, Transaction, EquityValue, EquityEvent
 
 
 class EquityAdmin(admin.ModelAdmin):
     list_display = ("key", "name")
-    fields = ["key", "name"]
+    fields = ["key", "name", "symbol", "equity_type", "region", "currency", "last_updated"]
 
 
 class PortfolioAdmin(admin.ModelAdmin):
@@ -16,7 +16,7 @@ class PortfolioAdmin(admin.ModelAdmin):
 
 class TransactionAdmin(admin.ModelAdmin):
     model = Transaction
-    list_display = ('get_equity', 'get_portfolio', 'value', 'date', 'price', 'quantity', 'buy_action')
+    list_display = ('equity_fk', 'get_portfolio', 'value', 'date', 'price', 'quantity', 'buy_action')
 
     fieldsets = [
         (None, {'fields': ['equity', 'portfolio']}),
@@ -29,20 +29,21 @@ class TransactionAdmin(admin.ModelAdmin):
     get_portfolio.short_description = 'Portfolio'
 
     def get_equity(self, obj):
-        return obj.equity.key
+        return obj.equity
+
     get_equity.short_description = 'Equity'
     get_equity.admin_order_field = 'equity__key'
 
 
-class EquityDividendAdmin(admin.ModelAdmin):
-    list_display = ("equity", "date", "value")
+class EquityEventAdmin(admin.ModelAdmin):
+    list_display = ("equity", "event_type", "date", "value")
 
 
 class EquityCloseAdmin(admin.ModelAdmin):
     list_display = ("equity", "date", "price")
 
 
-admin.site.register(EquityDividend, EquityDividendAdmin)
+admin.site.register(EquityEvent, EquityEventAdmin)
 admin.site.register(EquityValue, EquityCloseAdmin)
 admin.site.register(Equity, EquityAdmin)
 admin.site.register(Portfolio, PortfolioAdmin)

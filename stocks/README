@@ -1,0 +1,25 @@
+How to deal with stock splits.
+
+I noticed that my CIBC stocks split about a year ago.   The way the API records this is via "adjusted dividends".   This
+means that the historic dividends are report as a fraction 1/2 on on a 2x1 split.    Since this is in the past I can,
+ 1) Adjust the original number of stocks to match the split price and leave dividends alone
+ 2) Adjust the historic dividends to match the original number of stocks and then split my my stocks on split day
+
+ If I was already recording this and the stock in the future split,   I would have already recorded original dividends
+ so I would not have the issue of 1 above,  unless I wiped out all the history of dividends.
+
+ M1  Value 100     Dividend 10  Stocks 5 (payout 50 - Value 100)
+ M2  Value 103     Dividend 0   Stocks 5 (payout 0 - Value +3
+ M3  Value 51.5    Dividend 5   Stocks 10   (50) <- split
+ M4  Value 50      Dividend 0
+ M5  Value 51      Dividend 5   Stocks 10 (50)
+
+ If I reimport I would have
+
+ M1  Value 100     Dividend 5   Stocks 5 (25)
+ M2  Value 103     Dividend 0   Stocks 5
+ M3  Value 51.5    Dividend 5   Stocks 5   (50) <- split
+ M4  Value 50      Dividend 0
+ M5  Value 51      Dividend 5   Stocks 10 (50)
+
+ To deal with retro-active I have an event called Adjusted Split,   in the future,  I would hae just Split.
