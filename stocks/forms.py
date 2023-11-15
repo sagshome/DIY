@@ -29,6 +29,7 @@ class TransactionForm(forms.Form):
     """
     Multi entry form
     """
+
     equity = forms.ChoiceField(choices=Equity.choice_list())
     date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date'}))
     price = forms.DecimalField()

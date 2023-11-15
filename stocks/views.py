@@ -7,7 +7,6 @@ from .forms import AddEquityForm, AddPortfolioForm, TransactionForm
 from django.views import View
 from django.views.decorators.http import require_http_methods
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, FormView
-import django_tables2 as tables
 from datetime import datetime
 # Create your views here.
 
