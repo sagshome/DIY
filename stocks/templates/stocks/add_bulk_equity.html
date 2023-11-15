@@ -1,56 +1,20 @@
-﻿<!doctype html>
-<html>
-    <head>
-        <title>Add Equities</title>
-        {% load static %}
-        <link rel="stylesheet" href="/static/css/webui-components-standard.min.css">
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-        {% load django_bootstrap5 %}
-
-        {% bootstrap_css %}
-        {% bootstrap_javascript %}
-
-        <style>
-            body {background-color: green;padding:15px}
-            h1   {color: blue;}
-            p    {color: red;}
-            th, td {padding: 10px;}
-
-            .button {
-                 border: none;
-                 border-radius: 12px;
-                 text-align: center;
-                 text-decoration: none;
-                 display: inline-block;
-            }
-            .bad_text {
-                background-color: white;
-                color: red;
-             }
-            .green {background-color: #4CAF50;} /* Green */
-            .blue {background-color: #008CBA;} /* Blue */
-            .red {background-color: #f44336;} /* Red */
-            .gray {background-color: #e7e7e7; color: black;} /* Gray */
-            .black {background-color: #555555;} /* Black */
-            .yellow {
-                background-color: yellow;
-                color: black} /* Black */
-        </style>
-        <script>
-            $(document).ready(function() {
-                $("#datepicker").datepicker();
-            });
-        </script>
-
-    </head>
-    <body>
-    {# Display django.contrib.messages as Bootstrap alerts #}
-    {% bootstrap_messages %}
+﻿{% extends "base.html" %}
+    {% load django_bootstrap5 %}
+    {% bootstrap_css %}
+    {% bootstrap_javascript %}
+{% block title %}Add Equity to Portfolio{% endblock %}
+{% block scripts %}
+    <script>
+        $(document).ready(function() {
+            $("#datepicker").datepicker();
+        });
+    </script>
+{% endblock scripts %}
+{% block content %}
     <h1>Add Transaction Portfolio: {{ portfolio }}</h1>
         <form method="post">{% csrf_token %}
             {% bootstrap_form form %}
             <input type="submit" class="btn btn-secondary" name="submit-type" value="Add Another">
             <input type="submit" class="btn btn-primary" name="submit-type" value="Submit">
         </form>
-    </body>
-</html>
+{% endblock content %}

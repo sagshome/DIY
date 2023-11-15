@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{% block title %}
+      DIY Stocks Analysis{% endblock %}
+    </title>
+      {% load static %}
+      <link rel="stylesheet" href="/static/css/webui-components-standard.min.css">
+      {% load django_bootstrap5 %}
+      {% bootstrap_css %}
+      {% bootstrap_javascript %}
+    <style>
+        body {background-color: powderblue;}
+        h1   {color: blue;}
+        th, td {padding: 10px;}
+        .button {
+             border: none;
+             border-radius: 12px;
+             text-align: center;
+             text-decoration: none;
+             display: inline-block;
+        }
+        .bad-text {color: red;}
+        .green {background-color: #4CAF50;} /* Green */
+        .blue {background-color: #008CBA;} /* Blue */
+        .red {background-color: #f44336;} /* Red */
+        .gray {background-color: #e7e7e7; color: black;} /* Gray */
+        .black {background-color: #555555;} /* Black */
+        .yellow {
+            background-color: yellow;
+            color: black} /* Black */
+      </style>
+  </head>
+  <body>
+    {% bootstrap_messages %}
+    {% block content %}
+    {% endblock content %}
+  </body>
+</html>

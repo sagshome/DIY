@@ -242,17 +242,19 @@ def portfolio_equity_details(request, pk, key):
     data = []
     for key in list_keys:
         extra_data = ''
-        if key in summary.xas:
-            if summary.xas[key][1] < 0:
-                extra_data = f'Bought {summary.xas[key][0]} shares at ${summary.xas[key][2] * -1}'
-            elif summary.xas[key][1] > 0:
-                extra_data = f'Sold {summary.xas[key][0]} shares at ${summary.xas[key][2]}'
+        if summary.history[key].change != 0:
+            if summary.history[key].change < 0:
+                extra_data = f'Sold {summary.history[key].change} shares at ${summary.history[key].xa_price}'
             else:
-                extra_data = f'Received {summary.xas[key][0]} shares due to a stock split'
-        data.append([key, summary.history[key][0], summary.history[key][1], summary.history[key][3] * -1,
-                     summary.history[key][2], summary.history[key][4], summary.history[key][6], summary.history[key][5], extra_data])
+                if summary.history[key].xa_price == 0:
+                    extra_data = f'Received {summary.history[key].change} shares due to a stock split'
+                else:
+                    extra_data = f'Bought {summary.history[key].change} shares at ${summary.history[key].xa_price}'
+        data.append([key, summary.history[key].shares, summary.history[key].value, summary.history[key].cost,
+                     summary.history[key].dividends, summary.history[key].returns, summary.history[key].dividend,
+                     summary.history[key].price, extra_data])
 
-    return render(request, 'stocks/portfolio_equity_detail.html', {'week_list': data})
+    return render(request, 'stocks/portfolio_equity_detail.html', {'context': data})
 
 
 # def add_equity_to_portfolio(request, pk):

@@ -1,94 +1,60 @@
-<!doctype html>
-<html>
-    <head>
-        <title>Portfolio Details</title>
-            {% load static %}
-            <link rel="stylesheet" href="/static/css/webui-components-standard.min.css">
-            <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-
-        <style>
-            body {background-color: powderblue;}
-            h1   {color: blue;}
-            p    {color: red;}
-            th, td {padding: 10px;}
-
-            .button {
-                 border: none;
-                 border-radius: 12px;
-                 text-align: center;
-                 text-decoration: none;
-                 display: inline-block;
-            }
-            .bad_text {
-                background-color: white;
-                color: red;
-             }
-            .green {background-color: #4CAF50;} /* Green */
-            .blue {background-color: #008CBA;} /* Blue */
-            .red {background-color: #f44336;} /* Red */
-            .gray {background-color: #e7e7e7; color: black;} /* Gray */
-            .black {background-color: #555555;} /* Black */
-            .yellow {
-                background-color: yellow;
-                color: black} /* Black */
-        </style>
-    </head>
-    <body>
-        <h1>Portfolio Details for {{object}}</h1>
-        <table>
+{% extends "base.html" %}
+{% block title %}Portfolio Details{% endblock %}
+{% block content %}
+    <h1>Portfolio Details for {{object}}</h1>
+    <table>
+        <tr>
+            <th>Equity</th>
+            <th>Shares</th>
+            <th>Value</th>
+            <th>Dividends</th>
+            <th>Cost</th>
+            <th>Yield</th>
+            <th>% Gain</th>
+            <th>Actions</th>
+        </tr>
+        {% for equity in equities %}
             <tr>
-                <th>Name</th>
-                <th>Shares</th>
-                <th>Value</th>
-                <th>Dividends</th>
-                <th>Cost</th>
-                <th>Yield</th>
-                <th>% Gain</th>
-                <th>Actions</th>
+                <td><a href="{% url 'portfolio_equity_details' equity.portfolio.id equity.equity %}">{{equity.equity.symbol}}</a></td>
+                <td>{{equity.shares}}</td>
+                <td>${{equity.value|floatformat:'2g'}}</td>
+                <td>${{equity.dividends|floatformat:'2g'}}</td>
+                <td>${{equity.cost|floatformat:'2g'}}</td>
+                <td>${{equity.returns|floatformat:'2g'}}</td>
+                <td></td>
+                <td>
+                    <a href="{% url 'portfolio_equity_sell' equity.portfolio.id equity.equity %}">
+                            <button class="button button-xs button-success">Sold</button></a>
+                    <button id="update-{{equity.equity}}" onclick=update("{{equity.equity}}")
+                            class="button button-xs button-warning">Update</button>
+
+                </td>
             </tr>
-            {% for equity in equities %}
-                <tr>
-                    <td><a href="{% url 'portfolio_equity_details' equity.portfolio.id equity.equity %}">{{equity.equity.symbol}}</a></td>
-                    <td>{{equity.shares}}</td>
-                    <td>${{equity.value|floatformat:'2g'}}</td>
-                    <td>${{equity.dividends|floatformat:'2g'}}</td>
-                    <td>${{equity.cost|floatformat:'2g'}}</td>
-                    <td>${{equity.returns|floatformat:'2g'}}</td>
-                    <td></td>
-                    <td>
-                        <a href="{% url 'portfolio_equity_sell' equity.portfolio.id equity.equity %}">
-                        <button class="button button-xs button-success">sell</button></a>
-                        <button id="update-{{equity.equity}}" onclick=update("{{equity.equity}}")
-                                class="button button-xs button-warning">update</button>
+       {% endfor %}
+    </table>
+    <hr>
+    To purchase new equities select
+    <a href="{% url 'portfolio_buy' object.id %}"><button class="button button-xs button-success">Buy</button></a>
 
-                    </td>
-                </tr>
-           {% endfor %}
-        </table>
-        <hr>
-        To purchase new equities select
-        <a href="{% url 'portfolio_buy' object.id %}"><button class="button button-xs button-success">Buy</button></a>
-        button
-        <script>
-            function update(id) {
-                var xhttp = new XMLHttpRequest();
-                    var tag_id = "update-" + id
-                    var tag_id = "update-" + id
-                    xhttp.onreadystatechange = function() {
-                      if (this.readyState == 4 && this.status == 200) {
-                        setTimeout(function(){
-                          document.getElementById(tag_id).innerHTML = 'Update';
-                        }, 2000);
-                        window.location.href = window.location.href;
-                      } else {
-                        document.getElementById(tag_id).innerHTML = 'Loading...';
-                      }
-                    };
+    <script>
+        function update(id) {
+            var xhttp = new XMLHttpRequest();
+                var tag_id = "update-" + id
+                var tag_id = "update-" + id
+                xhttp.onreadystatechange = function() {
+                  if (this.readyState == 4 && this.status == 200) {
+                    setTimeout(function(){
+                      document.getElementById(tag_id).innerHTML = 'Update';
+                    }, 2000);
+                    window.location.href = window.location.href;
+                  } else {
+                    document.getElementById(tag_id).innerHTML = 'Loading...';
+                  }
+                };
 
-                xhttp.open("get", "/stocks/equity/"+id+"/update/", true);
-                xhttp.setRequestHeader("Content-type", "application/json");
-                xhttp.send();
-            }
-        </script>
-    </body>
-</html>
+            xhttp.open("get", "/stocks/equity/"+id+"/update/", true);
+            xhttp.setRequestHeader("Content-type", "application/json");
+            xhttp.send();
+        }
+    </script>
+{% endblock content %}
