@@ -1,36 +1,6 @@
-
-<!doctype html>
-<html>
-    <head>
-        <title>List of persons</title>
-        {% load static %}
-        <link rel="stylesheet" href="/static/css/webui-components-standard.min.css">
-
-        <style>
-            body {background-color: powderblue;}
-            h1   {color: blue;}
-            p    {color: red;}
-            th, td {padding: 10px;}
-
-            .button {
-                 border: none;
-                 border-radius: 12px;
-                 text-align: center;
-                 text-decoration: none;
-                 display: inline-block;
-            }
-            .green {background-color: #4CAF50;} /* Green */
-            .blue {background-color: #008CBA;} /* Blue */
-            .red {background-color: #f44336;} /* Red */
-            .gray {background-color: #e7e7e7; color: black;} /* Gray */
-            .black {background-color: #555555;} /* Black */
-            .yellow {
-                background-color: yellow;
-                color: black} /* Black */
-        </style>
-
-    </head>
-    <body>
+{% extends "base.html" %}
+{% block title %}Portfolio List{% endblock %}
+{% block content %}
 
         <table>
             <tr>
@@ -54,7 +24,7 @@
                     <td>${{portfolio.growth|floatformat:'2g'}}</td>
                     <td>${{portfolio.dividends|floatformat:'2g'}}</td>
                     <td>${{portfolio.returns|floatformat:'2g'}}</td>
-                    <td></td>
+                    <td>{{portfolio.gain|floatformat:'1g'}}%</td>
                     <td>
                         <a href="{% url 'portfolio_copy' portfolio.id %}"><button class="button button-xs button-info">Copy</button></a>
                         <a href="{% url 'portfolio_delete' portfolio.id %}"><button class="button button-xs button-danger">Delete</button></a>
@@ -89,4 +59,4 @@
             xhttp.send();
         }
     </script>
-</html>
+{% endblock content %}

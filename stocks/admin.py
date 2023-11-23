@@ -19,7 +19,7 @@ class TransactionAdmin(admin.ModelAdmin):
     list_display = ('equity_fk', 'get_portfolio', 'value', 'date', 'price', 'quantity', 'buy_action')
 
     fieldsets = [
-        (None, {'fields': ['equity', 'portfolio']}),
+        (None, {'fields': ['equity', 'equity_fk', 'portfolio']}),
         ('Purchase', {'fields': ['date', 'price', 'quantity', 'buy_action']}),
     ]
 

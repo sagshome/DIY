@@ -1,14 +1,11 @@
-from django.forms import formset_factory
-from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
+from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
-from .models import Equity, Portfolio, Transaction, EquitySummary
-from .forms import AddEquityForm, AddPortfolioForm, TransactionForm
-from django.views import View
 from django.views.decorators.http import require_http_methods
-from django.views.generic import ListView, DetailView, CreateView, DeleteView, FormView
-from datetime import datetime
-# Create your views here.
+from django.views.generic import ListView, DetailView, CreateView, DeleteView
+
+from .models import Equity, Portfolio, Transaction
+from .forms import AddEquityForm, TransactionForm
 
 
 @require_http_methods(['GET'])
@@ -24,8 +21,6 @@ def search(request):
 
     if not region:
         region = 'United States'
-
-    print(f'String is:{string} and Region is:{region}')
 
     response = Equity.lookup(string)
     if response:
@@ -65,31 +60,13 @@ class PortfolioDetailView(DetailView):
         :param kwargs:
         :return:
         """
-        print(kwargs)
         context = super().get_context_data(**kwargs)
-        print(context)
-
-        e_list = list()
-        for equity in context['portfolio'].equities:
-            e_list.append(EquitySummary(context['portfolio'], equity))
-        context['equities'] = e_list
+        p = context['portfolio']
+        equity_data = dict()
+        for equity in p.equities:
+            equity_data[equity.key] = p.data[equity.key].current_data
+        context['equities'] = equity_data
         return context
-
-
-def portfolio_add(request):
-
-    if request.method == 'POST':
-        form = AddPortfolioForm(request.POST)
-        if form.is_valid():
-            new_portfolio = Portfolio.objects.create(name=form.cleaned_data['name'])
-            return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': new_portfolio.id}))
-    else:  # Initial get
-        form = AddPortfolioForm(initial={'portfolio_name': 'New Portfolio'})
-
-    context = {
-        'form': form,
-    }
-    return render(request, 'stocks/add_portfolio.html', context)
 
 
 def portfolio_update(request, pk):
@@ -142,23 +119,6 @@ class PortfolioCopy(CreateView):
         return reverse('portfolio_details', kwargs={'pk': self.object.id})
 
 
-class PortfolioBuy(CreateView):
-    model = Transaction
-    template_name = "stocks/add_bulk_equity.html"
-    fields = ['equity', 'date', 'quantity', 'price']
-
-    def get_initial(self):
-        return {'date': datetime.now().date(), 'price': 1, 'quantity': 1}
-
-    def form_valid(self, form):
-        transaction = form.save(commit=False)
-        transaction.portfolio_id = self.kwargs['pk']
-        transaction.equity_fk = Equity.objects.get(key=transaction.equity)
-        transaction.save()
-
-        return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': self.kwargs['pk']}))
-
-
 def portfolio_buy(request, pk):
     portfolio = get_object_or_404(Portfolio, pk=pk)
     print(request.__dict__, pk)
@@ -189,27 +149,21 @@ def portfolio_buy(request, pk):
     return render(request, 'stocks/add_bulk_equity.html', context)
 
 
-def portfolio_copy(request, pk):
-    original = get_object_or_404(Portfolio, pk=pk)
-    print(request.__dict__, pk)
-
-    if request.method == 'POST':
-        form = AddPortfolioForm(request.POST)
-        if form.is_valid():
-            new_portfolio = Portfolio.objects.create(name=form.cleaned_data['portfolio_name'])
-            for t in Transaction.objects.filter(portfolio=original):
-                Transaction.objects.create(portfolio=new_portfolio, equity_fk=t.equity, equity=t.equity, date=t.date, price=t.price,
-                                           quantity=t.quantity, buy_action=t.buy_action)
-
-            return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': new_portfolio.id}))
-    else:  # Initial get
-        form = AddPortfolioForm(initial={'portfolio_name': f'{original.name}_copy'})
-
-    context = {
-        'form': form,
-        'portfolio': original,
-    }
-    return render(request, 'stocks/add_portfolio.html', context)
+def portfolio_compare(request, pk, green_grass, drip):
+    portfolio = get_object_or_404(Portfolio, pk=pk)
+    # for equity in portfolio.equities:
+    #
+    #
+    # if value == 'GIC':
+    #     pass  # not implemented
+    # elif value == 'Inflation':
+    #     pass  # not implemented
+    # else:
+    #     try:
+    #         equity = Equity.objects.get(key=value)
+    #     except Equity.DoesNotExist:
+    #         equity = Equity.objects.create(key=value)
+    #     transactions = TransactionHistory(portfolio=portfolio
 
 
 def equity_update(request,  key):
@@ -235,62 +189,30 @@ def portfolio_equity_details(request, pk, key):
     """
     portfolio = get_object_or_404(Portfolio, pk=pk)
     equity = get_object_or_404(Equity, key=key)
-    summary = EquitySummary(portfolio, equity)
-    list_keys = sorted(summary.history, reverse=True)
+    #summary = EquitySummary(portfolio, equity)
+    #list_keys = sorted(summary.history, reverse=True)
 
     data = []
-    for key in list_keys:
+    equity_data = portfolio.data[equity.key].data
+    for key in sorted(equity_data.keys()):
+        element = equity_data[key]
         extra_data = ''
-        if summary.history[key].change != 0:
-            if summary.history[key].change < 0:
-                extra_data = f'Sold {summary.history[key].change} shares at ${summary.history[key].xa_price}'
+        if element.change != 0:
+            if element.change < 0:
+                extra_data = f'Sold {element.change} shares at ${element.xa_price}'
             else:
-                if summary.history[key].xa_price == 0:
-                    extra_data = f'Received {summary.history[key].change} shares due to a stock split'
+                if element.xa_price == 0:
+                    extra_data = f'Received {element.change} shares due to a stock split'
                 else:
-                    extra_data = f'Bought {summary.history[key].change} shares at ${summary.history[key].xa_price}'
-        data.append([key, summary.history[key].shares, summary.history[key].value, summary.history[key].cost,
-                     summary.history[key].dividends, summary.history[key].returns, summary.history[key].dividend,
-                     summary.history[key].price, extra_data])
+                    extra_data = f'Bought {element.change} shares at ${element.xa_price}'
+
+        data.append([key, element.shares, element.value, element.cost,
+                     element.dividends, element.returns, element.dividend,
+                     element.price, extra_data])
 
     return render(request, 'stocks/portfolio_equity_detail.html', {'context': data})
 
 
-# def add_equity_to_portfolio(request, pk):
-#     portfolio = get_object_or_404(Portfolio, pk=pk)
-#     if request.method == 'POST':
-#         if form.is_valid():
-#             for form in formset:
-#                 new = form.save(commit=False)
-#                 new.portfolio = portfolio
-#                 new.equity_fk = Equity.objects.get(key=new.equity)
-#                 new.save()
-#             return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': portfolio.id}))
-#
-#     else:
-#         formset = transaction_form_set
-#     return render(request, 'stocks/add_bulk_equity.html', {'formset': formset,
-#                                                            'portfolio': portfolio,
-#                                                            'keys': formset.form.base_fields.keys()})
-
-
-    # def add_equity(request, pk):
-    #     if request.method == 'POST':
-    #         form = AddEquityForm(request.POST)
-    #         if form.is_valid():
-    #             symbol = form.cleaned_data['symbol']
-    #             equity = Equity.objects.create(name=form.cleaned_data['key'])
-    #             return HttpResponseRedirect(reverse('portfolio_list'))
-    #     else:  # Initial get
-    #         form = AddEquityForm()
-    #
-    #     context = {
-    #         'form': form,
-    #         'symbol_list': {}
-    #     }
-    #     return render(request, 'stocks/add_equity.html', context)
-
-#
 def add_equity(request):
     symbol_list = {}
     if request.method == 'POST':
@@ -306,32 +228,3 @@ def add_equity(request):
         'symbol_list': symbol_list
     }
     return render(request, 'stocks/add_equity.html', context)
-
-
-# class TransactionFormView(CreateView):
-#     model = Transaction
-#     template_name = 'stocks/add_bulk_equity.html'
-#     form_class = TransactionForm
-#
-#     def get_success_url(self):
-#         return reverse('portfolio_details', kwargs={'pk': self.kwargs['pk']})
-#
-#     def get_context_data(self, **kwargs):
-#         context = super().get_context_data(**kwargs)
-#         if self.request.POST:
-#             context['new_player'] = TransactionFormSet(self.request.POST)
-#         else:
-#             context['new_player'] = TransactionFormSet()
-#         return context
-#
-#     def form_valid(self, form):
-#         context = self.get_context_data()
-#         new_player_form = context['new_player']
-#         if new_player_form.is_valid():
-#             self.object = form.save()
-#             new_player_form.instance = self.object
-#             new_player_form.save()
-#             # Additional logic if needed
-#             return super().form_valid(form)
-#         else:
-#             return self.render_to_response(self.get_context_data(form=form))

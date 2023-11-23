@@ -1,33 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Portfolio Details{% endblock %}
+{% load my_tags %}
 {% block content %}
     <h1>Portfolio Details for {{object}}</h1>
     <table>
         <tr>
             <th>Equity</th>
             <th>Shares</th>
-            <th>Value</th>
-            <th>Dividends</th>
             <th>Cost</th>
+            <th>Value</th>
+            <th>Growth</th>
+            <th>Dividends</th>
             <th>Yield</th>
             <th>% Gain</th>
             <th>Actions</th>
         </tr>
-        {% for equity in equities %}
-            <tr>
-                <td><a href="{% url 'portfolio_equity_details' equity.portfolio.id equity.equity %}">{{equity.equity.symbol}}</a></td>
-                <td>{{equity.shares}}</td>
-                <td>${{equity.value|floatformat:'2g'}}</td>
-                <td>${{equity.dividends|floatformat:'2g'}}</td>
-                <td>${{equity.cost|floatformat:'2g'}}</td>
-                <td>${{equity.returns|floatformat:'2g'}}</td>
-                <td></td>
-                <td>
-                    <a href="{% url 'portfolio_equity_sell' equity.portfolio.id equity.equity %}">
-                            <button class="button button-xs button-success">Sold</button></a>
-                    <button id="update-{{equity.equity}}" onclick=update("{{equity.equity}}")
-                            class="button button-xs button-warning">Update</button>
 
+        {% for e in portfolio.equity_keys %}
+            <tr>
+                <td><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
+                <td>{% equity_value portfolio e "shares" "{:.1f}" %}</td>
+                <td>${% equity_value portfolio e "cost" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "value" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "growth" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "dividends" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "returns" "{:.0f}" %}</td>
+                <td>{% equity_value portfolio e "gain" "{:.1f}" %}%</td>
+                <td>
+                   <a href="{% url 'portfolio_equity_sell' portfolio.id e %}">
+                            <button class="button button-xs button-success">Sold</button></a>
+                    <button id="update-{{equity.key}}" onclick=update("{{e}}")
+                            class="button button-xs button-warning">Update</button>
                 </td>
             </tr>
        {% endfor %}
