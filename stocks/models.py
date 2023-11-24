@@ -1,4 +1,6 @@
 import copy
+import numpy as np
+import pandas as pd
 import platform
 import requests
 import tempfile
@@ -49,17 +51,8 @@ def normalize_date(this_date: date | datetime) -> datetime.date:
     return datetime(year, month, 1).date()
 
 
-def previous_date(this_date: datetime.date) -> datetime.date:
-    if this_date.day == 1:
-        return this_date
-
-    if this_date.month == 1:
-        year = this_date.year - 1
-        month = 12
-    else:
-        year = this_date.year
-        month = this_date.month - 1
-    return datetime(year, month, 1).date()
+def today() -> datetime.date:
+    return normalize_date(datetime.today().date())
 
 
 def tempdir() -> Path:
@@ -411,6 +404,18 @@ class Portfolio(models.Model):
     """
     Will need to be unique based on future user attribute
     """
+    DataColumns = ['Date',   # The date of this record
+                   'Equity',   # The equity (key) for this entry
+                   'Shares',   # The number of shares (on this date)
+                   'Cost',  # The cost (as of this date)
+                   'Value',   # The value (if you sold on this date)
+                   'Growth',  # Net gain (as of this day)
+                   'Dividend',   # The dividend per share issued on this date
+                   'TotalDividends',   #  The accumulated dividends as of this date
+                   'Yield',  # Total Dividends + Current Value - Cost as of this date
+                   'Gain',  # The percent gain (Yield - Cost/Cost) * 100 on this date
+                   ]
+
     name = models.CharField(max_length=128, unique=True, primary_key=False,
                             help_text='Enter a unique name for this portfolio')
 
@@ -420,6 +425,35 @@ class Portfolio(models.Model):
     def get_absolute_url(self):
         return reverse('portfolio_details', kwargs={'pk': self.pk})
 
+    @cached_property
+    def pd(self) -> pd:
+        new = pd.DataFrame(columns=self.DataColumns)
+        print ('Created a new Dataframe')
+        # new.loc[len(new.index)] = ['eeee', 'eeee', 1, 2, 3,4,5]
+        # new.loc[2,'Date'] = '2018-10-18'
+        # new.loc[(new['Equity'] == 'eeee') & (new['Date'] == '2018-10-18')]
+        # price: float, key: str, dividend: float = 0, change: float = 0, xa_price: float = 0)
+        # new = pp.loc[pp['Date'] == datetime(2023, 12, 1).date()]
+        for e in self.equities:
+            first = sorted(self.transactions[e.key].keys())[0]
+            values = EquityValue.objects.filter(date__gte=first, equity=e).order_by('date')
+            dividends = dict(EquityEvent.objects.filter(date__gte=first, event_type='Dividend',
+                                                        equity=e).values_list('date', 'value'))
+            total_dividends = shares = cost = 0
+
+            for value in values:  # This is over every month you owned this equity.
+                dividend = dividends[value.date] if value.date in dividends else 0
+                if value.date in self.transactions[e.key]:
+                    xa = self.transactions[e.key][value.date]
+                    shares += xa.quantity
+                    cost += (xa.quantity * xa.price)
+                cpv = value.price * shares
+                growth = cpv - cost
+                total_dividends += shares * dividend
+                yld = cpv + total_dividends - cost
+                gain = (cpv + total_dividends - cost) / cost * 100
+                new.loc[len(new.index)] = [value.date, e.key, shares, cost, cpv, growth, dividend, total_dividends, yld, gain]
+        return new
 
     @property
     def equities(self) -> List[Equity]:
@@ -427,10 +461,7 @@ class Portfolio(models.Model):
 
     @property
     def equity_keys(self):
-        result = []
-        for equity in self.equities:
-            result.append(equity.key)
-        return result
+        return sorted(self.pd['Equity'].unique())
 
     @cached_property
     def current_data(self) -> Dict:
@@ -438,7 +469,6 @@ class Portfolio(models.Model):
         for key in self.data:
             result[key] = self.data[key].current_data
         return result
-
 
     @cached_property
     def transactions(self) -> Dict[str, Dict[date, TransactionSummary]]:
@@ -471,38 +501,27 @@ class Portfolio(models.Model):
 
     @property
     def cost(self) -> float:
-        result = 0
-        for equity in self.current_data:
-            result += self.current_data[equity].cost
-        return result
+        return self.pd[self.pd['Date'] == today()]['Cost'].sum()
 
     @property
     def value(self) -> float:
-        result = 0
-        for equity in self.current_data:
-            result += self.current_data[equity].value
-        return result
+        return self.pd[self.pd['Date'] == today()]['Value'].sum()
 
     @property
     def dividends(self) -> float:
-        result = 0
-        for equity in self.current_data:
-            result += self.current_data[equity].dividends
-        return result
+        return self.pd[self.pd['Date'] == today()]['TotalDividends'].sum()
 
     @property
-    def returns(self) -> float:
-        return self.value + self.dividends - self.cost
+    def ylds(self) -> float:
+        return self.pd[self.pd['Date'] == today()]['Yield'].sum()
 
     @property
     def gain(self) -> float:
         return (self.value + self.dividends - self.cost) / self.cost * 100
 
-
     @property
     def growth(self) -> float:
         return self.value - self.cost
-
 
     def update(self):
         """

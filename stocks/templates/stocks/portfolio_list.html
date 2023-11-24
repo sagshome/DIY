@@ -23,7 +23,7 @@
                     <td>${{portfolio.value|floatformat:'2g'}}</td>
                     <td>${{portfolio.growth|floatformat:'2g'}}</td>
                     <td>${{portfolio.dividends|floatformat:'2g'}}</td>
-                    <td>${{portfolio.returns|floatformat:'2g'}}</td>
+                    <td>${{portfolio.ylds|floatformat:'2g'}}</td>
                     <td>{{portfolio.gain|floatformat:'1g'}}%</td>
                     <td>
                         <a href="{% url 'portfolio_copy' portfolio.id %}"><button class="button button-xs button-info">Copy</button></a>

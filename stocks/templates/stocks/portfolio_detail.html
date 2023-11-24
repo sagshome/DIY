@@ -19,13 +19,13 @@
         {% for e in portfolio.equity_keys %}
             <tr>
                 <td><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
-                <td>{% equity_value portfolio e "shares" "{:.1f}" %}</td>
-                <td>${% equity_value portfolio e "cost" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "value" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "growth" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "dividends" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "returns" "{:.0f}" %}</td>
-                <td>{% equity_value portfolio e "gain" "{:.1f}" %}%</td>
+                <td>{% equity_value portfolio e "Shares" "{:.1f}" %}</td>
+                <td>${% equity_value portfolio e "Cost" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "Growth" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "Yield" "{:.0f}" %}</td>
+                <td>{% equity_value portfolio e "Gain" "{:.1f}" %}%</td>
                 <td>
                    <a href="{% url 'portfolio_equity_sell' portfolio.id e %}">
                             <button class="button button-xs button-success">Sold</button></a>

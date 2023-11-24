@@ -189,29 +189,24 @@ def portfolio_equity_details(request, pk, key):
     """
     portfolio = get_object_or_404(Portfolio, pk=pk)
     equity = get_object_or_404(Equity, key=key)
-    #summary = EquitySummary(portfolio, equity)
-    #list_keys = sorted(summary.history, reverse=True)
-
     data = []
-    equity_data = portfolio.data[equity.key].data
-    for key in sorted(equity_data.keys()):
-        element = equity_data[key]
+    for element in portfolio.pd.loc[portfolio.pd['Equity'] == equity.key].to_records():
         extra_data = ''
-        if element.change != 0:
-            if element.change < 0:
-                extra_data = f'Sold {element.change} shares at ${element.xa_price}'
+        if element['Date'] in portfolio.transactions[equity.key]:
+            xa = portfolio.transactions[equity.key][element['Date']]
+            if xa.quantity < 0:
+                extra_data = f'Sold {xa.quantity} shares at ${xa.price}'
             else:
-                if element.xa_price == 0:
-                    extra_data = f'Received {element.change} shares due to a stock split'
+                if xa.price == 0:
+                    extra_data = f'Received {xa.quantity} shares due to a stock split'
                 else:
-                    extra_data = f'Bought {element.change} shares at ${element.xa_price}'
+                    extra_data = f'Bought {xa.quantity} shares at ${xa.price}'
 
-        data.append([key, element.shares, element.value, element.cost,
-                     element.dividends, element.returns, element.dividend,
-                     element.price, extra_data])
-
+        data.append([element['Date'], element['Shares'], element['Value'], element['Cost'],
+                     element['TotalDividends'], element['Yield'], element['Dividend'],
+                     element['Value'] / element['Shares'], extra_data])
+        data.reverse()
     return render(request, 'stocks/portfolio_equity_detail.html', {'context': data})
-
 
 def add_equity(request):
     symbol_list = {}
