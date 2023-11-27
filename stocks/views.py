@@ -1,8 +1,12 @@
+import plotly.express as px
+import plotly.io as pio
+
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 from django.views.generic import ListView, DetailView, CreateView, DeleteView
+
 
 from .models import Equity, Portfolio, Transaction
 from .forms import AddEquityForm, TransactionForm
@@ -186,10 +190,38 @@ def portfolio_equity_details(request, pk, key):
     :param pk:
     :param key:
     :return:
+
+    table = pd.pivot_table(p.pd, values=['Cost', 'Value', 'TotalDividends'], index='Date', aggfunc='sum')
+
+
+>>> df2 = p.pd.loc[:, ['Date', 'Value', 'Equity']]
+>>> pt2 = pd.pivot_table(df2, values='Value', index='Date', columns='Equity', aggfunc='sum')
+>>> pt2.reset_index(inplace=True)
+>>> fig2 = px.line(pt2, x='Date', y=['BCE.TRT', 'BMO.TRT', 'CM.TRT',  'CU.TO', 'EMA.TO','ENB.TO', 'MFC.TRT', 'POW.TRT'], title='FooBar')
+>>> fig2.show()Opening in existing browser session.
+>>> fig2.show()
+
+    import plotly.express as px
+import plotly.io as pio
+
+def my_view(request):
+    fig = px.scatter(x=[1, 2, 3], y=[4, 5, 6])
+    chart_html = pio.to_html(fig, full_html=False)
+    context = {'chart_html': chart_html}
+    return render(request, 'my_template.html', context)
+
+<div>
+    {{ chart_html|safe }}
+</div>
+
     """
     portfolio = get_object_or_404(Portfolio, pk=pk)
     equity = get_object_or_404(Equity, key=key)
+    #summary = EquitySummary(portfolio, equity)
+    #list_keys = sorted(summary.history, reverse=True)
     data = []
+    chart_html = '<p>No chart data available</p>'
+
     for element in portfolio.pd.loc[portfolio.pd['Equity'] == equity.key].to_records():
         extra_data = ''
         if element['Date'] in portfolio.transactions[equity.key]:
@@ -206,7 +238,17 @@ def portfolio_equity_details(request, pk, key):
                      element['TotalDividends'], element['Yield'], element['Dividend'],
                      element['Value'] / element['Shares'], extra_data])
         data.reverse()
-    return render(request, 'stocks/portfolio_equity_detail.html', {'context': data})
+
+        new = portfolio.pd.loc[portfolio.pd['Equity'] == equity.key]
+        new2 = new.loc[:, ['Date', 'Cost', 'Value', 'TotalDividends']]
+        new2.set_index('Date', inplace=True)
+
+        # Create a line chart
+        fig = px.line(new2, title=f'{equity}: Cost, Value, and Yield Over Time')
+        chart_html = pio.to_html(fig, full_html=False)
+    return render(request, 'stocks/portfolio_equity_detail.html',
+                  {'context': data, 'chart': chart_html})
+
 
 def add_equity(request):
     symbol_list = {}

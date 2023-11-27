@@ -434,6 +434,20 @@ class Portfolio(models.Model):
         # new.loc[(new['Equity'] == 'eeee') & (new['Date'] == '2018-10-18')]
         # price: float, key: str, dividend: float = 0, change: float = 0, xa_price: float = 0)
         # new = pp.loc[pp['Date'] == datetime(2023, 12, 1).date()]
+        '''
+import plotly.express as px
+p = Portfolio.objects.all()[0]
+new = p.pd.loc[p.pd['Equity'] == 'POW.TRT']
+new2 = new.loc[:, ['Date', 'Cost', 'Value', 'TotalDividends']]
+new2.set_index('Date', inplace=True)
+
+# Create a line chart
+fig = px.line(new2, title='Cost, Value, and Yield Over Time')
+
+# Display the chart
+fig.show()
+
+        '''
         for e in self.equities:
             first = sorted(self.transactions[e.key].keys())[0]
             values = EquityValue.objects.filter(date__gte=first, equity=e).order_by('date')
@@ -450,7 +464,7 @@ class Portfolio(models.Model):
                 cpv = value.price * shares
                 growth = cpv - cost
                 total_dividends += shares * dividend
-                yld = cpv + total_dividends - cost
+                yld = cpv + total_dividends
                 gain = (cpv + total_dividends - cost) / cost * 100
                 new.loc[len(new.index)] = [value.date, e.key, shares, cost, cpv, growth, dividend, total_dividends, yld, gain]
         return new
