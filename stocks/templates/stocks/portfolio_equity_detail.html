@@ -6,10 +6,10 @@
         <tr>
             <th>Date</th>
             <th>Shares Owned</th>
-            <th>Current Value</th>
             <th>Effective Cost</th>
+            <th>Current Value</th>
             <th>Total Dividends</th>
-            <th>Yield (with Dividends)</th>
+            <th>Value (with Dividends)</th>
             <th>Dividend Amount</th>
             <th>Share Price</th>
             <th>Activities</th>
@@ -18,8 +18,9 @@
             <tr>
                 <td>{{ data.0 }}</td>
                 <td>{{data.1|floatformat:'2g'}}</td>
-                <td>${{data.2|floatformat:'2g'}}</td>
                 <td>${{data.3|floatformat:'2g'}}</td>
+                <td>${{data.2|floatformat:'2g'}}</td>
+
                 <td>${{data.4|floatformat:'2g'}}</td>
                 <td
                     {% if data.5 < 0 %}

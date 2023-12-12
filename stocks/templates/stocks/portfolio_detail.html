@@ -2,17 +2,16 @@
 {% block title %}Portfolio Details{% endblock %}
 {% load my_tags %}
 {% block content %}
-    <h1>Portfolio Details for {{object}}</h1>
+    <h1>Portfolio Details for {{portfolio.name}}</h1>
+    <div>{{ chart|safe }}</div>
     <table>
         <tr>
             <th>Equity</th>
             <th>Shares</th>
-            <th>Cost</th>
+            <th>Effective<br>Cost</th>
             <th>Value</th>
             <th>Growth</th>
-            <th>Dividends</th>
-            <th>Yield</th>
-            <th>% Gain</th>
+            <th>Total<br>Dividends</th>
             <th>Actions</th>
         </tr>
 
@@ -24,20 +23,17 @@
                 <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "Growth" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "Yield" "{:.0f}" %}</td>
-                <td>{% equity_value portfolio e "Gain" "{:.1f}" %}%</td>
                 <td>
-                   <a href="{% url 'portfolio_equity_sell' portfolio.id e %}">
-                            <button class="button button-xs button-success">Sold</button></a>
-                    <button id="update-{{equity.key}}" onclick=update("{{e}}")
+                    <button id="update-{{equity.symbol}}" onclick=update("{{e}}")
                             class="button button-xs button-warning">Update</button>
                 </td>
             </tr>
        {% endfor %}
     </table>
     <hr>
+
     To purchase new equities select
-    <a href="{% url 'portfolio_buy' object.id %}"><button class="button button-xs button-success">Buy</button></a>
+    <a href="{% url 'portfolio_buy' portfolio.id %}"><button class="button button-xs button-success">Buy</button></a>
 
     <script>
         function update(id) {

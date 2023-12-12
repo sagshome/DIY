@@ -1,9 +1,6 @@
 import copy
-import numpy as np
 import pandas as pd
-import platform
 import requests
-import tempfile
 from django.urls import reverse
 
 from django.db import models
@@ -11,13 +8,14 @@ from django.utils.functional import cached_property
 
 from diy.settings import ALPHAVANTAGEAPI_KEY as AV_API_KEY
 from typing import List, Dict
-from pathlib import Path
 
 
 from datetime import datetime, date
 from time import sleep
 
-epoch = datetime(2018, 1, 1).date()  # Before this date.   I was too busy working
+from stocks.utils import normalize_date, normalize_today, next_date
+
+epoch = datetime(2014, 1, 1).date()  # Before this date.   I was too busy working
 av_url = 'https://www.alphavantage.co/query?function='
 av_regions = {'Toronto': {'suffix': 'TRT'},
               'United States': {'suffix': None},
@@ -26,42 +24,84 @@ av_regions = {'Toronto': {'suffix': 'TRT'},
 Notes:
 Inflation WebSite: https://www150.statcan.gc.ca/t1/tbl1/en/cv.action?pid=1810000401 (download Ontario all)
     Use this to calculate current equivalent dollar value (should be higher) or idle dollar value (the inverse)
+    
+Bank of Canada
+https://www.bankofcanada.ca/valet/docs
+https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/json?recent_months=96&order_dir=asc
+   - above to calculate inflatin
 '''
 
 
-def normalize_date(this_date: date | datetime) -> datetime.date:
+class Inflation(models.Model):
     """
-    Make every date the start of the next month.    The alpahvantage website is based on the last trading day each month
-    :param this_date:  The date to normalize
-    :return:  The 1st of the next month (and year if December)
+    Class to capture a months worth of inflation
     """
-    if not isinstance(this_date, date):
-        this_date = this_date.date()
+    date = models.DateField()
+    cost = models.FloatField()
+    inflation = models.FloatField()
+    estimated = models.BooleanField(default=True)
 
-    if this_date.day == 1:
-        return this_date
+    def __str__(self):
+        return f'{self.date} {self.inflation}'
 
-    if this_date.month == 12:
-        year = this_date.year + 1
-        month = 1
-    else:
-        year = this_date.year
-        month = this_date.month + 1
+    @classmethod
+    def update(cls, force: bool = False):
+        """
+        Update Inflation values
+        """
+        first = Transaction.objects.all().order_by('date')[0].date
+        first = first
+        first_str = first.strftime('%Y-%m-%d')
+        url = f'https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/json?start_date={first_str}'
+        result = requests.get(url)
+        if not result.status_code == 200:
+            print(f'BOC API failure: {result.status_code} - {result.reason}')
+        else:
+            # Pass 1 - Get all the inflation CPI values
+            data = result.json()
+            for record in range(len(data['observations'])):
+                this_date = datetime.strptime(data['observations'][record]['d'], '%Y-%m-%d').date()
+                if not Inflation.objects.filter(date=this_date, estimated=False).exists():
+                    Inflation.objects.create(date=this_date,
+                                             cost=data['observations'][record]['STATIC_INFLATIONCALC']['v'],
+                                             inflation=0,
+                                             estimated=False)
 
-    return datetime(year, month, 1).date()
-
-
-def today() -> datetime.date:
-    return normalize_date(datetime.today().date())
-
-
-def tempdir() -> Path:
-    return Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir())
+            # Pass 2 - Calculate monthly inflation rates
+            last_date = last_cost = last_inflation = None
+            for record in Inflation.objects.filter(estimated=False).order_by('date'):
+                if last_date:
+                    last_inflation = ((record.cost - last_cost) * 100) / last_cost
+                    if record.inflation != last_inflation:
+                        print(f'{record.date}: Inflation set to {last_inflation}')
+                        record.inflation = last_inflation
+                        record.save()
+                last_date = record.date
+                last_cost = record.cost
+                print(f'{last_date} {last_cost}')
+            # Pass three make sure we have values until the current normalized date.
+            this_date = normalize_today()
+            last_date = next_date(last_date)
+            while last_date <= this_date:
+                try:
+                    record = Inflation.objects.get(date=last_date)
+                except Inflation.DoesNotExist:
+                    record = Inflation(date=last_date)
+                record.estimated = True
+                record.cost = last_cost
+                record.inflation = last_inflation
+                record.save()
+                last_date = next_date(last_date)
 
 
 class Equity(models.Model):
 
-    EQUITY_TYPES = (('Equity', 'Equity/Stock'), ('ETF', 'Exchange Traded Fund'), ('MF', 'Mutual Fund'))
+    EQUITY_TYPES = (
+        ('Equity', 'Equity/Stock'),
+        ('ETF', 'Exchange Traded Fund'),
+        ('MF', 'Mutual Fund'),
+        ('MM', 'Money Market')
+    )
     REGIONS = (('TRT', 'Toronto'), ('', 'United States'))
     CURRENCIES = (('CAD', 'Canadian Dollar'), ('USD', 'US Dollar'))
 
@@ -72,59 +112,37 @@ class Equity(models.Model):
             result[region[0]] = region[1]
         return result
 
-    key: str = models.CharField(max_length=32, primary_key=True)  # Symbol + REGIONS.key()
-    name = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
-    # todo: Do I really need symbol?
-    symbol = models.CharField(max_length=32, verbose_name='Ticker name used when trading this equity')
-    equity_type = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES)
-    region = models.CharField(max_length=10, null=True, blank=True, choices=REGIONS, default='TRT',
+    symbol: str = models.CharField(max_length=32, verbose_name='Trading symbol')  # Symbol
+    name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
+    equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES)
+    region: str = models.CharField(max_length=10, null=False, blank=False, choices=REGIONS, default='TRT',
                               verbose_name='Region where this is traded')
-    currency = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
-    last_updated = models.DateField(blank=True, null=True)
+    currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
+    last_updated: date = models.DateField(blank=True, null=True)
+    searchable: bool = models.BooleanField(default=True)  # Set to False, when this is data that was forced into being
+    validated: bool = models.BooleanField(default=False)  # Set to True was validation is done
+
+    @property
+    def key(self):
+        return self.symbol
 
     def __str__(self):
-        return self.key
+        return self.symbol
 
     def save(self, *args, **kwargs):
         if 'update' in kwargs:
-            update = kwargs.pop('update')
+            do_update = kwargs.pop('update')
         else:
-            update = True
+            do_update = True
 
-        self.key = self.key.upper()
-        if self._state.adding:
-            validated = self.get_equity_data(self.key)
-            if validated:
-                self.symbol = self.key.split('.')[0]
-                self.name = validated['2. name']
-                self.equity_type = validated['3. type']
-                for region in self.REGIONS:
-                    if validated['4. region'] == region[1]:
-                        self.region = region[0]
-                        break
-                self.currency = validated['8. currency']
-            else:
-                return  # This should cause an error
+        self.symbol = self.symbol.upper()
+        if self._state.adding and do_update:
+            self.searchable = self.set_equity_data(self.symbol)
+            self.validated = True
 
-        if update:
+        if do_update and self.searchable:
             self.update()
         super(Equity, self).save(*args, **kwargs)
-
-    @staticmethod
-    def choice_list():
-        choices = list()
-        for choice in Equity.objects.all():
-            name = f'{choice.symbol} - {choice.equity_type}'
-            if choice.region:
-                name = f'{name} ({Equity.region_lookup()[choice.region]})'
-            choices.append((choice.key, name))
-        return sorted(choices)
-
-    def cleanup(self):
-        if not Portfolio.objects.filter(equity=self).exists():
-            EquityEvent.objects.filter(equity=self).delete()
-            EquityValue.objects.filter(equity=self).delete()
-            Equity.objects.filter(equity=self).delete()
 
     @staticmethod
     def lookup(key: str) -> List[Dict]:
@@ -151,52 +169,145 @@ class Equity(models.Model):
             return ticker_set[0]
         return {}
 
-    def update(self, force: bool = True) -> bool:
+    def set_equity_data(self, ticker: str) -> bool:
+        validated = self.get_equity_data(ticker)
+        if validated:
+            self.name = validated['2. name']
+            self.equity_type = validated['3. type']
+            for region in self.REGIONS:
+                if validated['4. region'] == region[1]:
+                    self.region = region[0]
+                    break
+            self.currency = validated['8. currency']
+            return True
+        return False
+
+    def fill_equity_holes(self):
+        last_date: date = None
+        last_price: float = 0  # just to stop the warnings,  it can't actually be used before its referenced
+        date_values: dict[date, float] = dict(
+            EquityValue.objects.filter(equity=self).values_list('date', 'price').order_by('date'))
+        for value in date_values:
+            if last_date and not value == next_date(last_date):  # We have a hole
+                months = (value.year - last_date.year) * 12 + value.month - last_date.month
+                change_increment = (date_values[value] - last_price) / months
+                print(last_date, value, months, change_increment)
+                for _ in range(months):
+                    next_month = next_date(last_date)
+                    last_price = last_price + change_increment
+                    if not EquityValue.objects.filter(equity=self, date=next_month).exists():
+                        EquityValue.objects.get_or_create(equity=self, date=next_month,
+                                                          price=last_price, estimated=True)
+                    last_date = next_month
+
+            last_date = value
+            last_price = date_values[value]
+
+        last_entry = EquityValue.objects.filter(equity=self).order_by('-date')[0]
+        current_date = normalize_today()
+        date_value = next_date(last_entry.date)
+        if not date_value > current_date:
+            price_value = last_entry.price
+            while date_value <= current_date:
+                EquityValue.objects.create(equity=self, date=date_value, price=price_value, estimated=True)
+                date_value = next_date(date_value)
+
+    def update(self, force: bool = False) -> bool:
         """
         For simplification,  I will change the closing date (each month) to the first of the next month.  This
         provides consistency later on when processing transactions (which will also be processed on the first of the
         next month).
         """
+        if not self.validated:
+            self.searchable = self.set_equity_data(self.symbol)
+            self.validated = True
 
-        now = datetime.now().date()
-        if now == self.last_updated and not force:
-            print(f'{self} - Already updated {now}')
-            return False  # Don't bother the external API
+        if self.searchable:
+            # Get rid of any uploaded dividend data,  it may be duplicated based on off month processing
+            EquityEvent.objects.filter(event_source='upload', event_type='Dividend').delete()
 
-        url = f'{av_url}TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={AV_API_KEY}'
-        data_key = 'Monthly Adjusted Time Series'
-        today = normalize_date(datetime.now())
-        print(url)
-        result = requests.get(url)
-        if not result.status_code == 200:
-            print(f'Result is {result.status_code} - {result.reason}')
-            return True   # Still did an API call
-        self.last_updated = now
-        self.save(update=False)
+            now = datetime.now().date()
+            if now == self.last_updated and not force:
+                print(f'{self} - Already updated {now}')
+                return False  # Don't bother the external API
 
-        data = result.json()
-        if data_key in data:
-            for entry in data[data_key]:
-                try:
-                    date_value = normalize_date(datetime.strptime(entry, '%Y-%m-%d'))
-                    if date_value >= epoch:
-                        print(f'Processing {self} for {entry}')
-                        if date_value == today or not EquityValue.objects.filter(equity=self, date=date_value).exists():
+            url = f'{av_url}TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.symbol}&apikey={AV_API_KEY}'
+            data_key = 'Monthly Adjusted Time Series'
+            this_day = normalize_date(datetime.now())
+            print(url)
+            result = requests.get(url)
+            if not result.status_code == 200:
+                print(f'Result is {result.status_code} - {result.reason}')
+                return True   # Still did an API call
+            self.last_updated = now
+            self.save(update=False)
 
-                            print(f'Updating {self} for {date_value}')
-                            EquityValue.objects.update_or_create(equity=self,
-                                                                 date=date_value,
-                                                                 defaults={'price': data[data_key][entry]['4. close']})
-                            dividend = float(data[data_key][entry]['7. dividend amount'])
-                            print(dividend)
-                            if dividend != 0:
-                                EquityEvent.objects.update_or_create(equity=self,
-                                                                     event_type='Dividend',
-                                                                     date=date_value,
-                                                                     defaults={'value': data[data_key][entry]['7. dividend amount']})
-                except ValueError:
-                    print(f'Bad date in {entry}')
+            data = result.json()
+            if data_key in data:
+                for entry in data[data_key]:
+                    try:
+                        date_value = normalize_date(datetime.strptime(entry, '%Y-%m-%d'))
+                        if date_value >= epoch:
+                            print(f'Processing {self} for {entry}')
+                            if date_value == this_day or not EquityValue.objects.filter(
+                                    equity=self, estimated=False, date=date_value).exists():
+                                try:
+                                    ev_record = EquityValue.objects.get(equity=self, date=date_value)
+                                except EquityValue.DoesNotExist:
+                                    ev_record = EquityValue(equity=self, date=date_value)
+                                ev_record.estimated = False
+                                ev_record.price = float(data[data_key][entry]['4. close'])
+                                ev_record.save()
+                                dividend = float(data[data_key][entry]['7. dividend amount'])
+                                if dividend != 0 and not EquityEvent.objects.filter(equity=self,
+                                                                         event_type='Dividend',
+                                                                         date=date_value).exists():
+                                    EquityEvent.objects.create(equity=self, event_type='Dividend',
+                                                               date=date_value, value=dividend, event_source='api')
+                    except ValueError:
+                        print(f'Bad date in {entry}')
+        self.fill_equity_holes()
         return True
+
+
+class EquityAlias(models.Model):
+    '''
+    This is needed to support the various imports.
+    Example when manulife XLU trust reports dividends under symbol S007135.    The only way I can find that is to
+    match on the name 'SELECT SECTOR SPDR TRUST THE UTILITIES SELECT SECTOR SPDR TRUST W...'
+    which I match the divided to name 'SELECT SECTOR SPDR TRUST THE UTILITIES SELECT SECTOR SPDR TRUST C...
+
+    when I first find XLU in a manulife import,  I will make an alias record using the name we import as'
+    I can later match the dividend (and create an alias) for that two.
+    '''
+    symbol = models.TextField()
+    name = models.TextField()
+    equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f'{self.symbol} : {self.equity.symbol} - {self.name}'
+
+    @staticmethod
+    def find_equity(description: str) -> [Equity | None]:
+        score: int = 0
+        matched: bool = False
+        match: Equity
+        for alias in EquityAlias.objects.all():
+            new_score = 0
+            limit = len(alias.name) - 1
+            for index in range(len(description) - 1):
+                if index > limit:
+                    break
+                if description[index] != alias.name[index]:
+                    break
+                new_score += 1
+            if new_score > score:
+                score = new_score
+                matched = True
+                match = alias
+        if matched:
+            return match.equity
+        return None
 
 
 class EquityValue(models.Model):
@@ -206,6 +317,13 @@ class EquityValue(models.Model):
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
     date = models.DateField()
     price = models.FloatField()
+    estimated = models.BooleanField(default=False)
+
+    def __str__(self):
+        output = f'{self.equity} - {self.date}: {self.price}'
+        if self.estimated:
+            output = f'{output} ?'
+        return output
 
 
 class EquityEvent(models.Model):
@@ -215,13 +333,17 @@ class EquityEvent(models.Model):
     EVENT_TYPES = (('Dividend', 'Dividend'),  # Automatically created as part of 'Update' action
                    ('SplitAD', 'Stock Split with Adjusted Dividends'),  # Historic dividends adjusted
                    ('Split', 'Stock Split'))
+    EVENT_SOURCE = (('manual', 'Manual'), ('api', 'API'), ('upload', 'Upload'))
 
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
     date = models.DateField()
     value = models.FloatField()
     event_type = models.TextField(max_length=10, choices=EVENT_TYPES)
+    event_source = models.TextField(max_length=6, choices=EVENT_SOURCE)
 
     def save(self, *args, **kwargs):
+        if not self.event_source:
+            self.event_source = 'manual'
         super(EquityEvent, self).save(*args, **kwargs)
         if self.event_type == 'SplitAD':
             print(f'Adjusting Dividends for {self.equity}')
@@ -230,148 +352,55 @@ class EquityEvent(models.Model):
                 event.save()
         if self.event_type.startswith('Split'):
             print(f'Adjusting Shares for {self.equity}')
-            for transaction in Transaction.objects.filter(equity_fk=self.equity, date__lt=self.date):
-                print(f'Portfolio {transaction.portfolio} - Adding {transaction.quantity} from date {transaction.date}')
+            for transaction in Transaction.objects.filter(equity=self.equity, date__lt=self.date):
+                # print(f'Portfolio {transaction.portfolio} - Adding {transaction.quantity} from date {transaction.date}')
                 Transaction.objects.create(portfolio=transaction.portfolio,
-                                           equity_fk=self.equity, equity=self.equity, price=0,
-                                           quantity=transaction.quantity, buy_action=True, date=self.date)
-
-
-class SummaryItem:
-    """
-    A linked list of processed data that is used by EquitySummary
-    change will be negative if we are selling
-    """
-    def __init__(self, previous, price: float, key: str, dividend: float = 0, change: float = 0, xa_price: float = 0):
-
-        self.price = price
-        self.dividend = dividend
-        self.previous = previous
-        self.change = change
-        self.xa_price = xa_price
-        self.key = key
-
-        if previous:
-            if previous.shares + change < 0:
-                raise ValueError("Trying to sell what you don't own")
-            self.shares = change + previous.shares
-            self.value = self.shares * price
-            self.cost = previous.cost + (change * xa_price)
-            self.dividends = previous.dividends + (dividend * self.shares)
-        else:
-            if change < 0:
-                raise ValueError("Initial equity entry must be a purchase")
-            self.shares = change  # which must be a positive
-            self.value = change * price
-            self.cost = change * xa_price
-            self.dividends = dividend * change
-
-    @property
-    def gain(self) -> float:
-        return (self.value + self.dividends - self.cost) / self.cost * 100
-
-    @property
-    def growth(self) -> float:
-        return self.value - self.cost
-
-    @property
-    def returns(self) -> float:
-        return self.value + self.dividends - self.cost
-
-
-class EquitySummary:
-    """
-    Non django class to load equity values base on portfolio
-
-    Need to decouple from a portfolio
-        - We need a Transaction history cloass
-
-    """
-
-    def __init__(self, equity: Equity, transactions: List['TransactionSummary']):
-        self.equity = Equity.objects.get(key=equity)
-        self.transactions = transactions
-
-    @cached_property
-    def data(self) -> Dict[date, SummaryItem]:
-        """
-        """
-
-        results = {}
-        first = sorted(self.transactions.keys())[0]
-        values = EquityValue.objects.filter(date__gte=first, equity=self.equity).order_by('date')
-        dividends = dict(
-            EquityEvent.objects.filter(date__gte=first, event_type='Dividend',
-                                       equity=self.equity).values_list('date', 'value'))
-
-        old_record = None
-        for value in values:  # This is over every month you owned this equity.
-            dividend = dividends[value.date] if value.date in dividends else 0
-            if value.date in self.transactions:
-                old_record = SummaryItem(old_record, value.price, self.equity, dividend=dividend,
-                                         change=self.transactions[value.date].quantity,
-                                         xa_price=self.transactions[value.date].price)
-            else:
-                old_record = SummaryItem(old_record, value.price, self.equity, dividend=dividend)
-            results[value.date] = old_record
-        return results
-
-    @cached_property
-    def current_data(self):
-        if len(self.data) == 0:
-            self.equity.update()
-        return self.data[sorted(self.data.keys()).pop()]
-
-    @property
-    def shares(self):
-        return self.current_data.shares
-
-    @property
-    def cost(self):
-        return self.current_data.cost
-
-    @property
-    def value(self):
-        return self.current_data.value
-
-    @property
-    def dividends(self):
-        return self.current_data.dividends
-
-    @property
-    def returns(self) -> float:
-        return self.value + self.dividends - self.cost
-
-    @property
-    def growth(self) -> float:
-        return self.value - self.cost
-
-    @property
-    def key(self) -> str:
-        return self.equity.key
+                                           equity=self.equity, price=0,
+                                           quantity=transaction.quantity, xa_action='buy', date=self.date)
 
 
 class TransactionSummary:
     """
     Create on record per day for each instance of a transaction for that equity and that portfolio
     """
-    def __init__(self, xa_date: date, portfolio: 'Portfolio', equity: 'Equity'):
-        self.date = date
+    def __init__(self, xa_date: date, equity: 'Equity'):
+        self.xa_date = xa_date
+        self.equity = equity
         self.price = 0
         self.quantity = 0
+        self.dividend = 0
+
+    def process(self, portfolio: 'Portfolio'):
 
         total_shares = 0
         total_cost = 0
-        xas = Transaction.objects.filter(date=xa_date, portfolio=portfolio, equity_fk=equity)
+        total_dividends = 0
+        xas = Transaction.objects.filter(date=self.xa_date, portfolio=portfolio, equity=self.equity)
+        price = 0
         for xa in xas:
-            if xa.buy_action:
+            price = xa.price
+            if xa.xa_action == 'buy':
                 total_shares += xa.quantity
                 total_cost = total_cost + (xa.price * xa.quantity)
-            else:
+            elif xa.xa_action == 'sell':
                 total_shares -= xa.quantity
                 total_cost = total_cost - (xa.price * xa.quantity)
-        self.price = total_cost / total_shares
+            elif xa.xa_action == 'int':
+                total_dividends += xa.quantity
+            elif xa.xa_action == 'div':
+                total_shares += xa.quantity
+
+        self.price = total_cost / total_shares if total_shares else price
         self.quantity = total_shares
+        self.dividend = total_dividends
+
+    def set(self, price,  quantity, dividends):
+        self.price = price
+        self.quantity = quantity
+        self.dividend = dividends
+
+    def adjust_shares(self, funds):
+        self.quantity += funds / self.price
 
 
 class PortfolioSummary:
@@ -379,45 +408,120 @@ class PortfolioSummary:
     None DB class that will calculate the historic information regarding a portfolio.    We purposefully do not
     reference raw portfolio or transaction data.   This is done so that we can compare / create speculative data
     """
+    DataColumns = ['Date',   # The date of this record
+                   'Equity',   # The equity (key) for this entry
+                   'Shares',   # The number of shares (on this date)
+                   'Cost',  # The cost (as of this date)
+                   'InflatedCost',  # The cost (as of this date) - with inflation factored in
+                   'Value',   # The value (if you sold on this date)
+                   'Growth',  # Net gain (as of this day)
+                   'Dividend',   # The dividend per share issued on this date
+                   'TotalDividends',   # The accumulated dividends as of this date
+                   'Yield',  # Total Dividends + Current Value - Cost as of this date
+                   'Gain',  # The percent gain (Yield - Cost/Cost) * 100 on this date
+                   ]
 
-    def __init__(self, name):
+    def __init__(self, name: str, xas: Dict, drip: bool = False):
         self.name = name
-        self.xa_history = {}
-        self.data = {}
+        self.xas = xas
+        self.drip = drip  # if this a drip portfolio then do not realize dividends - they will appear as purchases
 
-    def add_item(self, equity: Equity, xa_s: List[TransactionSummary]):
-        if equity.key not in self.xa_history:
-            self.xa_history[equity.key] = None
-        self.xa_history[equity.key] = xa_s
+    @cached_property
+    def pd(self) -> pd:
+        now = datetime.now()
+        new = pd.DataFrame(columns=self.DataColumns)
+        monthly_inflation: Dict[date, float] = dict(Inflation.objects.all().values_list('date', 'inflation'))
+        e: Equity
 
-    def duplicate(self, name: str) -> 'PortfolioSummary':
-        new = PortfolioSummary(name)
-        new.xa_history = copy.deepcopy(self.xa_history)
+        for e in self.xas.keys():
+            equity = Equity.objects.get(symbol=e)
+            first = sorted(self.xas[e])[0]
+            values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
+            dividends = dict(EquityEvent.objects.filter(date__gte=first, event_type='Dividend',
+                                                        equity=equity).values_list('date', 'value'))
 
-    def switch_equity(self, new_equity: Equity):
-        for x in self.xa_history:
-            if not x == new_equity.key:
-                value = self.xa_history
+            total_dividends = shares = cost = cost_per_share = inflation = 0
+
+            for value in values:  # This is over every month you owned this equity.
+                if self.drip:
+                    dividend = 0
+                else:
+                    dividend = dividends[value.date] if value.date in dividends else 0
+
+                new_cash = 0
+                if value.date in self.xas[e]:
+                    xa = self.xas[e][value.date]
+                    shares += xa.quantity
+                    cost += (xa.quantity * xa.price)
+                    inflation += (inflation * monthly_inflation[value.date] / 100) + (xa.quantity * xa.price)
+                    if equity.equity_type == 'MM':
+                        new_cash += xa.dividend  # todo:  Test this out with a MM equity
+                else:
+                    inflation += inflation * monthly_inflation[value.date] / 100
+                if cost < 0:
+                    print(f'Equity:{e} Date:{value.date} - LESS THEN 0 -> {cost} Shares {shares}')
+                    cost = 0
+                    shares = 0
+                    inflation = 0
+                print(f'Equity:{e} Date:{value.date} Cost:{cost} Inflation:{inflation} Rate:{monthly_inflation[value.date]}')
+
+                cpv = value.price * shares
+                growth = cpv - cost
+                total_dividends += shares * dividend + new_cash
+
+                yld = cpv + total_dividends
+                gain = 0 if cost == 0 else (cpv + total_dividends - cost) / cost * 100
+
+                new.loc[len(new.index)] = [value.date, e, shares, cost, inflation, cpv, growth, dividend,
+                                           total_dividends, yld, gain]
+        print(f'Created DataFrame for {self.name} in {(datetime.now()-now).seconds}')
+        return new
+
+    def switch(self, new_name: str, new_equity: Equity, original_portfolio: 'Portfolio') -> 'PortfolioSummary':
+        '''
+        Using the data from this portfolio summary,  create a new portfolio based on new_equity.   If this portfolio
+        is managed,  assume any dividends are just dripped back in.
+
+        :param new_name:
+        :param new_equity:
+        :param original_portfolio:
+        :return:
+        '''
+
+        new = PortfolioSummary(new_name, {}, original_portfolio.managed)
+        new.xas = dict()  # This is what we are switching out.
+        new.xas[new_equity.key] = {}
+
+        new_v = dict(EquityValue.objects.filter(equity=new_equity).values_list('date', 'price'))
+        new_d = dict(EquityEvent.objects.filter(equity=new_equity, event_type='Dividend').values_list('date', 'value'))
+
+        # Pass 1,  figure out shares owned
+        for equity in self.xas:
+            for this_date in self.xas[equity]:
+                xa = self.xas[equity][this_date]
+                if this_date not in new.xas[new_equity.key]:
+                    new.xas[new_equity.key][this_date] = TransactionSummary(this_date, new_equity)
+                    new.xas[new_equity.key][this_date].set(new_v[this_date], 0, 0)
+
+                if not xa.quantity == 0:  # We bought or sold something  vs split or drip
+                    new.xas[new_equity.key][this_date].adjust_shares(xa.quantity * xa.price)
+                else:
+                    pass  # This must be a split. It does not apply. Not sure how to deal with splits in new equity.
+        return new
 
 
 class Portfolio(models.Model):
     """
     Will need to be unique based on future user attribute
     """
-    DataColumns = ['Date',   # The date of this record
-                   'Equity',   # The equity (key) for this entry
-                   'Shares',   # The number of shares (on this date)
-                   'Cost',  # The cost (as of this date)
-                   'Value',   # The value (if you sold on this date)
-                   'Growth',  # Net gain (as of this day)
-                   'Dividend',   # The dividend per share issued on this date
-                   'TotalDividends',   #  The accumulated dividends as of this date
-                   'Yield',  # Total Dividends + Current Value - Cost as of this date
-                   'Gain',  # The percent gain (Yield - Cost/Cost) * 100 on this date
-                   ]
 
-    name = models.CharField(max_length=128, unique=True, primary_key=False,
-                            help_text='Enter a unique name for this portfolio')
+    name: str = models.CharField(max_length=128, unique=True, primary_key=False,
+                                 help_text='Enter a unique name for this portfolio')
+    managed: bool = models.BooleanField(default=True)
+
+    @cached_property
+    def summary(self):
+        return PortfolioSummary(str(self.name), self.transactions, drip=self.managed)
 
     def __str__(self):
         return self.name
@@ -427,62 +531,15 @@ class Portfolio(models.Model):
 
     @cached_property
     def pd(self) -> pd:
-        new = pd.DataFrame(columns=self.DataColumns)
-        print ('Created a new Dataframe')
-        # new.loc[len(new.index)] = ['eeee', 'eeee', 1, 2, 3,4,5]
-        # new.loc[2,'Date'] = '2018-10-18'
-        # new.loc[(new['Equity'] == 'eeee') & (new['Date'] == '2018-10-18')]
-        # price: float, key: str, dividend: float = 0, change: float = 0, xa_price: float = 0)
-        # new = pp.loc[pp['Date'] == datetime(2023, 12, 1).date()]
-        '''
-import plotly.express as px
-p = Portfolio.objects.all()[0]
-new = p.pd.loc[p.pd['Equity'] == 'POW.TRT']
-new2 = new.loc[:, ['Date', 'Cost', 'Value', 'TotalDividends']]
-new2.set_index('Date', inplace=True)
-
-# Create a line chart
-fig = px.line(new2, title='Cost, Value, and Yield Over Time')
-
-# Display the chart
-fig.show()
-
-        '''
-        for e in self.equities:
-            first = sorted(self.transactions[e.key].keys())[0]
-            values = EquityValue.objects.filter(date__gte=first, equity=e).order_by('date')
-            dividends = dict(EquityEvent.objects.filter(date__gte=first, event_type='Dividend',
-                                                        equity=e).values_list('date', 'value'))
-            total_dividends = shares = cost = 0
-
-            for value in values:  # This is over every month you owned this equity.
-                dividend = dividends[value.date] if value.date in dividends else 0
-                if value.date in self.transactions[e.key]:
-                    xa = self.transactions[e.key][value.date]
-                    shares += xa.quantity
-                    cost += (xa.quantity * xa.price)
-                cpv = value.price * shares
-                growth = cpv - cost
-                total_dividends += shares * dividend
-                yld = cpv + total_dividends
-                gain = (cpv + total_dividends - cost) / cost * 100
-                new.loc[len(new.index)] = [value.date, e.key, shares, cost, cpv, growth, dividend, total_dividends, yld, gain]
-        return new
+        return self.summary.pd
 
     @property
     def equities(self) -> List[Equity]:
-        return Equity.objects.filter(key__in=Transaction.objects.filter(portfolio=self).values('equity')).order_by('key')
+        return Equity.objects.filter(symbol__in=Transaction.objects.filter(portfolio=self).values('equity__symbol')).order_by('symbol')
 
     @property
     def equity_keys(self):
         return sorted(self.pd['Equity'].unique())
-
-    @cached_property
-    def current_data(self) -> Dict:
-        result = {}
-        for key in self.data:
-            result[key] = self.data[key].current_data
-        return result
 
     @cached_property
     def transactions(self) -> Dict[str, Dict[date, TransactionSummary]]:
@@ -497,40 +554,31 @@ fig.show()
             if equity.key not in result:
                 result[equity.key] = {}
             for this_date in Transaction.objects.filter(
-                    portfolio=self, equity_fk=equity).order_by('date').values_list('date', flat=True).distinct():
-                result[equity.key][this_date] = TransactionSummary(this_date, self, equity)
+                    portfolio=self, equity=equity).order_by('date').values_list('date', flat=True).distinct():
+                result[equity.key][this_date] = TransactionSummary(this_date, equity)
+                result[equity.key][this_date].process(self)
         return result
-
-    @cached_property
-    def data(self) -> Dict[str, EquitySummary]:
-        """
-        Build up a dictionary of equity_keys,  dates and equitySummary
-
-        :return:
-        """
-        results = dict()
-        for equity_key in self.transactions.keys():
-            results[equity_key] = EquitySummary(equity_key, self.transactions[equity_key])
-        return results
 
     @property
     def cost(self) -> float:
-        return self.pd[self.pd['Date'] == today()]['Cost'].sum()
+        return self.pd[self.pd['Date'] == normalize_today()]['Cost'].sum()
 
     @property
     def value(self) -> float:
-        return self.pd[self.pd['Date'] == today()]['Value'].sum()
+        return self.pd[self.pd['Date'] == normalize_today()]['Value'].sum()
 
     @property
     def dividends(self) -> float:
-        return self.pd[self.pd['Date'] == today()]['TotalDividends'].sum()
+        return self.pd[self.pd['Date'] == normalize_today()]['TotalDividends'].sum()
 
     @property
     def ylds(self) -> float:
-        return self.pd[self.pd['Date'] == today()]['Yield'].sum()
+        return self.pd[self.pd['Date'] == normalize_today()]['Yield'].sum()
 
     @property
     def gain(self) -> float:
+        if self.cost == 0:
+            return 0
         return (self.value + self.dividends - self.cost) / self.cost * 100
 
     @property
@@ -551,16 +599,31 @@ class Transaction(models.Model):
     """
     Track changes made to an equity on a portfolio
     """
+
+    @staticmethod
+    def equity_choice_list():
+        choices = list()
+
+        for choice in Equity.objects.all():
+            name = f'{choice.key} - {choice.equity_type}'
+            if choice.region:
+                name = f'{name} ({Equity.region_lookup()[choice.region]})'
+            choices.append((choice.id, name))
+        return sorted(choices)
+
+
+    TRANSACTION_TYPE = (('buy', 'Buy'), ('sell', 'Sell'), ('int', 'Interest'), ('div', 'Dividend'))
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
-    equity_fk = models.ForeignKey(Equity, on_delete=models.CASCADE)  # Needed this so I can make a choice list
-    equity = models.TextField(choices=Equity.choice_list())
+    #
+    equity = models.ForeignKey(Equity, on_delete=models.CASCADE)  # Needed this so I can make a choice list
     date: date = models.DateField()
     price: float = models.FloatField()
     quantity: float = models.FloatField()
-    buy_action = models.BooleanField(default=True)
+    xa_action = models.TextField(choices=TRANSACTION_TYPE, default='buy')
+    drip = models.BooleanField(default=False)
 
     def __str__(self):
-        return f'{self.equity} - {self.date}: {self.price} {self.quantity} Buy({self.buy_action})'
+        return f'{self.portfolio}: {self.equity} - {self.date}: {self.price} {self.quantity} Buy({self.xa_action})'
 
     @property
     def value(self):
@@ -569,5 +632,4 @@ class Transaction(models.Model):
 
     def save(self, *args, **kwargs):
         self.date = normalize_date(self.date)
-        self.equity_fk = Equity.objects.get(key=self.equity)
         super(Transaction, self).save(*args, **kwargs)

@@ -2,12 +2,12 @@ from django.contrib import admin
 
 # Register your models here.
 
-from .models import Equity, Portfolio, Transaction, EquityValue, EquityEvent
+from .models import Equity, Portfolio, Transaction, EquityValue, EquityEvent, Inflation
 
 
 class EquityAdmin(admin.ModelAdmin):
-    list_display = ("key", "name")
-    fields = ["key", "name", "symbol", "equity_type", "region", "currency", "last_updated"]
+    list_display = ("symbol", "region", "name")
+    fields = ["symbol", "name", "equity_type", "region", "currency", "last_updated", "searchable", "validated"]
 
 
 class PortfolioAdmin(admin.ModelAdmin):
@@ -16,11 +16,11 @@ class PortfolioAdmin(admin.ModelAdmin):
 
 class TransactionAdmin(admin.ModelAdmin):
     model = Transaction
-    list_display = ('equity_fk', 'get_portfolio', 'value', 'date', 'price', 'quantity', 'buy_action')
+    list_display = ('equity', 'get_portfolio', 'value', 'date', 'price', 'quantity', 'xa_action')
 
     fieldsets = [
-        (None, {'fields': ['equity', 'equity_fk', 'portfolio']}),
-        ('Purchase', {'fields': ['date', 'price', 'quantity', 'buy_action']}),
+        (None, {'fields': ['equity', 'portfolio']}),
+        ('Purchase', {'fields': ['date', 'price', 'quantity', 'xa_action', 'drip']}),
     ]
 
     def get_portfolio(self, obj):
@@ -36,15 +36,19 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 class EquityEventAdmin(admin.ModelAdmin):
-    list_display = ("equity", "event_type", "date", "value")
+    list_display = ("equity", "event_type", "date", "value", "event_source")
 
 
-class EquityCloseAdmin(admin.ModelAdmin):
-    list_display = ("equity", "date", "price")
+class EquityValueAdmin(admin.ModelAdmin):
+    list_display = ("equity", "date", "price", "estimated")
+
+class InflationAdmin(admin.ModelAdmin):
+    list_display = ("date", "cost", "inflation", "estimated")
 
 
 admin.site.register(EquityEvent, EquityEventAdmin)
-admin.site.register(EquityValue, EquityCloseAdmin)
+admin.site.register(EquityValue, EquityValueAdmin)
 admin.site.register(Equity, EquityAdmin)
 admin.site.register(Portfolio, PortfolioAdmin)
 admin.site.register(Transaction, TransactionAdmin)
+admin.site.register(Inflation, InflationAdmin)

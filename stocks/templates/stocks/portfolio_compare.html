@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Portfolio Details{% endblock %}
+{% load my_tags %}
+{% block content %}
+    <h1>Portfolio compare: {{portfolio}}</h1>
+    <h2>Target is: {{compare_to.name}}</h2>
+    <div>{{ chart|safe }}</div>
+{% endblock content %}

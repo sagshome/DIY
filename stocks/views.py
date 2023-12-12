@@ -1,5 +1,7 @@
+import pandas as pd
 import plotly.express as px
 import plotly.io as pio
+import plotly.graph_objects as go
 
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
@@ -8,9 +10,23 @@ from django.views.decorators.http import require_http_methods
 from django.views.generic import ListView, DetailView, CreateView, DeleteView
 
 
-from .models import Equity, Portfolio, Transaction
+from .models import Equity, Portfolio, Transaction, normalize_today
 from .forms import AddEquityForm, TransactionForm
+from .importers import *
 
+def test2(request):
+    from .models import Inflation
+    Inflation.update()
+
+    return JsonResponse(status=200, data={})
+
+
+def test(request):
+    manulife('/home/scott/shared/Finance/manulife_1_xas.csv')
+    # questtrade('/home/scott/Downloads/ScottQuest.csv', 'Scott')
+    # questtrade('/home/scott/Downloads/QTest1.csv', 'QTest1')
+
+    return JsonResponse(status=200, data={})
 
 @require_http_methods(['GET'])
 def search(request):
@@ -63,13 +79,27 @@ class PortfolioDetailView(DetailView):
         Add a list of all the equities in this portfolio
         :param kwargs:
         :return:
+
         """
         context = super().get_context_data(**kwargs)
         p = context['portfolio']
-        equity_data = dict()
-        for equity in p.equities:
-            equity_data[equity.key] = p.data[equity.key].current_data
-        context['equities'] = equity_data
+        x = sorted(p.pd['Date'].unique())
+        new = p.pd[['Date', 'Cost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
+        cost = new['Cost']
+        inflation = new['InflatedCost']
+        total = new['Value'] + new['TotalDividends']
+        dividends = new['TotalDividends']
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x, y=dividends, fill='tonexty', mode='lines', name='Total Dividends'))
+
+        fig.add_trace(go.Scatter(x=x, y=total, fill='tonexty', mode='lines', name='Present Value (Stacked)'))
+        fig.add_trace(go.Scatter(x=x, y=cost, mode='lines', name='Cost'))
+        fig.add_trace(go.Scatter(x=x, y=inflation, mode='lines', name='Inflation Cost'))
+
+        fig.update_layout(title='Return vs Cost', xaxis_title='Month', yaxis_title='Dollars')
+        chart_html = pio.to_html(fig, full_html=False)
+        context = {'portfolio': p, 'chart': chart_html}
         return context
 
 
@@ -88,7 +118,7 @@ def portfolio_update(request, pk):
 class PortfolioAdd(CreateView):
     model = Portfolio
     template_name = 'stocks/add_portfolio.html'
-    fields = ['name']
+    fields = ['name', 'managed']
     # form_class = AddPortfolioForm
 
     def get_success_url(self):
@@ -113,9 +143,9 @@ class PortfolioCopy(CreateView):
         result = super().form_valid(form)
         original = Portfolio.objects.get(pk=self.kwargs['pk'])
         for t in Transaction.objects.filter(portfolio=original):
-            Transaction.objects.create(portfolio=self.object, equity_fk=t.equity_fk, equity=t.equity, date=t.date,
+            Transaction.objects.create(portfolio=self.object, equity=t.equity, date=t.date,
                                        price=t.price,
-                                       quantity=t.quantity, buy_action=t.buy_action)
+                                       quantity=t.quantity, buy_action=t.xa_action)
 
         return result
 
@@ -135,8 +165,7 @@ def portfolio_buy(request, pk):
                                              date=form.cleaned_data['date'],
                                              price=form.cleaned_data['price'],
                                              quantity=form.cleaned_data['quantity'],
-                                             portfolio=portfolio,
-                                             equity_fk=equity)
+                                             portfolio=portfolio)
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
                 form = TransactionForm(initial={'portfolio': portfolio,
                                                 'equity': new.equity,
@@ -153,21 +182,32 @@ def portfolio_buy(request, pk):
     return render(request, 'stocks/add_bulk_equity.html', context)
 
 
-def portfolio_compare(request, pk, green_grass, drip):
+def portfolio_compare(request, pk):
     portfolio = get_object_or_404(Portfolio, pk=pk)
-    # for equity in portfolio.equities:
-    #
-    #
-    # if value == 'GIC':
-    #     pass  # not implemented
-    # elif value == 'Inflation':
-    #     pass  # not implemented
-    # else:
-    #     try:
-    #         equity = Equity.objects.get(key=value)
-    #     except Equity.DoesNotExist:
-    #         equity = Equity.objects.create(key=value)
-    #     transactions = TransactionHistory(portfolio=portfolio
+    compare_equity = Equity.objects.get(symbol='VFV.TRT')
+    compare_to = portfolio.summary.switch('Comparison', compare_equity, portfolio)
+
+    x = sorted(portfolio.pd['Date'].unique())
+    new = portfolio.pd[['Date', 'Cost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
+    comp = compare_to.pd[['Date', 'Value',  'InflatedCost', 'TotalDividends']].groupby('Date').sum()
+    total = new['Value']
+    dividends = new['TotalDividends']
+    inflation = new['InflatedCost']
+    cost = new['Cost']
+    compt = comp['Value']
+    compd = comp['TotalDividends']
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x, y=dividends, fill='tonexty', mode='lines', name='Total Dividends'))
+    fig.add_trace(go.Scatter(x=x, y=total, fill='tonexty', mode='lines', name='Present Value'))
+    fig.add_trace(go.Scatter(x=x, y=cost, mode='lines', name='Cost'))
+    fig.add_trace(go.Scatter(x=x, y=inflation, mode='lines', name='Inflation'))
+    fig.add_trace(go.Scatter(x=x, y=compd, mode='lines', name=f'Dividends if...{compare_equity}'))
+    fig.add_trace(go.Scatter(x=x, y=compt, mode='lines', name=f'Present Value if...{compare_equity}'))
+    fig.update_layout(title='Return vs Cost', xaxis_title='Month', yaxis_title='Dollars')
+    chart_html = pio.to_html(fig, full_html=False)
+    return render(request, 'stocks/portfolio_compare.html',
+                  {'portfolio': portfolio, 'compare_to': compare_equity, 'chart': chart_html})
 
 
 def equity_update(request,  key):
@@ -178,7 +218,7 @@ def equity_update(request,  key):
     :param key:
     :return:
     """
-    equity = get_object_or_404(Equity, key=key)
+    equity = get_object_or_404(Equity, symbol=key)
     equity.update()
     return HttpResponse(status=200)
 
@@ -193,36 +233,15 @@ def portfolio_equity_details(request, pk, key):
 
     table = pd.pivot_table(p.pd, values=['Cost', 'Value', 'TotalDividends'], index='Date', aggfunc='sum')
 
-
->>> df2 = p.pd.loc[:, ['Date', 'Value', 'Equity']]
->>> pt2 = pd.pivot_table(df2, values='Value', index='Date', columns='Equity', aggfunc='sum')
->>> pt2.reset_index(inplace=True)
->>> fig2 = px.line(pt2, x='Date', y=['BCE.TRT', 'BMO.TRT', 'CM.TRT',  'CU.TO', 'EMA.TO','ENB.TO', 'MFC.TRT', 'POW.TRT'], title='FooBar')
->>> fig2.show()Opening in existing browser session.
->>> fig2.show()
-
-    import plotly.express as px
-import plotly.io as pio
-
-def my_view(request):
-    fig = px.scatter(x=[1, 2, 3], y=[4, 5, 6])
-    chart_html = pio.to_html(fig, full_html=False)
-    context = {'chart_html': chart_html}
-    return render(request, 'my_template.html', context)
-
-<div>
-    {{ chart_html|safe }}
-</div>
-
     """
     portfolio = get_object_or_404(Portfolio, pk=pk)
-    equity = get_object_or_404(Equity, key=key)
-    #summary = EquitySummary(portfolio, equity)
-    #list_keys = sorted(summary.history, reverse=True)
+    equity = get_object_or_404(Equity, symbol=key)
     data = []
     chart_html = '<p>No chart data available</p>'
-
-    for element in portfolio.pd.loc[portfolio.pd['Equity'] == equity.key].to_records():
+    #portfolio.pd['Date'] = pd.to_datetime(portfolio.pd['Date'])
+    df_sorted = portfolio.pd.sort_values(by='Date')
+    new_df = df_sorted.loc[df_sorted['Equity'] == equity.key]
+    for element in new_df.to_records():
         extra_data = ''
         if element['Date'] in portfolio.transactions[equity.key]:
             xa = portfolio.transactions[equity.key][element['Date']]
@@ -230,22 +249,40 @@ def my_view(request):
                 extra_data = f'Sold {xa.quantity} shares at ${xa.price}'
             else:
                 if xa.price == 0:
-                    extra_data = f'Received {xa.quantity} shares due to a stock split'
+                    extra_data = f'Received {xa.quantity} shares (DRIP or Split)'
                 else:
                     extra_data = f'Bought {xa.quantity} shares at ${xa.price}'
 
+        if element['Shares'] == 0:
+            total_dividends = eyield = 0
+        else:
+            total_dividends = element['TotalDividends']
+            eyield = element['Yield']
+
+        #total_dividends = element['TotalDividends']
+        #eyield = element['Yield']
+        share_price = element['Value'] / element['Shares'] if element['Shares'] != 0 else 0
         data.append([element['Date'], element['Shares'], element['Value'], element['Cost'],
-                     element['TotalDividends'], element['Yield'], element['Dividend'],
-                     element['Value'] / element['Shares'], extra_data])
-        data.reverse()
+                     total_dividends, eyield, element['Dividend'],
+                     share_price, extra_data])
+        #data.reverse()
 
-        new = portfolio.pd.loc[portfolio.pd['Equity'] == equity.key]
-        new2 = new.loc[:, ['Date', 'Cost', 'Value', 'TotalDividends']]
-        new2.set_index('Date', inplace=True)
+        x = sorted(new_df['Date'].unique())
+        #new = df_sorted.loc[df_sorted['Equity'] == equity.key][['Date', 'Cost', 'Value', 'TotalDividends']]
+        cost = new_df['Cost']
+        inflation = new_df['InflatedCost']
+        total = new_df['Value'] + new_df['TotalDividends']
+        dividends = new_df['TotalDividends']
 
-        # Create a line chart
-        fig = px.line(new2, title=f'{equity}: Cost, Value, and Yield Over Time')
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x, y=dividends, fill='tonexty', mode='lines', name='Total Dividends'))
+
+        fig.add_trace(go.Scatter(x=x, y=total, fill='tonexty', mode='lines', name='Present Value (Stacked)'))
+        fig.add_trace(go.Scatter(x=x, y=cost, mode='lines', name='Cost'))
+        fig.add_trace(go.Scatter(x=x, y=inflation, mode='lines', name='Inflation Cost'))
+        fig.update_layout(title=f'{portfolio}/{equity}: Return vs Cost', xaxis_title='Month', yaxis_title='Dollars')
         chart_html = pio.to_html(fig, full_html=False)
+
     return render(request, 'stocks/portfolio_equity_detail.html',
                   {'context': data, 'chart': chart_html})
 

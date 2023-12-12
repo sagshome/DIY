@@ -5,13 +5,12 @@
         <table>
             <tr>
 
-                <th>Name</th>
-                <th>Cost</th>
-                <th>Value</th>
+                <th>Portfolio Name</th>
+                <th>Effective Cost</th>
+                <th>Present Value</th>
                 <th>Growth</th>
-                <th>Dividends</th>
-                <th>Yield</th>
-                <th>% Gain</th>
+                <th>Total Dividends</th>
+                <th>Total Value</th>
                 <th>Actions</th>
             </tr>
             {% for portfolio in object_list %}
@@ -24,13 +23,11 @@
                     <td>${{portfolio.growth|floatformat:'2g'}}</td>
                     <td>${{portfolio.dividends|floatformat:'2g'}}</td>
                     <td>${{portfolio.ylds|floatformat:'2g'}}</td>
-                    <td>{{portfolio.gain|floatformat:'1g'}}%</td>
                     <td>
+                        <a href="{% url 'portfolio_compare' portfolio.id %}"><button class="button button-xs button-primary">Compare</button></a>
                         <a href="{% url 'portfolio_copy' portfolio.id %}"><button class="button button-xs button-info">Copy</button></a>
                         <a href="{% url 'portfolio_delete' portfolio.id %}"><button class="button button-xs button-danger">Delete</button></a>
                         <button id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}") class="button button-xs button-warning">Update</button>
-
-
                     </td>
                 </tr>
            {% endfor %}
