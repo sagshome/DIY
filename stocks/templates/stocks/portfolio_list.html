@@ -4,28 +4,37 @@
 
         <table>
             <tr>
-
                 <th>Portfolio Name</th>
+                <th>Start</th>
+                <th>End</th>
                 <th>Effective Cost</th>
                 <th>Present Value</th>
                 <th>Growth</th>
                 <th>Total Dividends</th>
                 <th>Total Value</th>
+                <th>Comparisons</th>
                 <th>Actions</th>
             </tr>
             {% for portfolio in object_list %}
                 <tr>
-                    <td><a href="{% url 'portfolio_details' portfolio.id %}">
-                        <button class="button button-xs button-success">{{portfolio.name}}</button>
-                    </a></td>
-                    <td>${{portfolio.cost|floatformat:'2g'}}</td>
-                    <td>${{portfolio.value|floatformat:'2g'}}</td>
-                    <td>${{portfolio.growth|floatformat:'2g'}}</td>
-                    <td>${{portfolio.dividends|floatformat:'2g'}}</td>
-                    <td>${{portfolio.ylds|floatformat:'2g'}}</td>
+                    <td><a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></td>
+                    <td>{{portfolio.start}}</td>
+                    <td>{% if portfolio.end != None %}
+                              {{portfolio.end}}
+                        {% endif %}
+                    </td>
+                    <td>${{portfolio.cost|floatformat:'0g'}}</td>
+                    <td>${{portfolio.value|floatformat:'0g'}}</td>
+                    <td>${{portfolio.growth|floatformat:'0g'}}</td>
+                    <td>${{portfolio.dividends|floatformat:'0g'}}</td>
+                    <td>${{portfolio.total|floatformat:'0g'}}</td>
                     <td>
-                        <a href="{% url 'portfolio_compare' portfolio.id %}"><button class="button button-xs button-primary">Compare</button></a>
-                        <a href="{% url 'portfolio_copy' portfolio.id %}"><button class="button button-xs button-info">Copy</button></a>
+                        <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}"><button class="button button-xs button-primary">S&P 500(ish)</button></a>
+                        <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}"><button class="button button-xs button-primary">TSX Dividend</button></a>
+                        <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}"><button class="button button-xs button-primary">BMO Global</button></a>
+
+                    </td>
+                    <td>
                         <a href="{% url 'portfolio_delete' portfolio.id %}"><button class="button button-xs button-danger">Delete</button></a>
                         <button id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}") class="button button-xs button-warning">Update</button>
                     </td>
@@ -33,7 +42,6 @@
            {% endfor %}
         </table>
         <hr>
-        <a href='/admin/stocks/equity/add/'><button class="button button-xs button-success">Add Equity</button></a>
         <a href="{% url 'portfolio_add' %}"><button class="button button-xs button-success">New Portfolio</button></a>
 
     </body>

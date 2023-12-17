@@ -17,15 +17,15 @@ from .importers import *
 def test2(request):
     from .models import Inflation
     Inflation.update()
-
     return JsonResponse(status=200, data={})
 
 
 def test(request):
-    manulife('/home/scott/shared/Finance/manulife_1_xas.csv')
-    # questtrade('/home/scott/Downloads/ScottQuest.csv', 'Scott')
+    # manulife('/home/scott/shared/Finance/manulife_1_xas.csv')
+    #questtrade('/home/scott/Downloads/GailQtrade.csv', 'Gail')
     # questtrade('/home/scott/Downloads/QTest1.csv', 'QTest1')
-
+    p: Portfolio = Portfolio.objects.get(name='Scott-Individual RRSP')
+    p.update_static_values()
     return JsonResponse(status=200, data={})
 
 @require_http_methods(['GET'])
@@ -84,8 +84,8 @@ class PortfolioDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         p = context['portfolio']
         x = sorted(p.pd['Date'].unique())
-        new = p.pd[['Date', 'Cost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
-        cost = new['Cost']
+        new = p.pd[['Date', 'EffectiveCost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
+        cost = new['EffectiveCost']
         inflation = new['InflatedCost']
         total = new['Value'] + new['TotalDividends']
         dividends = new['TotalDividends']
@@ -182,10 +182,10 @@ def portfolio_buy(request, pk):
     return render(request, 'stocks/add_bulk_equity.html', context)
 
 
-def portfolio_compare(request, pk):
+def portfolio_compare(request, pk, symbol):
     portfolio = get_object_or_404(Portfolio, pk=pk)
-    compare_equity = Equity.objects.get(symbol='VFV.TRT')
-    compare_to = portfolio.summary.switch('Comparison', compare_equity, portfolio)
+    compare_equity = Equity.objects.get(symbol=symbol)
+    compare_to = portfolio.summary.switch(compare_equity.name, compare_equity, portfolio)
 
     x = sorted(portfolio.pd['Date'].unique())
     new = portfolio.pd[['Date', 'Cost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
@@ -198,8 +198,8 @@ def portfolio_compare(request, pk):
     compd = comp['TotalDividends']
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=dividends, fill='tonexty', mode='lines', name='Total Dividends'))
-    fig.add_trace(go.Scatter(x=x, y=total, fill='tonexty', mode='lines', name='Present Value'))
+    fig.add_trace(go.Scatter(x=x, y=dividends, mode='lines', name='Total Dividends'))
+    fig.add_trace(go.Scatter(x=x, y=total, mode='lines', name='Present Value'))
     fig.add_trace(go.Scatter(x=x, y=cost, mode='lines', name='Cost'))
     fig.add_trace(go.Scatter(x=x, y=inflation, mode='lines', name='Inflation'))
     fig.add_trace(go.Scatter(x=x, y=compd, mode='lines', name=f'Dividends if...{compare_equity}'))
@@ -236,6 +236,11 @@ def portfolio_equity_details(request, pk, key):
     """
     portfolio = get_object_or_404(Portfolio, pk=pk)
     equity = get_object_or_404(Equity, symbol=key)
+
+
+    dividend_detail = dict(EquityEvent.objects.filter(event_type='Dividend', equity=equity).values_list('date', 'value'))
+    value_detail = dict(EquityValue.objects.filter(equity=equity).values_list('date', 'price'))
+
     data = []
     chart_html = '<p>No chart data available</p>'
     #portfolio.pd['Date'] = pd.to_datetime(portfolio.pd['Date'])
@@ -254,22 +259,25 @@ def portfolio_equity_details(request, pk, key):
                     extra_data = f'Bought {xa.quantity} shares at ${xa.price}'
 
         if element['Shares'] == 0:
-            total_dividends = eyield = 0
+            total_dividends = equity_growth = 0
         else:
             total_dividends = element['TotalDividends']
-            eyield = element['Yield']
+            equity_growth = element['Value'] - element['EffectiveCost']
 
         #total_dividends = element['TotalDividends']
         #eyield = element['Yield']
-        share_price = element['Value'] / element['Shares'] if element['Shares'] != 0 else 0
-        data.append([element['Date'], element['Shares'], element['Value'], element['Cost'],
-                     total_dividends, eyield, element['Dividend'],
+
+        share_price = value_detail[element['Date']] if element['Date'] in value_detail else 0
+        dividend_price = dividend_detail[element['Date']] if element['Date'] in dividend_detail else 0
+
+        data.append([element['Date'], element['Shares'], element['Value'], element['EffectiveCost'],
+                     total_dividends, equity_growth, dividend_price,
                      share_price, extra_data])
         #data.reverse()
 
         x = sorted(new_df['Date'].unique())
         #new = df_sorted.loc[df_sorted['Equity'] == equity.key][['Date', 'Cost', 'Value', 'TotalDividends']]
-        cost = new_df['Cost']
+        cost = new_df['EffectiveCost']
         inflation = new_df['InflatedCost']
         total = new_df['Value'] + new_df['TotalDividends']
         dividends = new_df['TotalDividends']
@@ -284,7 +292,7 @@ def portfolio_equity_details(request, pk, key):
         chart_html = pio.to_html(fig, full_html=False)
 
     return render(request, 'stocks/portfolio_equity_detail.html',
-                  {'context': data, 'chart': chart_html})
+                  {'context': data, 'portfolio': portfolio, 'equity': equity, 'chart': chart_html})
 
 
 def add_equity(request):

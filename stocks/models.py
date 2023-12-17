@@ -409,25 +409,31 @@ class PortfolioSummary:
     reference raw portfolio or transaction data.   This is done so that we can compare / create speculative data
     """
     DataColumns = ['Date',   # The date of this record
+                   'Funding',  # The amount the Portfolio has received and redeemed
+                   'FundingCost',  # The inflated cost of the funding
                    'Equity',   # The equity (key) for this entry
                    'Shares',   # The number of shares (on this date)
-                   'Cost',  # The cost (as of this date)
-                   'InflatedCost',  # The cost (as of this date) - with inflation factored in
-                   'Value',   # The value (if you sold on this date)
-                   'Growth',  # Net gain (as of this day)
-                   'Dividend',   # The dividend per share issued on this date
+                   'Spent',  # Accumulated Cost
+                   'Redeemed',  # Accumulated Sales
+                   'EffectiveCost',  # Spend - Redeemed (or 0)
+                   'Value',  # Present Value
+                   'Dividend',  # The dividend value on this date/equity/portfolio
                    'TotalDividends',   # The accumulated dividends as of this date
-                   'Yield',  # Total Dividends + Current Value - Cost as of this date
-                   'Gain',  # The percent gain (Yield - Cost/Cost) * 100 on this date
+                   'InflatedCost',  # The cost (as of this date) - with inflation factored in / Less redeemed
                    ]
 
-    def __init__(self, name: str, xas: Dict, drip: bool = False):
+    def __init__(self, name: str, xas: Dict, funding: Dict, drip: bool = False):
         self.name = name
         self.xas = xas
+        self.funding = funding
         self.drip = drip  # if this a drip portfolio then do not realize dividends - they will appear as purchases
 
     @cached_property
     def pd(self) -> pd:
+        '''
+        This structure
+        :return:
+        '''
         now = datetime.now()
         new = pd.DataFrame(columns=self.DataColumns)
         monthly_inflation: Dict[date, float] = dict(Inflation.objects.all().values_list('date', 'inflation'))
@@ -435,13 +441,12 @@ class PortfolioSummary:
 
         for e in self.xas.keys():
             equity = Equity.objects.get(symbol=e)
-            first = sorted(self.xas[e])[0]
+            first = sorted(self.xas[e])[0]  # todo: How many times am I sorting this
             values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
-            dividends = dict(EquityEvent.objects.filter(date__gte=first, event_type='Dividend',
-                                                        equity=equity).values_list('date', 'value'))
+            dividends: Dict[date, float] = dict(EquityEvent.objects.filter(date__gte=first, event_type='Dividend',
+                                                                           equity=equity).values_list('date', 'value'))
 
-            total_dividends = shares = cost = cost_per_share = inflation = 0
-
+            shares = spent = redeemed = effective_cost = total_dividends = inflation = 0
             for value in values:  # This is over every month you owned this equity.
                 if self.drip:
                     dividend = 0
@@ -452,28 +457,26 @@ class PortfolioSummary:
                 if value.date in self.xas[e]:
                     xa = self.xas[e][value.date]
                     shares += xa.quantity
-                    cost += (xa.quantity * xa.price)
+                    if xa.quantity > 0:
+                        spent += xa.quantity * xa.price
+                    else:
+                        redeemed += xa.quantity * xa.price
+                    effective_cost += xa.quantity * xa.price
                     inflation += (inflation * monthly_inflation[value.date] / 100) + (xa.quantity * xa.price)
                     if equity.equity_type == 'MM':
                         new_cash += xa.dividend  # todo:  Test this out with a MM equity
                 else:
                     inflation += inflation * monthly_inflation[value.date] / 100
-                if cost < 0:
-                    print(f'Equity:{e} Date:{value.date} - LESS THEN 0 -> {cost} Shares {shares}')
-                    cost = 0
-                    shares = 0
-                    inflation = 0
-                print(f'Equity:{e} Date:{value.date} Cost:{cost} Inflation:{inflation} Rate:{monthly_inflation[value.date]}')
+                    if effective_cost < 0:
+                        print(f'Equity:{e} Date:{value.date} - LESS THEN 0 -> {effective_cost} Shares {shares}')
+                        shares = 0
+                        inflation = 0
+                        effective_cost = 0
+                this_dividend = shares * dividend if not self.drip else 0
+                total_dividends += this_dividend + new_cash
 
-                cpv = value.price * shares
-                growth = cpv - cost
-                total_dividends += shares * dividend + new_cash
-
-                yld = cpv + total_dividends
-                gain = 0 if cost == 0 else (cpv + total_dividends - cost) / cost * 100
-
-                new.loc[len(new.index)] = [value.date, e, shares, cost, inflation, cpv, growth, dividend,
-                                           total_dividends, yld, gain]
+                new.loc[len(new.index)] = [value.date, e, shares, spent, redeemed, effective_cost,
+                                           value.price * shares, this_dividend, total_dividends, inflation]
         print(f'Created DataFrame for {self.name} in {(datetime.now()-now).seconds}')
         return new
 
@@ -518,10 +521,19 @@ class Portfolio(models.Model):
     name: str = models.CharField(max_length=128, unique=True, primary_key=False,
                                  help_text='Enter a unique name for this portfolio')
     managed: bool = models.BooleanField(default=True)
+    # These Values are updated to allow for a quick loading of portfolio_list
+    cost: int = models.IntegerField(null=True, blank=True)  # Effective cost of all shares ever purchased
+    value: int = models.IntegerField(null=True, blank=True)  # of shares owned as of today
+    dividends: int = models.IntegerField(null=True, blank=True)  # Total dividends ever received
+    start: date = models.DateField(null=True, blank=True)
+    end: date = models.DateField(null=True, blank=True)
 
     @cached_property
     def summary(self):
-        return PortfolioSummary(str(self.name), self.transactions, drip=self.managed)
+        return PortfolioSummary(str(self.name), self.transactions, self.funding, drip=self.managed)
+
+    def funding(self):
+        return dict(Funding.objects.filter(portfolio=self).values_list('date', 'amount').order_by_date())
 
     def __str__(self):
         return self.name
@@ -559,31 +571,14 @@ class Portfolio(models.Model):
                 result[equity.key][this_date].process(self)
         return result
 
-    @property
-    def cost(self) -> float:
-        return self.pd[self.pd['Date'] == normalize_today()]['Cost'].sum()
 
     @property
-    def value(self) -> float:
-        return self.pd[self.pd['Date'] == normalize_today()]['Value'].sum()
-
-    @property
-    def dividends(self) -> float:
-        return self.pd[self.pd['Date'] == normalize_today()]['TotalDividends'].sum()
-
-    @property
-    def ylds(self) -> float:
-        return self.pd[self.pd['Date'] == normalize_today()]['Yield'].sum()
-
-    @property
-    def gain(self) -> float:
-        if self.cost == 0:
-            return 0
-        return (self.value + self.dividends - self.cost) / self.cost * 100
-
-    @property
-    def growth(self) -> float:
+    def growth(self) -> int:
         return self.value - self.cost
+
+    @property
+    def total(self) -> int:
+        return self.growth + self.dividends
 
     def update(self):
         """
@@ -593,6 +588,44 @@ class Portfolio(models.Model):
         for equity in self.equities:
             if equity.update():
                 sleep(2)  # Any faster and my free API will fail
+
+    def update_static_values(self):
+        """
+        Ensure that each of my equities is updated
+        :return:
+            cost: int = models.IntegerField(null=True, blank=True)  # Total cost of all shares ever purchased
+    value: int = models.IntegerField(null=True, blank=True)  # of shares owned as of today
+    growth: int = models.IntegerField(null=True, blank=True)  # PV - cost + redeemed values
+    dividends: int = models.IntegerField(null=True, blank=True)  # Total dividends ever received
+    start: date = models.DateField(null=True, blank=True)
+    end: date = models.DateField(null=True, blank=True)
+
+        """
+        this_day = normalize_today()
+        current = self.pd.loc[self.pd['Date'] == this_day]
+        self.cost = current['EffectiveCost'].sum()
+        self.dividends = current['TotalDividends'].sum()
+        self.value = current['Value'].sum()
+        self.start = self.pd['Date'].min()
+        end_date = self.pd.loc[self.pd['Value'] > 0]['Date'].max()
+        self.save()
+
+
+class Funding(models.Model):
+    """
+    Track money in/out of a portfolio
+    """
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
+    date: date = models.DateField()
+    amount: float = models.FloatField()
+
+    def __str__(self):
+        return f'{self.date} - {self.portfolio} - {self.amount}'
+
+    def save(self, *args, **kwargs):
+        self.date = normalize_date(self.date)
+        super(Transaction, self).save(*args, **kwargs)
+        raise Exception(f'Portfolio {portfolio} - has negative funding.')
 
 
 class Transaction(models.Model):

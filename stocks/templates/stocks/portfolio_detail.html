@@ -19,7 +19,7 @@
             <tr>
                 <td><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
                 <td>{% equity_value portfolio e "Shares" "{:.1f}" %}</td>
-                <td>${% equity_value portfolio e "Cost" "{:.0f}" %}</td>
+                <td>${% equity_value portfolio e "EffectiveCost" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "Growth" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
