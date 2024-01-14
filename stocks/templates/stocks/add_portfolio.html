@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Portfolio Add{% endblock %}
+{% block title %}Portfolio {{view_verb}}{% endblock %}
 {% block content %}
-  <h1>New Portfolio:</h1>
+  <h1>{{view_verb}} Portfolio:</h1>
   <form action="" method="post">
     {% csrf_token %}
     {{ form.as_p }}

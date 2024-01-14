@@ -1,33 +1,13 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>{% block title %}
-      DIY Stocks Analysis{% endblock %}
-    </title>
+    <title>{% block title %} DIY Stocks Analysis {% endblock title %}</title>
       {% load static %}
-      <link rel="stylesheet" href="/static/css/webui-components-standard.min.css">
-      {% load django_bootstrap5 %}
-      {% bootstrap_css %}
-      {% bootstrap_javascript %}
-    <style>
-        body {background-color: powderblue;}
-        h1   {color: blue;}
-        th, td {padding: 10px;}
-        th {text-align: center;}
-        .button {
-             border: none;
-             border-radius: 12px;
-             text-align: center;
-             text-decoration: none;
-             display: inline-block;
-        }
-        .bad-text {color: red;}
-      </style>
+      <link rel="stylesheet" href="/static/css/webui-components-standard.css">
+      <link rel="stylesheet" href="/static/diy.css">
   </head>
   <body>
-    <script src="js/webui.min.js"></script>
-
-    {% bootstrap_messages %}
+    <script src="/static/js/webui-components.js"></script>
     {% block content %}
     {% endblock content %}
   </body>

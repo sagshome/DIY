@@ -1,10 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Portfolio Equity Details{% endblock %}
 {% block content %}
-    <h1>Portfolio: {{portfolio}}</h1>
-    <h2>Target is: {{equity.name}} ({{equity.symbol}})</h2>
-    <div>{{ chart|safe }}</div>
-    <table>
+<div class="flex-container flex-items-auto">
+    <div class="row">
+        <div id="heading">
+            <h1>Portfolio: {{portfolio}}</h1>
+            <h2>Target is: {{equity.name}} ({{equity.symbol}})</h2>        </div>
+        </div>
+    </div>
+</div>
+<div class="flex-container flex-items-auto">
+    <div class="row">
+        <div id="chart" class="col flex-size-16 pad-md rounded">
+            {{ chart|safe }}
+        </div>
+        </div>
+        <div id="documentation" class="col flex-size-8 pad-md">
+            The <b>Return vs Cost</b> tracks and equity in your portfolio based on the following criteria:
+            <ul>
+                <li><em>Effective Cost</em> is the purchase cost less the sales cost as of that date</li>
+                <li><em>Present Value</em> is the market value of the shares on that date</li>
+                <li><em>Effective Value</em> is Present Value, combined with the total dividends</li>
+                <li><em>Total dividends</em> just tracks the accumulated dividends the equity has received.</li>
+                <li><em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
+                    the CPI (consumers price index) based on the Bank of Canada's inflation reporting.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+<div class="flex-container flex-items-auto">
+    <div id="table" class="pad-md">
+    <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
         <tr>
             <th>Date</th>
             <th>Shares Owned</th>
@@ -42,5 +68,6 @@
             </tr>
        {% endfor %}
     </table>
-    <a href='portfolio><button class="button button-xs button-info">Add Portfolio</button></a>
+    </div>
+</div>
 {% endblock content %}

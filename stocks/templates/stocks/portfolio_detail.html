@@ -2,58 +2,79 @@
 {% block title %}Portfolio Details{% endblock %}
 {% load my_tags %}
 {% block content %}
-    <h1>Portfolio Details for {{portfolio.name}}</h1>
-    <div>{{ chart|safe }}</div>
-    <table>
+<div class="flex-container flex-items-auto">
+    <div class="row">
+        <div id="heading">
+            <p class="indent">Portfolio Details for {{portfolio.name}}
+        </div>
+    </div>
+</div>
+<div class="flex-container flex-items-auto">
+    <div class="row">
+        <div id="chart">
+            {{ chart|safe }}
+        </div>
+    </div>
+</div>
+<div class="flex-container flex-items-auto">
+    <div class="column">
+        <p> Comparison charts<br></p>
+        <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}"><button class="rounded spaced menu-button-primary">S&P 500(ish)</button></a>
+                        <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}"><button class="rounded spaced menu-button-primary">TSX Dividend</button></a>
+                        <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}"><button class="rounded spaced menu-button-primary">BMO Global</button></a>
+
+    </div></div>
+<div class="flex-container flex-items-auto">
+    <div id="table" class="flex-size-12 pad-md">
+    <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
         <tr>
             <th>Equity</th>
             <th>Shares</th>
             <th>Effective<br>Cost</th>
             <th>Value</th>
-            <th>Growth</th>
             <th>Total<br>Dividends</th>
             <th>Actions</th>
         </tr>
 
         {% for e in portfolio.equity_keys %}
             <tr>
-                <td><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
+                <td class="indent"><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
                 <td>{% equity_value portfolio e "Shares" "{:.1f}" %}</td>
                 <td>${% equity_value portfolio e "EffectiveCost" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "Growth" "{:.0f}" %}</td>
                 <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
                 <td>
                     <button id="update-{{equity.symbol}}" onclick=update("{{e}}")
-                            class="button button-xs button-warning">Update</button>
+                            class="rounded spaced menu-button-warning">Update</button>
                 </td>
             </tr>
        {% endfor %}
     </table>
-    <hr>
+    To add a new Transaction,  select
+    <a href="{% url 'transaction_add' portfolio.id %}"><button class="rounded spaced menu-button-success">New Activity</button></a>
+    </div>
+    <div id="documentation" class="pad-md">
+        The <b>Return vs Cost</b> chart computes the cost of the portfolio by the total of money funded into the portfolio
+        vs money that was redeemed.   <em>Effective Cost</em> is the funded cost less the redeemed cost as of that date.
+        Cash positions inside the portfolio are not realized until they are removed.
+        <br><br>
+        <em>Value</em> is the value of the combined equities/mutual funds/money markets etc as of that date.   It also
+        includes any cash sitting in the portfolio.  The values
+        when possible are tracked against API the report historic values.
+        <br><br>
+        <em>Total dividends</em> just tracks the accumulated dividends the portfolio has received.   Their value is not deducted
+        from the Effective cost (unless the value was redeemed).
+        <br><br>
+        The <em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
+        the CPI (consumers price index) based on the Bank of Canada's inflation reporting.
+        <br><br><br>
+        The Portfolio Detail table,  tracks individual items.   Items with 0 value are historic positions.   Each item
+        in the table can be drilled down to see your specific returns over time.
+        <br><br>
+        The <em>Update</em> action will force an API refresh however,  the values are automatically updated every
+        morning, and they will not update again on the same day.
+    </div>
 
-    To purchase new equities select
-    <a href="{% url 'portfolio_buy' portfolio.id %}"><button class="button button-xs button-success">Buy</button></a>
+</div>
 
-    <script>
-        function update(id) {
-            var xhttp = new XMLHttpRequest();
-                var tag_id = "update-" + id
-                var tag_id = "update-" + id
-                xhttp.onreadystatechange = function() {
-                  if (this.readyState == 4 && this.status == 200) {
-                    setTimeout(function(){
-                      document.getElementById(tag_id).innerHTML = 'Update';
-                    }, 2000);
-                    window.location.href = window.location.href;
-                  } else {
-                    document.getElementById(tag_id).innerHTML = 'Loading...';
-                  }
-                };
-
-            xhttp.open("get", "/stocks/equity/"+id+"/update/", true);
-            xhttp.setRequestHeader("Content-type", "application/json");
-            xhttp.send();
-        }
-    </script>
 {% endblock content %}

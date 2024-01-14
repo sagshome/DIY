@@ -3,7 +3,10 @@ from django.core.exceptions import ValidationError
 from .models import Equity, Portfolio, Transaction
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
 
-
+def popover_html(label, content):
+    return label + ' <a tabindex="0" role="button" data-toggle="popover" data-html="true" \
+                            data-trigger="hover" data-placement="auto" data-content="' + content + '"> \
+                            <span class="glyphicon glyphicon-info-sign"></span></a>'
 class AddEquityForm(forms.Form):
 
     search = forms.CharField(max_length=30,
@@ -12,17 +15,35 @@ class AddEquityForm(forms.Form):
     region = forms.ChoiceField(choices=Equity.REGIONS)
 
 
-class AddPortfolioForm(forms.Form):
 
-    name = forms.CharField()
+class UploadForm(forms.Form):
+    """
+    Multi entry form
+    """
 
-    def clean_name(self):
-        print('here')
-        data = self.cleaned_data['name']
-        data = data.lstrip(' ').rstrip(' ')
-        if Portfolio.objects.filter(name=data).exists():
-            raise ValidationError('Invalid portfolio name,  it already exists')
-        return data
+    upload_file = forms.FileInput()
+
+    equity = forms.ChoiceField(choices=Transaction.equity_choice_list(),
+                               label='Equity')
+    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
+                                                         'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
+                           label='Date')
+    price = forms.DecimalField(label='Price')
+    quantity = forms.DecimalField(label='Quantity')
+    action = forms.ChoiceField(label='Transaction Type',
+                                 choices=[(Transaction.FUND, 'Fund'),
+                                          (Transaction.BUY, 'Buy'),
+                                          (Transaction.SELL, 'Sell'),
+                                          (Transaction.REDEEM, 'Redeem')])
+
+
+class PortfolioForm(forms.ModelForm):
+    class Meta:
+        model = Portfolio
+        fields = ('name', 'currency', 'managed', 'end')
+        widgets = {
+            'end': forms.TextInput(attrs={'type': 'date'})
+        }
 
 
 class TransactionForm(forms.Form):
@@ -30,28 +51,15 @@ class TransactionForm(forms.Form):
     Multi entry form
     """
 
-    equity = forms.ChoiceField(choices=Transaction.equity_choice_list())
-    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date'}))
-    price = forms.DecimalField()
-    quantity = forms.DecimalField()
-
-    # class Meta:
-    #     model = Transaction
-    #     fields = ['equity', 'date', 'quantity', 'price']
-    #     widgets = {
-    #         'equity': forms.ChoiceField(choices=Equity.choice_list()),
-    #         'date': forms.DateField(widget=forms.TextInput(attrs={'type': 'date'})),
-    #         'quantity': forms.FloatField(),
-    #         'price': forms.FloatField()
-    #     }
-
-
-
-#TransactionFormSet = formset_factory(TransactionForm, extra=1)
-#TransactionFormSet = modelformset_factory(Transaction, fields=['equity', 'date', 'quantity', 'price'], extra=1 )
-
-#TransactionFormset = formset_factory()
-#    Transaction,
-#    extra=1,
-#    fields=['equity', 'date', 'quantity', 'price']
-#)
+    equity = forms.ChoiceField(choices=Transaction.equity_choice_list(),
+                               label='Equity')
+    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
+                                                         'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
+                           label='Date')
+    price = forms.DecimalField(label='Price')
+    quantity = forms.DecimalField(label='Quantity')
+    action = forms.ChoiceField(label='Transaction Type',
+                                 choices=[(Transaction.FUND, 'Fund'),
+                                          (Transaction.BUY, 'Buy'),
+                                          (Transaction.SELL, 'Sell'),
+                                          (Transaction.REDEEM, 'Redeem')])
