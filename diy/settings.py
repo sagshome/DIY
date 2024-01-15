@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-
+import logging
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,14 +20,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-)y9$(s0712%j*q^f9)g!n^9jwh5d2sjve2_e*h7^235x2xb(=1'
+SECRET_KEY = 'Secret'  # override in local_settings.py
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+try:
+    from .local_settings import DEBUG
+except ImportError:
+    DEBUG = False
 
 ALLOWED_HOSTS = []
 
-ALPHAVANTAGEAPI_KEY = 'A982RGIV8QX2YQQ7'
+ALPHAVANTAGEAPI_KEY = 'ALPHAVANTAGEAPI_KEY'  # Override in local_settings.py
 
 # Application definition
 
@@ -53,6 +56,37 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {module}:{lineno} {message}",
+            # "format": "{levelname} {asctime} {module}:{lineno} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": "logfile.log",
+            "formatter": "verbose",
+            "level": "DEBUG"
+        },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+            'level': 'DEBUG' if DEBUG else 'CRITICAL',
+        },
+    },
+    "loggers": {
+        "": {
+            "handlers": ["console", "file"],
+            'level': 'DEBUG' if DEBUG else 'WARNING',
+        }
+    }
+}
+
 ROOT_URLCONF = 'diy.urls'
 
 TEMPLATES = [
@@ -76,13 +110,7 @@ WSGI_APPLICATION = 'diy.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+# set in local_settings.py
 
 
 # Password validation
@@ -113,7 +141,7 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
-USE_TZ = True
+USE_TZ = False
 
 
 # Static files (CSS, JavaScript, Images)
@@ -130,6 +158,5 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-SHELL_PLUS_POST_IMPORTS = [
-    ('stocks.models', '*'),
-]
+from .local_settings import *
+

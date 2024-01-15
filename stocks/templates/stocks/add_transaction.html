@@ -1,0 +1,49 @@
+﻿{% extends "base.html" %}
+{% load my_tags %}
+{% block title %}Add Equity to Portfolio{% endblock title %}
+{% block scripts %}
+    <script>
+        $(document).ready(function() {
+            $("#datepicker").datepicker();
+        });
+    </script>
+{% endblock scripts %}
+{% block content %}
+    <div class="flex-container flex-items-auto">
+        <div class="row">
+            <div id="heading">
+                <h2>Portfolio Transactions</h2>
+            </div>
+        </div>
+    </div>
+    <div class="flex-container flex-items-auto">
+        <div id="xa_table" class="flex-size-8 pad-md">
+            <form method="post">{% csrf_token %}
+                {{ form.non_field_errors }}
+
+                {% for hidden_field in form.hidden_fields %}
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
+                {% endfor %}
+
+                <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-md text-sm">
+                    {% for field in form.visible_fields %}
+                    <tr>
+                        <th class="col-3">{{ field.label_tag }}</th>
+                        <td class="col-5 rounded">
+                            {{ field.errors }}
+                            {{ field }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                <input type="submit" class="rounded spaced menu-button-info" name="submit-type" value="Add Another">
+                <input type="submit" class="rounded spaced menu-button-success" name="submit-type" value="Submit">
+            </form>
+        </div>
+        <div id="documentation" class="pad-md">
+            Add a Fund, Buy, Sell or Redeem transaction for {{portfolio.name}}
+
+        </div>
+    </div>
+{% endblock content %}

@@ -1,249 +1,460 @@
+import copy
 import csv
+import logging
+import pandas as pd
 
 from datetime import datetime, date
 from typing import List, Dict
 
 from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction
-from .utils import next_date, normalize_date
 
-equities: Dict[str, Equity] = {}
-portfolios: Dict[str, Portfolio] = {}
+FUND = Transaction.FUND
+BUY = Transaction.BUY
+SELL = Transaction.SELL
+DIV = Transaction.DIV
+INT = Transaction.INTEREST
+REDEEM = Transaction.REDEEM
+JUNK = 7
+REINVESTED = 8
+TRANSFER_IN = 9
+TRANSFER_OUT = 10
 
-
-def equity_lookup(symbol: str, name: str):
-    if symbol in equities:
-        return equities[symbol]
-    value = EquityAlias.find_equity(name)
-    if value:
-        equities[symbol] = value
-        return equities[symbol]
-    raise Exception(f'Failed to lookup {symbol} - {name}')
-
-
-def get_or_create_equity(symbol: str, name: str, currency: str, managed: bool):
-    '''
-    Given a symbol,  and a descriptive name - do your best to lookup and / or create a new equity
-    :param symbol:  The basic for the search
-    :param name:  The text description
-    :param currency: Used to pick region and possible symbol decorations
-    :param managed:  Used to determine MoneyMarket vs MutualFund for managed accounts
-    :return:
-    '''
-
-    if symbol not in equities:  # Not yet cached
-        try:
-            equity = Equity.objects.get(symbol=symbol)
-        except Equity.DoesNotExist:
-            searchable = False
-            region = 'TRT' if currency == 'CAD' else ""
-            if name.find(' ETF') != -1:
-                equity_type = 'ETF'
-                searchable = True
-            elif not managed:
-                equity_type = 'Equity'
-                searchable = True
-            elif name.find('%') != -1 or name.find('SAVINGS') != -1:
-                equity_type = 'MM'
-            else:
-                equity_type = 'MF'
-            equity = Equity(symbol=symbol, name=name, searchable=searchable, equity_type=equity_type,
-                            currency=currency, region=region)
-            equity.save(update=False)
-
-        if not EquityAlias.objects.filter(symbol=symbol, name=name).exists():
-            EquityAlias.objects.create(symbol=symbol, name=name, equity=equity)
-        equities[symbol] = equity
-    return equities[symbol]
+logger = logging.getLogger(__name__)
 
 
-def get_or_create_portfolio(portfolio, managed):
-    if portfolio not in portfolios:
-        p, created = Portfolio.objects.get_or_create(name=portfolio, managed=managed)
-        portfolios[portfolio] = p
-    return portfolios[portfolio]
-
-
-def fill_value_holes():
+class StockImporter:
     """
-    Inporting based on transactions leaves a lot of holes in price data.    This function will fill those holes
-    with estimated data based on price changes between data points.
-
-    :return:
+    Pull the CSV file into a pd structure, so we can sort it.   Sorting is required, so we can calculate the dividends
+    based on the amount of shares owned.
     """
-    for equity in Equity.objects.all():
-        print(f'Checking {equity} for holes')
-        equity.fill_equity_holes()
+    default_pd_columns = ['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency',
+                          'Quantity', 'Price', 'Amount']
+
+    def __init__(self, file_name: str, headers: Dict[str, str], stub: str = None, managed: bool = False):
+        self.stub = stub + '_' if stub else None
+        self.managed = managed
+        self.headers = headers  # A dictonary map for csv_columns to pd_columns
+        self._columns = copy.deepcopy(self.default_pd_columns)
+        self.added_columns = set(self.headers.keys()) - set(self._columns)
+        for new_column in self.added_columns:
+            self._columns.append(new_column)
+        self.pd = pd.DataFrame(columns=self._columns)
+        self.portfolios: Dict[str, Portfolio] = {}
+        self.equities: Dict[str, Equity] = {}
+
+        with open(file_name) as csv_file:
+            reader = csv.reader(csv_file)
+            self.mappings = self.get_headers(reader)
+
+            for row in reader:
+                xa_date: date = self.csv_date(row)  # Normalize and format date (need to override if date format is off)
+                if xa_date:  # Skip blank lines
+                    account_name: str = row[self.mappings['AccountName']]
+                    account_key: str = row[self.mappings['AccountKey']]
+                    symbol: str = self.csv_symbol(row)
+                    description: str = row[self.mappings['Description']]
+                    xa_type: int = self.csv_xa_type(row)
+                    currency: str = row[self.mappings['Currency']]
+                    quantity: float = self.csv_quantity(row)
+                    price: float = self.csv_price(row)
+                    amount: float = self.csv_amount(row)
+
+                    self.pd.loc[len(self.pd.index)] = self.add_extra_data(row,
+                                                                          [xa_date, account_name, account_key,
+                                                                           symbol, description, xa_type, currency,
+                                                                           quantity, price, amount])
+
+        self.pd['Date'] = pd.to_datetime(self.pd['Date'])
+        self.pd = self.pd.sort_values(['Date', 'AccountKey', 'XAType'], ascending=[True, True, True])
+
+    def process(self):
+        equity_totals = {}  # Needed to calculate dividends on a specific date
+        last_import = None
+        for _, prow in self.pd.iterrows():
+            do_process: bool = True
+            this_date: date = self.pd_date(prow)
+            symbol: str = self.pd_symbol(prow)
+            xa_action: int = self.pd_xa_type(prow)
+            amount: float = self.pd_amount(prow)
+            price = self.pd_price(prow)
+            quantity = self.pd_quantity(prow)
+            equity: Equity
+
+            logger.debug('Processing %s %s %s' % (this_date, symbol, xa_action))
+            #
+            portfolio: Portfolio = self.get_or_create_portfolio(
+                self.stub, self.pd_account_name(prow), self.pd_account_key(prow), False)
+            if portfolio.explicit_name not in equity_totals:
+                equity_totals[portfolio.explicit_name] = {}
+            if portfolio.last_import and (this_date <= portfolio.last_import):
+                logger.debug('Skipping this record')
+                do_process = False
+
+            last_import = this_date  # This has been pre-ordered by date
+
+            if xa_action in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN] and do_process:
+                this_action = FUND if xa_action in [FUND, TRANSFER_IN] else REDEEM
+                Transaction.objects.create(date=this_date, portfolio=portfolio,
+                                           value=amount, xa_action=this_action,
+                                           quantity=0, price=0)
+
+            if xa_action in [BUY, SELL, REINVESTED, TRANSFER_IN, TRANSFER_OUT]:
+                equity = self.get_or_create_equity(symbol, self.pd_description(prow), self.pd_currency(prow), False)
+                if equity.key not in equity_totals[portfolio.explicit_name]:
+                    equity_totals[portfolio.explicit_name][equity.key] = 0  # First purchase
+                equity_totals[portfolio.explicit_name][equity.key] += quantity
+                buy_price = price if xa_action != REINVESTED else 0
+                this_action = BUY if xa_action in [BUY, REINVESTED, TRANSFER_IN] else SELL
+
+                if do_process:
+                    logger.debug('%s:Trading %s shares %s' % (this_date, equity, quantity))
+                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=this_date,
+                                               xa_action=this_action, price=buy_price, quantity=quantity)
+                    if not EquityValue.objects.filter(equity=equity, date=self.pd_date(prow)).exists():
+                        EquityValue.objects.create(equity=equity, date=this_date, price=price, estimated=True)
+
+            if xa_action not in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN, BUY, SELL, REINVESTED] and do_process:
+                equity = self.equity_lookup(symbol, self.pd_description(prow))
+                if xa_action == DIV:  # Dividends
+                    logger.debug('%s:DIV %s' % (this_date, equity))
+                    value = amount / equity_totals[portfolio.explicit_name][equity.key]
+                    if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
+                        if not EquityEvent.objects.filter(equity=equity, date=this_date, event_type='Dividend').exists():
+                            EquityEvent.objects.create(equity=equity, date=this_date, value=value,
+                                                       event_type='Dividend', event_source='upload')
+                        if not EquityValue.objects.filter(equity=equity, date=this_date).exists():
+                            EquityValue.objects.create(equity=equity, date=this_date, price=price, estimated=True)
+
+                elif xa_action == INT:  # Interest
+                    logger.info('Skipping INT action - I will come out as profit when redeeming')
+                elif xa_action == JUNK:
+                    pass
+                else:
+                    raise Exception(f'Unexpected Activity type {xa_action}')
+
+        for p in self.portfolios:
+            if (not self.portfolios[p].last_import) or (last_import and (self.portfolios[p].last_import < last_import)):
+                self.portfolios[p].last_import = last_import
+                self.portfolios[p].save()  # We must have imported something
+            for e in self.portfolios[p].equities:
+                e.update(force=False)
+            self.portfolios[p].update_static_values()
+        self.fill_value_holes()
+
+    def get_headers(self, csv_reader):
+        if set(self._columns) - set(self.headers.keys()):
+            raise NotImplementedError(f'Failed to provide mappings for {set(self._columns) - set(self.headers.keys())}')
+
+        header = next(csv_reader)
+        return_dict = {}
+        for column in self.headers:
+            return_dict[column] = header.index(self.headers[column])
+        return return_dict
+
+    # These setters are used so that subclassed importers can override the default value
+
+    def csv_symbol(self, row) -> str:
+        return row[self.mappings['Symbol']]
+
+    def csv_date(self, row) -> date | None:
+        data = row[self.mappings['Date']]
+        if data:
+            try:
+                return datetime.strptime(data, '%Y-%m-%d %H:%M:%S %p')
+            except ValueError:
+                logger.debug('Invalid date %s on row %s' % (data, row))
+        return None
+
+    def csv_price(self, row) -> float:
+        value = row[self.mappings['Price']]
+        if value:
+            try:
+                value = float(value)
+            except ValueError:
+                logger.error('Failed to convert Price:%s to a floating point number' % value)
+                value = 0
+        else:
+            value = 0
+        return value
+
+    def csv_quantity(self, row) -> float:
+        value = row[self.mappings['Quantity']]
+        if value:
+            try:
+                value = float(value)
+            except ValueError:
+                logger.error('Failed to convert Quantity:%s to a floating point number' % value)
+                value = 0
+        else:
+            value = 0
+        return value
+
+    def csv_amount(self, row) -> float:
+        value = row[self.mappings['Amount']]
+        if value:
+            try:
+                value = float(value)
+            except ValueError:
+                logger.error(f'Failed to convert Amount:%s to a floating point number' % value)
+                value = 0
+        else:
+            value = 0
+        return value
+
+    def csv_xa_type(self, row) -> int:
+        csv_value = row[self.mappings['XAType']]
+        return Transaction.TRANSACTION_MAP[csv_value]
+
+    @staticmethod
+    def pd_get(row, key):
+        return row[key]
+
+    def pd_symbol(self, row) -> str:
+        return self.pd_get(row, 'Symbol')
+
+    def pd_account_name(self, row) -> str:
+        return self.pd_get(row, 'AccountName')
+
+    def pd_account_key(self, row) -> str:
+        return self.pd_get(row, 'AccountKey')
+
+    def pd_description(self, row) -> str:
+        return self.pd_get(row, 'Description')
+
+    def pd_date(self, row) -> date:
+        return self.pd_get(row, 'Date').date()
+
+    def pd_price(self, row) -> float:
+        return float(self.pd_get(row, 'Price'))
+
+    def pd_quantity(self, row) -> float:
+        return float(self.pd_get(row, 'Quantity'))
+
+    def pd_amount(self, row) -> float:
+        return float(self.pd_get(row, 'Amount'))
+
+    def pd_xa_type(self, row) -> int:
+        return self.pd_get(row, 'XAType')
+
+    def pd_currency(self, row) -> str:
+        return self.pd_get(row, 'Currency')
+
+    def add_extra_data(self, row, existing) -> List:
+        """
+        Adding data from the input dict to the columns
+        :param row:
+        :param existing:
+        :return:
+        """
+        for added in self.added_columns:
+            existing.append(row[self.mappings[added]])
+        return existing
+
+    def equity_lookup(self, symbol: str, name: str):
+        if symbol in self.equities:
+            return self.equities[symbol]
+        value = EquityAlias.find_equity(name)
+        if value:
+            self.equities[symbol] = value
+            return self.equities[symbol]
+        raise Exception(f'Failed to lookup {symbol} - {name}')
+
+    def get_or_create_equity(self, symbol: str, name: str, currency: str, managed: bool):
+        """
+        Given a symbol,  and a descriptive name - do your best to lookup and / or create a new equity
+        :param symbol:  The basic for the search
+        :param name:  The text description
+        :param currency: Used to pick region and possible symbol decorations
+        :param managed:  Used to determine MoneyMarket vs MutualFund for managed accounts
+        :return:
+        """
+
+        if symbol not in self.equities:  # Not yet cached
+            try:
+                equity = Equity.objects.get(symbol=symbol)
+            except Equity.DoesNotExist:
+                searchable = False
+                validated = False
+                region = 'TRT' if currency == 'CAD' else ""
+                if name.find(' ETF') != -1:
+                    equity_type = 'ETF'
+                    searchable = True
+                elif not managed:
+                    equity_type = 'Equity'
+                    searchable = True
+                elif name.find('%') != -1 or name.find('SAVINGS') != -1:
+                    equity_type = 'MM'
+                    validated = True
+                else:
+                    equity_type = 'MF'
+                    validated = True
+                equity = Equity(symbol=symbol, name=name, searchable=searchable, equity_type=equity_type,
+                                currency=currency, region=region, validated=validated)
+                equity.save(update=False)
+
+            if not equity:
+                raise Exception(f'Could not create/lookup equity {symbol} - {name}')
+
+            if not EquityAlias.objects.filter(symbol=symbol, name=name).exists():
+                EquityAlias.objects.create(symbol=symbol, name=name, equity=equity)
+
+            self.equities[symbol] = equity
+        return self.equities[symbol]
+
+    def get_or_create_portfolio(self, stub, name, explicit_name, managed):
+        """
+
+        :param stub: A prefix to the action name
+        :param name: The explict name we import as
+        :param explicit_name:  The name we are going to use as a none changable key
+        :param managed: True if We are not pulling dividends out of.
+        :return:
+        """
+        if explicit_name not in self.portfolios:
+            p: Portfolio
+            try:
+                p = Portfolio.objects.get(explicit_name=explicit_name)
+            except Portfolio.DoesNotExist:
+                p = Portfolio(name=f'{stub}_{name}', explicit_name=explicit_name, managed=managed)
+                p.save()
+                p = Portfolio.objects.get(explicit_name=explicit_name)  # Refresh
+            self.portfolios[explicit_name] = p
+        return self.portfolios[explicit_name]
+
+    @staticmethod
+    def fill_value_holes():
+        """
+        Inporting based on transactions leaves a lot of holes in price data.    This function will fill those holes
+        with estimated data based on price changes between data points.
+
+        :return:
+        """
+        for equity in Equity.objects.all():
+            equity.fill_equity_holes()
 
 
-def manulife(file_name):
+class Manulife(StockImporter):
     """
     Downloaded my transactions from manulife and looking to import them
     :param file_name:
     :return:
     """
-    with open(file_name) as csv_file:
-        csv_reader = csv.reader(csv_file)
-        header = next(csv_reader)
-        column_indices = {
-            'Portfolio': header.index('Account'),
-            'Name': header.index('Investment Name'),
-            'Symbol': header.index('Symbol'),
-            'XAType': header.index('Transaction Type'),
-            'Currency': header.index('Currency'),
-            'Quantity': header.index('Unit Quantity'),
-            'Price': header.index('Price'),
-            'Cost': header.index('Net Amount'),
-            'Date': header.index('Posted Date')
-        }
 
-        for row in csv_reader:
-            portfolio = get_or_create_portfolio(row[column_indices['Portfolio']], managed=True)
-            equity = get_or_create_equity(row[column_indices['Symbol']],
-                                          row[column_indices['Name']],
-                                          row[column_indices['Currency']],
-                                          True)
-            this_date = normalize_date(datetime.strptime(row[column_indices['Date']], '%Y-%m-%d'))
-            price = float(row[column_indices['Price']])
-            quantity = float(row[column_indices['Quantity']])
-            xa_type = row[column_indices['XAType']]
-            cost = row[column_indices['Cost']]
+    ManulifeKeys = {
+        'Account': 'Account',
+        'Description': 'Investment Name',
+        'Symbol': 'Symbol',
+        'XAType': 'Transaction Type',
+        'Currency': 'Currency',
+        'Quantity': 'Unit Quantity',
+        'Price': 'Price',
+        'Amount': 'Net Amount',
+        'Date': 'Process Date',
+    }
 
-            if xa_type == 'Cash Dividend/Interest' or xa_type == 'Fee Rebate':
-                pass  # This will be reinvested or redeemed later
+    def __init__(self, file_name: str, name_stub: str):
+        super().__init__(file_name, self.ManulifeKeys, stub=name_stub, managed=True)
+
+    def csv_xa_type(self, row) -> int:
+        csv_value = row[self.mappings['XAType']]
+        if csv_value in ['Fee Rebate',]:
+            return FUND
+        if csv_value in ['Purchase', 'Switch In', 'Transfer In - External']:
+            return BUY
+        if csv_value == 'Transfer Out - External':
+            return REDEEM
+        if csv_value in ['Redemption', 'Switch Out']:
+            return SELL
+        elif csv_value == 'Reinvested Dividend/Interest':
+            return REINVESTED
+        elif csv_value == 'Cash Dividend/Interest':
+            return INT
+        elif csv_value in ['Fee Rebate', ]:
+            return JUNK
+        else:
+            logger.error('Unexpected XA Type:%s' %  csv_value)
+            return JUNK
+
+    def csv_date(self, row) -> date | None:
+        data = row[self.mappings['Date']]
+        if data:
+            try:
+                return datetime.strptime(row[self.mappings['Date']], '%Y-%m-%d')
+            except ValueError:
+                logger.debug('Invalid date %s on row %s' % (data, row))
+        return None
+
+    def pd_account_key(self, row) -> str:
+        value = super().pd_account_key(row)
+        return 'Manulife_' + value
+
+
+class QuestTrade(StockImporter):
+
+    QuestTradeKeys = {
+        'AccountName': 'Account Type',
+        'Description': 'Description',
+        'Symbol': 'Symbol',
+        'XAType': 'Activity Type',
+        'Currency': 'Currency',
+        'Quantity': 'Quantity',
+        'Price': 'Price',
+        'Amount': 'Net Amount',
+        'Date': 'Settlement Date',
+        'Action': 'Action',
+        'Fees': 'Commission',
+        'AccountKey': 'Account #'
+    }
+
+    def __init__(self, file_name: str,  name_stub: str):
+        super().__init__(file_name, self.QuestTradeKeys, stub=name_stub, managed=False)
+
+    def csv_xa_type(self, row) -> int:
+        csv_value = row[self.mappings['XAType']]
+        if csv_value == 'Deposit':
+            return FUND
+        if csv_value == 'Trades':
+            action = row[self.mappings['Action']]
+            if action == 'Buy':
+                return BUY
             else:
-                xa_price = price
-                if xa_type == 'Transfer In - External' or xa_type == 'Purchase' or xa_type == 'Switch In':
-                    buy_action = 'buy'
-                    drip = False
-                elif xa_type == 'Reinvested Dividend/Interest':
-                    if equity.equity_type == 'MM':
-                        drip = False
-                        buy_action = 'int'
-                    elif equity.equity_type == 'MF':
-                        drip = True
-                        buy_action = 'div'
-                    xa_price = 0  # Since we did not really pay for this.
-                elif xa_type == 'Redemption' or xa_type == 'Switch Out':
-                    buy_action = 'sell'
-                    drip = False
-                    quantity = quantity * -1
-                else:
-                    raise Exception(f'Unknown XA Type:{xa_type}')
-
-                if not Transaction.objects.filter(portfolio=portfolio, equity=equity, date=this_date, xa_action=buy_action,
-                                                  drip=drip, price=xa_price, quantity=quantity).exists():
-
-                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=this_date, xa_action=buy_action,
-                                               drip=drip, price=xa_price, quantity=quantity)
-                else:
-                    print(f'Warning - duplicate transaction: {portfolio}, {equity}, {date}')
-
-                if not EquityValue.objects.filter(equity=equity, date=this_date).exists():
-                    EquityValue.objects.create(equity=equity, date=this_date, price=price, )
-
-        fill_value_holes()
-
-
-def questtrade(file_name: str, portfolio_stub: str):
-    """
-    Downloaded my transactions from Questtrade to import them
-    Notes,
-        1. questrade does not report dividend amount just net value.  Must track quantities and divided by net.
-        2. wanky things will happen,  make sure you sort your CSV file by date.
-        3. Dividend may include stock split - CM
-
-
-    :param file_name:   The file to import
-    :param portfolio_stub:  A stub for the portfolio name
-    :return:
-    """
-    with open(file_name) as csv_file:
-        csv_reader = csv.reader(csv_file)
-        header = next(csv_reader)
-        column_indices = {
-            'AccType': header.index('Account Type'),
-            'Name': header.index('Description'),
-            'Symbol': header.index('Symbol'),
-            'XAType': header.index('Activity Type'),
-            'Currency': header.index('Currency'),
-            'Quantity': header.index('Quantity'),
-            'Price': header.index('Price'),
-            'Net': header.index('Net Amount'),
-            'Cost': header.index('Commission'),
-            'Date': header.index('Settlement Date')
-        }
-        equity_totals = {}
-        cash_totals = {}
-        for row in csv_reader:
-            portfolio = get_or_create_portfolio(f'{portfolio_stub}-{row[column_indices["AccType"]]}', False)
-            if not portfolio.name in equity_totals:
-                equity_totals[portfolio.name] = {}
-                cash_totals[portfolio.name] = {'CAD': 0, 'USD': 0}
-
-            name = row[column_indices['Name']]
-            symbol = row[column_indices['Symbol']]
-            xa_date = normalize_date(datetime.strptime(row[column_indices['Date']], '%Y-%m-%d %H:%M:%S %p'))
-            price = float(row[column_indices['Price']])
-            quantity = float(row[column_indices['Quantity']])
-            net = float(row[column_indices['Net']])
-            cost = float(row[column_indices['Cost']])
-            xa_type = row[column_indices['XAType']]
-            currency = row[column_indices['Currency']]
-
-            equity: Equity
-            if xa_type in ('Deposits', 'Transfers', 'Fees and rebates', 'Withdrawals', 'Other', 'FX conversion'):
-                cash_totals[portfolio.name][currency] += net
+                return SELL
+        elif csv_value == 'Dividends':
+            return DIV
+        elif csv_value == 'Interest':
+            return INT
+        elif csv_value in ['Fees and rebates', 'Transfers', 'Other', 'Deposits', 'Withdrawals']:
+            amount = self.csv_amount(row)
+            if amount >= 0:
+                return FUND
             else:
-                if xa_type == 'Trades':
-                    if symbol.endswith('.TO'):
-                        symbol = symbol[0:len(symbol) - 3] + '.TRT'
-                    equity = get_or_create_equity(symbol, name, currency, False)
-                else:
-                    equity = equity_lookup(symbol, name)
+                return REDEEM
+        elif csv_value == 'FX conversion':
+            return JUNK  # We use BOC conversation rates
+        else:
+            print (f'Unexpected XA Type: {csv_value}')
+            return JUNK
 
-                if not equity:
-                    raise Exception(f'Could not create/lookup equity {symbol} - {name}')
+    def csv_price(self, row) -> float:
+        price = float(row[self.mappings['Price']])
+        quantity = self.csv_quantity(row)
+        if quantity != 0:  # On trades we have fees with Questtrade
+            fees = float(row[self.mappings['Fees']])
+            return (price * quantity + fees * -1) / quantity
+        return price
 
-                if xa_type == 'Trades':
-                    if equity.key not in equity_totals[portfolio.name]:
-                        equity_totals[portfolio.name][equity.key] = 0  # First purchase
-                    cash_totals[portfolio.name][currency] += net
-                    cash_totals[portfolio.name][currency] += cost
-                    equity_totals[portfolio.name][equity.key] += quantity
-                    if quantity > 0:
-                        trans_type = 'buy'
-                    if quantity < 0:
-                        trans_type = 'sell'
-                        quantity *= -1
-                    xa_price = (price * quantity + cost * -1) / quantity
-                    if not EquityValue.objects.filter(equity=equity, date=xa_date).exists():
-                        EquityValue.objects.create(equity=equity, date=xa_date, price=price)
+    def csv_symbol(self, row) -> str:
+        symbol = super().csv_symbol(row)
+        parts = symbol.split('.')
+        parts_cnt = len(parts)
+        if parts_cnt > 1 and parts[parts_cnt - 1] == 'TO':
+            suffix = '.TRT'
+            prefix = '-'.join(parts[:parts_cnt - 1])
+            symbol = prefix + suffix
+        else:
+            symbol = '-'.join(parts)
+        return symbol
 
-                    if not Transaction.objects.filter(portfolio=portfolio, equity=equity, date=xa_date,
-                                                      xa_action=trans_type,
-                                                      price=xa_price, quantity=quantity).exists():
-                        Transaction.objects.create(portfolio=portfolio, equity=equity, date=xa_date,
-                                                   xa_action=trans_type,
-                                                   price=xa_price, quantity=quantity)
-
-                elif xa_type == 'Dividends':
-                    value = net / equity_totals[portfolio.name][equity.key]
-                    if not EquityEvent.objects.filter(equity=equity, date=xa_date, event_type='Dividend').exists():
-                        EquityEvent.objects.create(equity=equity, date=xa_date, value=value,
-                                                   event_type='Dividend', event_source='upload')
-                    cash_totals[portfolio.name][currency] += net
-
-                    '''if not Transaction.objects.filter(portfolio=portfolio, equity=equity, date=xa_date,
-                                                      xa_action=trans_type,
-                                                      price=xa_price, quantity=quantity).exists():
-                        Transaction.objects.create(portfolio=portfolio, equity=equity, date=xa_date,
-                                                   xa_action=trans_type,
-                                                   price=xa_price, quantity=quantity)
-                                                                   else:
-                    print(f'Warning - duplicate transaction: {portfolio}, {equity}, {xa_date}')
-'''
-
-                else:
-                    raise Exception(f'Unexpected Activity type {xa_type}')
-            print(cash_totals, equity_totals)
-        fill_value_holes()
+    def pd_account_key(self, row) -> str:
+        value = super().pd_account_key(row)
+        return 'QuestTrade_' + value
