@@ -1,0 +1,24 @@
+[run]
+branch = False
+source = stocks
+omit =
+    *tests*
+    *migrations*
+    *venv*
+
+
+[paths]
+source =
+    src
+
+[report]
+show_missing = True
+skip_covered = True
+exclude_lines =
+    pragma: no cover
+    raise AssertionError
+    raise NotImplementedError
+
+[html]
+directory = htmlcov
+
