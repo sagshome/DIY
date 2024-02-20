@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import logging
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,7 +29,12 @@ try:
 except ImportError:
     DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+  'localhost',
+  '127.0.0.1',
+  '10.0.0.150',
+  'mywebsite.example']
+
 
 ALPHAVANTAGEAPI_KEY = 'ALPHAVANTAGEAPI_KEY'  # Override in local_settings.py
 

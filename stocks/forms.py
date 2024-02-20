@@ -15,26 +15,11 @@ class AddEquityForm(forms.Form):
     region = forms.ChoiceField(choices=Equity.REGIONS)
 
 
-
 class UploadForm(forms.Form):
     """
     Multi entry form
     """
-
-    upload_file = forms.FileInput()
-
-    equity = forms.ChoiceField(choices=Transaction.equity_choice_list(),
-                               label='Equity')
-    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
-                                                         'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
-                           label='Date')
-    price = forms.DecimalField(label='Price')
-    quantity = forms.DecimalField(label='Quantity')
-    action = forms.ChoiceField(label='Transaction Type',
-                                 choices=[(Transaction.FUND, 'Fund'),
-                                          (Transaction.BUY, 'Buy'),
-                                          (Transaction.SELL, 'Sell'),
-                                          (Transaction.REDEEM, 'Redeem')])
+    pass
 
 
 class PortfolioForm(forms.ModelForm):
@@ -51,8 +36,7 @@ class TransactionForm(forms.Form):
     Multi entry form
     """
 
-    equity = forms.ChoiceField(choices=Transaction.equity_choice_list(),
-                               label='Equity')
+    equity = forms.ModelChoiceField(label='Equity', queryset=Equity.objects.all().order_by('symbol'))
     date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
                                                          'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
                            label='Date')

@@ -2,7 +2,13 @@ from django.contrib import admin
 
 # Register your models here.
 
-from .models import Equity, Portfolio, Transaction, EquityValue, EquityEvent, Inflation, EquityAlias, ExchangeRate
+from .models import Equity, Portfolio, Transaction, EquityValue, EquityEvent, Inflation, EquityAlias, ExchangeRate, \
+    DataSource
+
+
+@admin.display(description="Source")
+def display_source(obj):
+    return DataSource(obj.source).name
 
 
 class EquityAdmin(admin.ModelAdmin):
@@ -15,7 +21,7 @@ class EquityAliasAdmin(admin.ModelAdmin):
 
 
 class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ("name", )
+    list_display = ("name",)
 
 
 class TransactionAdmin(admin.ModelAdmin):
@@ -29,17 +35,23 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 class EquityEventAdmin(admin.ModelAdmin):
-    list_display = ("equity", "event_type", "date", "value", "event_source")
+    list_display = ("equity", "event_type", "date", "value", "source")
 
 
 class EquityValueAdmin(admin.ModelAdmin):
-    list_display = ("equity", "date", "price", "estimated")
+    list_display = ("equity", "date", "price", "source")
+
+    def source(self, obj: EquityValue):
+        return DataSource(obj.source).name
+
 
 class InflationAdmin(admin.ModelAdmin):
-    list_display = ("date", "cost", "inflation", "estimated")
+    list_display = ("date", "cost", "inflation", "source")
+
 
 class ExchangeRateAdmin(admin.ModelAdmin):
-    list_display = ("date", "us_to_can", "can_to_us")
+    list_display = ("date", "us_to_can", "can_to_us", "source")
+
 
 admin.site.register(EquityAlias, EquityAliasAdmin)
 admin.site.register(EquityEvent, EquityEventAdmin)

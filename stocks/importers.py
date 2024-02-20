@@ -6,7 +6,8 @@ import pandas as pd
 from datetime import datetime, date
 from typing import List, Dict
 
-from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction
+from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction, DataSource
+from .utils import normalize_date
 
 FUND = Transaction.FUND
 BUY = Transaction.BUY
@@ -31,9 +32,9 @@ class StockImporter:
                           'Quantity', 'Price', 'Amount']
 
     def __init__(self, file_name: str, headers: Dict[str, str], stub: str = None, managed: bool = False):
-        self.stub = stub + '_' if stub else None
+        self.stub = stub if stub else None
         self.managed = managed
-        self.headers = headers  # A dictonary map for csv_columns to pd_columns
+        self.headers = headers  # A dictionary map for csv_columns to pd_columns
         self._columns = copy.deepcopy(self.default_pd_columns)
         self.added_columns = set(self.headers.keys()) - set(self._columns)
         for new_column in self.added_columns:
@@ -55,8 +56,8 @@ class StockImporter:
                     description: str = row[self.mappings['Description']]
                     xa_type: int = self.csv_xa_type(row)
                     currency: str = row[self.mappings['Currency']]
-                    quantity: float = self.csv_quantity(row)
                     price: float = self.csv_price(row)
+                    quantity: float = self.csv_quantity(row)
                     amount: float = self.csv_amount(row)
 
                     self.pd.loc[len(self.pd.index)] = self.add_extra_data(row,
@@ -73,6 +74,7 @@ class StockImporter:
         for _, prow in self.pd.iterrows():
             do_process: bool = True
             this_date: date = self.pd_date(prow)
+            norm_date = normalize_date(this_date)
             symbol: str = self.pd_symbol(prow)
             xa_action: int = self.pd_xa_type(prow)
             amount: float = self.pd_amount(prow)
@@ -80,14 +82,12 @@ class StockImporter:
             quantity = self.pd_quantity(prow)
             equity: Equity
 
-            logger.debug('Processing %s %s %s' % (this_date, symbol, xa_action))
             #
             portfolio: Portfolio = self.get_or_create_portfolio(
                 self.stub, self.pd_account_name(prow), self.pd_account_key(prow), False)
             if portfolio.explicit_name not in equity_totals:
                 equity_totals[portfolio.explicit_name] = {}
             if portfolio.last_import and (this_date <= portfolio.last_import):
-                logger.debug('Skipping this record')
                 do_process = False
 
             last_import = this_date  # This has been pre-ordered by date
@@ -107,29 +107,27 @@ class StockImporter:
                 this_action = BUY if xa_action in [BUY, REINVESTED, TRANSFER_IN] else SELL
 
                 if do_process:
-                    logger.debug('%s:Trading %s shares %s' % (this_date, equity, quantity))
-                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=this_date,
+                    logger.debug('%s:%sTrading %s shares %s' % (this_date, norm_date, equity, quantity))
+                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=norm_date,
                                                xa_action=this_action, price=buy_price, quantity=quantity)
-                    if not EquityValue.objects.filter(equity=equity, date=self.pd_date(prow)).exists():
-                        EquityValue.objects.create(equity=equity, date=this_date, price=price, estimated=True)
+                    EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
+                                                      source=DataSource.UPLOAD.value)
 
             if xa_action not in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN, BUY, SELL, REINVESTED] and do_process:
                 equity = self.equity_lookup(symbol, self.pd_description(prow))
                 if xa_action == DIV:  # Dividends
-                    logger.debug('%s:DIV %s' % (this_date, equity))
                     value = amount / equity_totals[portfolio.explicit_name][equity.key]
                     if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
-                        if not EquityEvent.objects.filter(equity=equity, date=this_date, event_type='Dividend').exists():
-                            EquityEvent.objects.create(equity=equity, date=this_date, value=value,
-                                                       event_type='Dividend', event_source='upload')
-                        if not EquityValue.objects.filter(equity=equity, date=this_date).exists():
-                            EquityValue.objects.create(equity=equity, date=this_date, price=price, estimated=True)
+                        EquityEvent.get_or_create(equity=equity, date=norm_date, value=value,
+                                                   event_type='Dividend', source=DataSource.UPLOAD.value)
+                        EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
+                                                       source=DataSource.UPLOAD.value)
 
-                elif xa_action == INT:  # Interest
+                elif xa_action == INT:  # pragma: no cover
                     logger.info('Skipping INT action - I will come out as profit when redeeming')
-                elif xa_action == JUNK:
+                elif xa_action == JUNK:  # pragma: no cover
                     pass
-                else:
+                else:  # pragma: no cover
                     raise Exception(f'Unexpected Activity type {xa_action}')
 
         for p in self.portfolios:
@@ -157,12 +155,15 @@ class StockImporter:
         return row[self.mappings['Symbol']]
 
     def csv_date(self, row) -> date | None:
-        data = row[self.mappings['Date']]
-        if data:
-            try:
-                return datetime.strptime(data, '%Y-%m-%d %H:%M:%S %p')
-            except ValueError:
-                logger.debug('Invalid date %s on row %s' % (data, row))
+        try:
+            data = row[self.mappings['Date']]
+            if data:
+                try:
+                    return datetime.strptime(data, '%Y-%m-%d %H:%M:%S %p')
+                except ValueError:  # pragma: no cover
+                    logger.debug('Invalid date %s on row %s' % (data, row))
+        except IndexError:
+            logger.debug('No date on row %s' % row)
         return None
 
     def csv_price(self, row) -> float:
@@ -257,7 +258,7 @@ class StockImporter:
         if value:
             self.equities[symbol] = value
             return self.equities[symbol]
-        raise Exception(f'Failed to lookup {symbol} - {name}')
+        raise Exception(f'Failed to lookup {symbol} - {name}')  # pragma: no cover
 
     def get_or_create_equity(self, symbol: str, name: str, currency: str, managed: bool):
         """
@@ -273,27 +274,36 @@ class StockImporter:
             try:
                 equity = Equity.objects.get(symbol=symbol)
             except Equity.DoesNotExist:
-                searchable = False
-                validated = False
-                region = 'TRT' if currency == 'CAD' else ""
-                if name.find(' ETF') != -1:
-                    equity_type = 'ETF'
-                    searchable = True
+                equity = Equity.objects.create(symbol=symbol, name=name)
+                changed = False
+                if not equity.region:
+                    changed = True
+                    if currency == 'CAD':
+                        equity.region = 'TRT'
+                        equity.currency = 'CAD'
+                    else:
+                        equity.currency = 'USD'
+                if not equity.equity_type:
+                    if equity.name.find(' ETF') != -1:
+                        equity.equity_type = 'ETF'
+                        changed = True
                 elif not managed:
-                    equity_type = 'Equity'
-                    searchable = True
+                    equity.equity_type = 'Equity'
+                    changed = True
                 elif name.find('%') != -1 or name.find('SAVINGS') != -1:
-                    equity_type = 'MM'
-                    validated = True
+                    equity.equity_type = 'MM'
+                    changed = True
                 else:
-                    equity_type = 'MF'
-                    validated = True
-                equity = Equity(symbol=symbol, name=name, searchable=searchable, equity_type=equity_type,
-                                currency=currency, region=region, validated=validated)
-                equity.save(update=False)
+                    equity.equity_type = 'MF'
+                    changed = True
+                if changed:
+                    equity.save(update=False)
 
             if not equity:
                 raise Exception(f'Could not create/lookup equity {symbol} - {name}')
+
+            if not EquityAlias.objects.filter(symbol=equity.symbol, name=equity.name).exists():
+                EquityAlias.objects.create(symbol=equity.symbol, name=equity.name, equity=equity)
 
             if not EquityAlias.objects.filter(symbol=symbol, name=name).exists():
                 EquityAlias.objects.create(symbol=symbol, name=name, equity=equity)
@@ -376,12 +386,15 @@ class Manulife(StockImporter):
             return JUNK
 
     def csv_date(self, row) -> date | None:
-        data = row[self.mappings['Date']]
-        if data:
-            try:
-                return datetime.strptime(row[self.mappings['Date']], '%Y-%m-%d')
-            except ValueError:
-                logger.debug('Invalid date %s on row %s' % (data, row))
+        try:
+            data = row[self.mappings['Date']]
+            if data:
+                try:
+                    return datetime.strptime(row[self.mappings['Date']], '%Y-%m-%d')
+                except ValueError:
+                    logger.debug('Invalid date %s on row %s' % (data, row))
+        except IndexError:
+            logger.debug('No Date on row %s' % row)
         return None
 
     def pd_account_key(self, row) -> str:
@@ -411,15 +424,22 @@ class QuestTrade(StockImporter):
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
+        action = row[self.mappings['Action']]
         if csv_value == 'Deposit':
             return FUND
         if csv_value == 'Trades':
-            action = row[self.mappings['Action']]
             if action == 'Buy':
                 return BUY
-            else:
+            elif action == 'Sell':
                 return SELL
+            else:
+                logger.error("Unexpected XA value:%s Source %s(%s) and %s(%s)" % (
+                    csv_value, self.mappings['XAType'], row[self.mappings['XAType']],
+                    self.mappings['Action'], row[self.mappings['Action']]))
+                return JUNK
         elif csv_value == 'Dividends':
+            if action == 'DIS':
+                return BUY
             return DIV
         elif csv_value == 'Interest':
             return INT
@@ -432,16 +452,24 @@ class QuestTrade(StockImporter):
         elif csv_value == 'FX conversion':
             return JUNK  # We use BOC conversation rates
         else:
-            print (f'Unexpected XA Type: {csv_value}')
-            return JUNK
+            logger.error("Unexpected XA value:%s Source %s(%s)" % (
+                csv_value, self.mappings['XAType'], row[self.mappings['XAType']]))
 
     def csv_price(self, row) -> float:
-        price = float(row[self.mappings['Price']])
-        quantity = self.csv_quantity(row)
-        if quantity != 0:  # On trades we have fees with Questtrade
-            fees = float(row[self.mappings['Fees']])
-            return (price * quantity + fees * -1) / quantity
-        return price
+        try:
+            price = float(row[self.mappings['Price']])
+            if price:
+                quantity = self.csv_quantity(row)
+                if quantity != 0:  # On trades we have fees with Questtrade
+                    try:
+                        fees = float(row[self.mappings['Fees']])
+                        return (price * quantity + fees * -1) / quantity
+                    except ValueError:
+                        logger.error('Could not convert commission (%s) to a value' % row[self.mappings['Fees']])
+            return price
+        except ValueError:
+            logger.error('Could not convert price (%s) to a value' % row[self.mappings['Price']])
+            return 0
 
     def csv_symbol(self, row) -> str:
         symbol = super().csv_symbol(row)

@@ -31,7 +31,7 @@ def test(request):
 
     #QuestTrade('/home/scott/shared/Finance/TestQtradeP1.csv', 'test2').process()
     #QuestTrade('/home/scott/shared/Finance/TestQtradeAll.csv', 'test2').process()
-    QuestTrade('/home/scott/Downloads/ScottQuest.csv', 'Scott').process()
+    QuestTrade('/home/scott/shared/Finance/QT_Scott_upto_Jan25_2024.csv', 'Scott').process()
 
     # questtrade('/home/scott/Downloads/QTest1.csv', 'QTest1')
     #p: Portfolio = Portfolio.objects.get(name='Scott-Individual RRSP')
@@ -196,11 +196,7 @@ def add_transaction(request, pk):
     if request.method == 'POST':
         form = TransactionForm(request.POST)
         if form.is_valid():
-            if form.cleaned_data['equity']:
-                equity = Equity.objects.get(id=form.cleaned_data['equity'])
-            else:
-                equity = None
-            new = Transaction.objects.create(equity=equity,
+            new = Transaction.objects.create(equity=form.cleaned_data['equity'],
                                              date=form.cleaned_data['date'],
                                              price=form.cleaned_data['price'],
                                              quantity=form.cleaned_data['quantity'],
