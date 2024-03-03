@@ -436,10 +436,10 @@ class EquityAlias(models.Model):
         return f'{self.symbol} : {self.equity.symbol} - {self.name}'
 
     @staticmethod
-    def find_equity(description: str) -> [Equity | None]:
+    def find_equity(description: str) -> [Equity]:
         score: int = 0
         matched: bool = False
-        match: EquityAlias | None = None
+        match: EquityAlias = None
         for alias in EquityAlias.objects.all():
             new_score = 0
             limit = len(alias.name) - 1

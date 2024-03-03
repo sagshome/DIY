@@ -1,0 +1,7 @@
+FROM nginx:alpine
+RUN mkdir /app
+RUN mkdir /app/static
+COPY node_modules/asyncdesign-webui/dist /app/static
+COPY favicon.ico /app/static
+COPY diy.css /app/static
+EXPOSE 80

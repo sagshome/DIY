@@ -528,6 +528,21 @@ class BasicSetup(TestCase):
 
     @freeze_time('2020-09-01')
     @patch('requests.get')
+    def test_div_bad(self, get):
+        data_text = [
+            self.csv_header,
+            '2020-03-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type',
+            '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type',
+            '2020-03-06 12:00:00 AM,DIV,OTHER,,Other Equity,0,0,0,5,CAD,123,Dividends,Type',
+        ]
+        get.side_effect = [self.mock_lookup, self.mock_query]
+        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
+            with self.assertRaises(Exception) as context:
+                my_obj = QuestTrade('no_file', 'test')
+                my_obj.process()
+            self.assertEqual(str(context.exception), "Failed to lookup OTHER - Other Equity")
+    @freeze_time('2020-09-01')
+    @patch('requests.get')
     def test_div_upload(self, get):
         data_text = [
             self.csv_header,
@@ -767,6 +782,16 @@ class ParsingQT(TestCase):
                 my_obj = QuestTrade('no_file', 'test')
                 self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
                 self.assertEqual(my_obj.pd.iloc[0]['XAType'], JUNK, 'Invalid Record')
+                self.assertEqual(len(captured.records), 1, 'Log an error')
+                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+                self.assertTrue(captured.records[0].msg.startswith('Unexpected XA value'), 'Error in log')
+
+        data_text = [self.csv_header,
+                     '2020-03-06 12:00:00 AM,Foo,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,505.0,CAD,123,FOO,Type']
+        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
+            with self.assertLogs(level='ERROR') as captured:
+                my_obj = QuestTrade('no_file', 'test')
+                self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
                 self.assertEqual(len(captured.records), 1, 'Log an error')
                 self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
                 self.assertTrue(captured.records[0].msg.startswith('Unexpected XA value'), 'Error in log')

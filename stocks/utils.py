@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 
-def normalize_date(this_date: date | datetime) -> datetime.date:
+def normalize_date(this_date) -> datetime.date:
     """
     Make every date the start of the next month.    The alpahvantage website is based on the last trading day each month
     :param this_date:  The date to normalize

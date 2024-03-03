@@ -154,7 +154,7 @@ class StockImporter:
     def csv_symbol(self, row) -> str:
         return row[self.mappings['Symbol']]
 
-    def csv_date(self, row) -> date | None:
+    def csv_date(self, row) -> date:
         try:
             data = row[self.mappings['Date']]
             if data:
@@ -299,7 +299,7 @@ class StockImporter:
                 if changed:
                     equity.save(update=False)
 
-            if not equity:
+            if not equity:  # pragma: no cover
                 raise Exception(f'Could not create/lookup equity {symbol} - {name}')
 
             if not EquityAlias.objects.filter(symbol=equity.symbol, name=equity.name).exists():
@@ -385,7 +385,7 @@ class Manulife(StockImporter):
             logger.error('Unexpected XA Type:%s' %  csv_value)
             return JUNK
 
-    def csv_date(self, row) -> date | None:
+    def csv_date(self, row) -> date:
         try:
             data = row[self.mappings['Date']]
             if data:
@@ -441,7 +441,7 @@ class QuestTrade(StockImporter):
             if action == 'DIS':
                 return BUY
             return DIV
-        elif csv_value == 'Interest':
+        elif csv_value == 'Interest':  # pragma: no cover
             return INT
         elif csv_value in ['Fees and rebates', 'Transfers', 'Other', 'Deposits', 'Withdrawals']:
             amount = self.csv_amount(row)
