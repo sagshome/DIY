@@ -1,7 +1,9 @@
 FROM nginx:alpine
 RUN mkdir /app
-RUN mkdir /app/static
-COPY node_modules/asyncdesign-webui/dist /app/static
-COPY favicon.ico /app/static
-COPY diy.css /app/static
+RUN mkdir /app/static_root
+COPY build/favicon.ico /app/static_root
+COPY build/diy.css /app/static_root
+COPY static_root /app/static_root
+COPY build/nginx.conf /etc/nginx/conf.d/default.conf
+COPY diy/uwsgi_params /app
 EXPOSE 80

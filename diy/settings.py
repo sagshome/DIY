@@ -20,11 +20,7 @@ try:
 except KeyError:
     DEBUG = False
 
-ALLOWED_HOSTS = [
-  'localhost',
-  '127.0.0.1',
-  'diy_nginx'
-]
+ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
 
 if ('test' in sys.argv  # set with manage.py test
         or 'test' in sys.argv[0]  # set with pytest
@@ -86,7 +82,7 @@ LOGGING = {
     "handlers": {
         "file": {
             "class": "logging.FileHandler",
-            "filename": "logfile.log",
+            "filename": "/tmp/DIY.log",
             "formatter": "verbose",
             "level": "DEBUG"
         },
@@ -153,7 +149,7 @@ USE_TZ = False
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
-#STATIC_ROOT = "static"
+STATIC_ROOT = "static_root/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
@@ -164,4 +160,3 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-

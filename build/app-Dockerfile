@@ -3,17 +3,17 @@ ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 RUN mkdir /app
 WORKDIR /app
-COPY build/production-requirements.txt requirements.txt
+COPY build/requirements.txt requirements.txt
 COPY build/app-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r dev-requirements.txt
 COPY manage.py /app
 COPY diy /app/diy
 COPY stocks /app/stocks
 EXPOSE 8001
-CMD [ "uwsgi", "--http", ":8001", \
+CMD [ "uwsgi", "--socket", ":8001", \
                "--module", "diy.wsgi", \
                "--buffer-size", "32764", \
                "--ini",  "diy/uwsgi.ini"]
