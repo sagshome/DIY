@@ -24,7 +24,8 @@ ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
 
 if ('test' in sys.argv  # set with manage.py test
         or 'test' in sys.argv[0]  # set with pytest
-        or ('PYTEST_RUN_CONFIG' in os.environ and os.environ['PYTEST_RUN_CONFIG'])):  # set with local pycharm tests
+        or ('PYTEST_RUN_CONFIG' in os.environ and os.environ['PYTEST_RUN_CONFIG'])
+        or ('DIY_LOCALDB' in os.environ and os.environ['DIY_LOCALDB'])):  # set with local pycharm tests
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
