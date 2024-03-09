@@ -22,6 +22,18 @@ TRANSFER_OUT = 10
 
 logger = logging.getLogger(__name__)
 
+HEADERS = {
+    'default': {
+        'Date': 'Date', 'AccountName': 'AccountName', 'AccountKey': 'AccountKey', 'Symbol': 'Symbol',
+        'Description': 'Description', 'XAType': 'XAType', 'Currency': 'Currency',  'Quantity': 'Quantity',
+        'Price': 'Price', 'Amount': 'Amount'
+    }
+}
+
+
+class DIYImportException(Exception):
+    pass
+
 
 class StockImporter:
     """
@@ -31,7 +43,7 @@ class StockImporter:
     default_pd_columns = ['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency',
                           'Quantity', 'Price', 'Amount']
 
-    def __init__(self, file_name: str, headers: Dict[str, str], stub: str = None, managed: bool = False):
+    def __init__(self, reader: csv.reader, headers: Dict[str, str], stub: str = None, managed: bool = False):
         self.stub = stub if stub else None
         self.managed = managed
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
@@ -43,27 +55,25 @@ class StockImporter:
         self.portfolios: Dict[str, Portfolio] = {}
         self.equities: Dict[str, Equity] = {}
 
-        with open(file_name) as csv_file:
-            reader = csv.reader(csv_file)
-            self.mappings = self.get_headers(reader)
+        self.mappings = self.get_headers(reader)
 
-            for row in reader:
-                xa_date: date = self.csv_date(row)  # Normalize and format date (need to override if date format is off)
-                if xa_date:  # Skip blank lines
-                    account_name: str = row[self.mappings['AccountName']]
-                    account_key: str = row[self.mappings['AccountKey']]
-                    symbol: str = self.csv_symbol(row)
-                    description: str = row[self.mappings['Description']]
-                    xa_type: int = self.csv_xa_type(row)
-                    currency: str = row[self.mappings['Currency']]
-                    price: float = self.csv_price(row)
-                    quantity: float = self.csv_quantity(row)
-                    amount: float = self.csv_amount(row)
+        for row in reader:
+            xa_date: date = self.csv_date(row)  # Normalize and format date (need to override if date format is off)
+            if xa_date:  # Skip blank lines
+                account_name: str = row[self.mappings['AccountName']]
+                account_key: str = row[self.mappings['AccountKey']]
+                symbol: str = self.csv_symbol(row)
+                description: str = row[self.mappings['Description']]
+                xa_type: int = self.csv_xa_type(row)
+                currency: str = row[self.mappings['Currency']]
+                price: float = self.csv_price(row)
+                quantity: float = self.csv_quantity(row)
+                amount: float = self.csv_amount(row)
 
-                    self.pd.loc[len(self.pd.index)] = self.add_extra_data(row,
-                                                                          [xa_date, account_name, account_key,
-                                                                           symbol, description, xa_type, currency,
-                                                                           quantity, price, amount])
+                self.pd.loc[len(self.pd.index)] = self.add_extra_data(row,
+                                                                      [xa_date, account_name, account_key,
+                                                                       symbol, description, xa_type, currency,
+                                                                       quantity, price, amount])
 
         self.pd['Date'] = pd.to_datetime(self.pd['Date'])
         self.pd = self.pd.sort_values(['Date', 'AccountKey', 'XAType'], ascending=[True, True, True])
@@ -128,7 +138,7 @@ class StockImporter:
                 elif xa_action == JUNK:  # pragma: no cover
                     pass
                 else:  # pragma: no cover
-                    raise Exception(f'Unexpected Activity type {xa_action}')
+                    raise DIYImportException(f'Unexpected Activity type {xa_action}')
 
         for p in self.portfolios:
             if (not self.portfolios[p].last_import) or (last_import and (self.portfolios[p].last_import < last_import)):
@@ -141,7 +151,8 @@ class StockImporter:
 
     def get_headers(self, csv_reader):
         if set(self._columns) - set(self.headers.keys()):
-            raise NotImplementedError(f'Failed to provide mappings for {set(self._columns) - set(self.headers.keys())}')
+            missing = str(set(self._columns) - set(self.headers.keys()))
+            raise DIYImportException('CSV, required column(s) are missing (%s)' % missing)
 
         header = next(csv_reader)
         return_dict = {}
@@ -258,7 +269,7 @@ class StockImporter:
         if value:
             self.equities[symbol] = value
             return self.equities[symbol]
-        raise Exception(f'Failed to lookup {symbol} - {name}')  # pragma: no cover
+        raise DIYImportException(f'Failed to lookup {symbol} - {name}')  # pragma: no cover
 
     def get_or_create_equity(self, symbol: str, name: str, currency: str, managed: bool):
         """
@@ -300,7 +311,7 @@ class StockImporter:
                     equity.save(update=False)
 
             if not equity:  # pragma: no cover
-                raise Exception(f'Could not create/lookup equity {symbol} - {name}')
+                raise DIYImportException(f'Could not create/lookup equity {symbol} - {name}')
 
             if not EquityAlias.objects.filter(symbol=equity.symbol, name=equity.name).exists():
                 EquityAlias.objects.create(symbol=equity.symbol, name=equity.name, equity=equity)
@@ -419,8 +430,8 @@ class QuestTrade(StockImporter):
         'AccountKey': 'Account #'
     }
 
-    def __init__(self, file_name: str,  name_stub: str):
-        super().__init__(file_name, self.QuestTradeKeys, stub=name_stub, managed=False)
+    def __init__(self, reader: str,  name_stub: str):
+        super().__init__(reader, self.QuestTradeKeys, stub=name_stub, managed=False)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]

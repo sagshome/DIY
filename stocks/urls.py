@@ -6,7 +6,8 @@ from . import views
 urlpatterns = [
     path(r'', views.PortfolioView.as_view(), name='portfolio_home'),
     path(r'lookup', views.search, name="lookup"),
-    path(r'upload/', views.upload, name='upload'),
+    path(r'upload/', views.upload_file, name='upload'),
+
     path(r'equity/add', views.add_equity, name='add_equity'),
     path(r'equity/<key>/update/', views.equity_update, name='equity_update'),
 
@@ -21,9 +22,5 @@ urlpatterns = [
     path(r'portfolio/<pk>/<symbol>/compare/', views.portfolio_compare, name='portfolio_compare'),
 
     path(r'portfolio/<pk>/buy/', views.add_transaction,  name='transaction_add'),
-
-    path(r'test/', views.test),
-    path(r'test2/', views.test2)
-
 
 ]

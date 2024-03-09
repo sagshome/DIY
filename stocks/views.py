@@ -1,3 +1,4 @@
+import csv
 import logging
 
 import plotly.io as pio
@@ -5,6 +6,7 @@ import plotly.graph_objects as go
 
 from pandas import DataFrame
 
+from django.contrib import messages
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
@@ -14,29 +16,11 @@ from django.views.generic.dates import DateMixin
 
 
 from .models import Equity, Portfolio, Transaction, normalize_today
-from .forms import AddEquityForm, TransactionForm, PortfolioForm
-from .importers import *
+from .forms import AddEquityForm, TransactionForm, PortfolioForm, UploadFileForm
+from .importers import QuestTrade, Manulife, StockImporter, HEADERS, DIYImportException
 
 logger = logging.getLogger(__name__)
-def test2(request):
-    from .models import Inflation
-    Inflation.update()
-    return JsonResponse(status=200, data={})
 
-
-def test(request):
-    # manulife('/home/scott/shared/Finance/manulife_1_xas.csv')
-    #QuestTrade('/home/scott/Downloads/GailQtrade.csv', 'Gail').process()
-    #questtrade('/home/scott/Downloads/GailQtrade.csv', 'Gail')
-
-    #QuestTrade('/home/scott/shared/Finance/TestQtradeP1.csv', 'test2').process()
-    #QuestTrade('/home/scott/shared/Finance/TestQtradeAll.csv', 'test2').process()
-    QuestTrade('/home/scott/shared/Finance/QT_Scott_upto_Jan25_2024.csv', 'Scott').process()
-
-    # questtrade('/home/scott/Downloads/QTest1.csv', 'QTest1')
-    #p: Portfolio = Portfolio.objects.get(name='Scott-Individual RRSP')
-    #p.update_static_values()
-    return JsonResponse(status=200, data={})
 
 @require_http_methods(['GET'])
 def search(request):
@@ -160,7 +144,6 @@ class PortfolioEdit(UpdateView, DateMixin):
         return context
 
 
-
 class PortfolioCopy(CreateView):
     model = Portfolio
     template_name = 'stocks/add_portfolio.html'
@@ -188,6 +171,37 @@ class PortfolioCopy(CreateView):
 
     def get_success_url(self):
         return reverse('portfolio_details', kwargs={'pk': self.object.id})
+
+
+def upload_file(request):
+    if request.method == "POST":
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            bin_file = form.cleaned_data['csv_file'].read()
+            text_file = bin_file.decode('utf-8')
+            reader = csv.reader(text_file.splitlines())
+            stub = form.cleaned_data['stub'] if form.cleaned_data['stub'] else None
+            try:
+                if form.cleaned_data["csv_type"] == 'QuestTrade':
+                    importer = QuestTrade(reader, stub)
+                elif form.cleaned_data["csv_type"] == 'Manulife':
+                    importer = Manulife(reader, stub)
+                else:
+                    importer = StockImporter(reader, HEADERS, stub=stub, managed=False)
+
+                    importer.process()
+            except DIYImportException as e:
+                #messages.error(request, str(e))
+                # messages.error(request, 'FooBar')
+                return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': str(e)})
+
+
+                #return render(request, "stocks/uploadfile.html", {"form": form})
+            return HttpResponseRedirect(reverse('portfolio_list'))
+
+    else:
+        form = UploadFileForm()
+    return render(request, "stocks/uploadfile.html", {"form": form})
 
 
 def add_transaction(request, pk):
@@ -344,12 +358,3 @@ def add_equity(request):
         'symbol_list': symbol_list
     }
     return render(request, 'stocks/add_equity.html', context)
-
-def upload(request):
-    if request.method == 'POST' and request.FILES['myfile']:
-        myfile = request.FILES['myfile']
-
-        return render(request, 'stocks/upload.html', {
-            'uploaded_file_url': upload
-        })
-    return render(request, 'stocks/upload.html')

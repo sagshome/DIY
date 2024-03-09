@@ -15,6 +15,9 @@ class AddEquityForm(forms.Form):
     region = forms.ChoiceField(choices=Equity.REGIONS)
 
 
+
+
+
 class UploadForm(forms.Form):
     """
     Multi entry form
@@ -47,3 +50,22 @@ class TransactionForm(forms.Form):
                                           (Transaction.BUY, 'Buy'),
                                           (Transaction.SELL, 'Sell'),
                                           (Transaction.REDEEM, 'Redeem')])
+
+class UploadFileForm(forms.Form):
+    stub = forms.CharField(label="Portfolio Prefix", required=False, max_length=16,
+                           help_text='Optional field that is used to decorate any portfolio in the uploaded csv file')
+    #csv_type = forms.CharField(choices=choices, default='QuestTrade')
+    csv_type = forms.ChoiceField(label='Upload Type',
+                                 choices=[('', '----',),
+                                          ('Default', 'Default'),
+                                          ('QuestTrade', 'QuestTrade'),
+                                          ('Manulife', 'Manulife')])
+    #csv_type3 = forms.ChoiceField(choices=choices)
+    csv_file = forms.FileField()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        csv_type = cleaned_data.get("csv_type")
+
+        if csv_type not in ('QuestTrade', 'Manulife'):
+            self.add_error('csv_type', f"CSV Type {csv_type} is not currently valid")
