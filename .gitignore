@@ -4,3 +4,4 @@
 /build/package.json
 /build/package-lock.json
 /.coverage
+/build/node_modules/

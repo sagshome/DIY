@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Upload Transactions{% endblock title %}
+{% block content %}
+
+    <div class="flex-container flex-items-auto">
+        <div class="row">
+            <div id="heading">
+                <h2>Upload Transactions</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-container flex-items-auto">
+        <div id="xa_table" class="flex-size-8 pad-md">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+
+                {% for hidden_field in form.hidden_fields %}
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
+                {% endfor %}
+
+                <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-md text-sm">
+                    {% for field in form.visible_fields %}
+                    <tr>
+                        <th class="col-3">{{ field.label_tag }}</th>
+                        <td class="col-5 rounded">
+                            {{ field.errors }}
+                            {{ field }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                <button type="submit">Import CSV</button> This may take a moment. Please be patient.
+            </form>
+        </div>
+    </div>
+    {% if custom_error %}
+        <div class="alert alert-danger">
+            <h2>Errors</h2>
+            {{ custom_error }}
+        </div>
+    {% endif %}
+{% endblock content %}
