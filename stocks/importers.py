@@ -453,7 +453,7 @@ class QuestTrade(StockImporter):
                 return JUNK
         elif csv_value == 'Dividends':
             if action == 'DIS':
-                return BUY
+                return None  #  I can not suppor stocks split via import
             return DIV
         elif csv_value == 'Interest':  # pragma: no cover
             return INT
