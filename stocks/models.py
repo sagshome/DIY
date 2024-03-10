@@ -139,11 +139,10 @@ class ExchangeRate(models.Model):
         value for the last month
         """
         try:
-            first_str = EquityValue.objects.all().order_by('date')[0].date.strftime('%Y-%m-%d')
+            first = EquityValue.objects.all().order_by('date')[0].date
         except IndexError:  # pragma: no cover
-            logger.error('Failed to extract the first date of EquityValue objects')
-            return
-
+            first = EPOCH
+        first_str = first.strftime('%Y-%m-%d')
         url = f'{BOC_URL}FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=asc'
         result = requests.get(url)
         if not result.status_code == 200:  # pragma: no cover
@@ -210,9 +209,12 @@ class Inflation(models.Model):
         """
         Update Inflation values
         """
-        first = Transaction.objects.all().order_by('date')[0].date
-        first = first
+        try:
+            first = Transaction.objects.all().order_by('date')[0].date
+        except IndexError:
+            first = EPOCH
         first_str = first.strftime('%Y-%m-%d')
+
         url = f'{BOC_URL}STATIC_INFLATIONCALC/json?start_date={first_str}'
         result = requests.get(url)
         if not result.status_code == 200:
@@ -231,14 +233,6 @@ class Inflation(models.Model):
                 Inflation.get_or_create(date=this_date, cost=this_cost, inflation=this_inflation,
                                                 source=DataSource.API.value)
                 last_cost = this_cost
-
-            # Pass three make sure we have values until the current normalized date.
-            this_date = normalize_today()
-            last_date = next_date(last_date)
-            while last_date <= this_date:
-                Inflation.get_or_create(date=last_date, inflation=this_inflation, cost=this_cost,
-                                                source=DataSource.ESTIMATE.value)
-                last_date = next_date(last_date)
 
 
 class Equity(models.Model):

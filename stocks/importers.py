@@ -44,6 +44,7 @@ class StockImporter:
                           'Quantity', 'Price', 'Amount']
 
     def __init__(self, reader: csv.reader, headers: Dict[str, str], stub: str = None, managed: bool = False):
+        self.ignored_rows = []
         self.stub = stub if stub else None
         self.managed = managed
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
@@ -69,11 +70,12 @@ class StockImporter:
                 price: float = self.csv_price(row)
                 quantity: float = self.csv_quantity(row)
                 amount: float = self.csv_amount(row)
-
-                self.pd.loc[len(self.pd.index)] = self.add_extra_data(row,
-                                                                      [xa_date, account_name, account_key,
+                if xa_type:
+                    self.pd.loc[len(self.pd.index)] = self.add_extra_data(row,[xa_date, account_name, account_key,
                                                                        symbol, description, xa_type, currency,
-                                                                       quantity, price, amount])
+                                                                      quantity, price, amount])
+                else:
+                    self.ignored_rows.append(row)
 
         self.pd['Date'] = pd.to_datetime(self.pd['Date'])
         self.pd = self.pd.sort_values(['Date', 'AccountKey', 'XAType'], ascending=[True, True, True])
@@ -130,6 +132,7 @@ class StockImporter:
                     if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
                         EquityEvent.get_or_create(equity=equity, date=norm_date, value=value,
                                                    event_type='Dividend', source=DataSource.UPLOAD.value)
+                    if price != 0:
                         EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
                                                        source=DataSource.UPLOAD.value)
 
@@ -373,7 +376,7 @@ class Manulife(StockImporter):
         'Date': 'Process Date',
     }
 
-    def __init__(self, file_name: str, name_stub: str):
+    def __init__(self, file_name: csv.reader, name_stub: str):
         super().__init__(file_name, self.ManulifeKeys, stub=name_stub, managed=True)
 
     def csv_xa_type(self, row) -> int:
@@ -430,7 +433,7 @@ class QuestTrade(StockImporter):
         'AccountKey': 'Account #'
     }
 
-    def __init__(self, reader: str,  name_stub: str):
+    def __init__(self, reader: csv.reader,  name_stub: str):
         super().__init__(reader, self.QuestTradeKeys, stub=name_stub, managed=False)
 
     def csv_xa_type(self, row) -> int:

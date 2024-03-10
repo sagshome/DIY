@@ -1,3 +1,4 @@
+import csv
 import logging
 import os
 import sys
@@ -216,15 +217,15 @@ class BasicSetup(TestCase):
         data_text = [self.csv_header]
         data_text.append('2020-03-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type')
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            self.assertNotIn('FOO', my_obj.headers, 'Skip unneeded column')
-            self.assertIn('Action', my_obj.headers, 'Ensure extra column is added')
-            self.assertFalse(my_obj.managed, 'Default managed setting')
-            self.assertEqual(len(my_obj.pd), 1, 'PD created with initial funding')
-            self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.FUND, 'Funding record parsed')
-            self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
-            my_obj.process()
+        #with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        self.assertNotIn('FOO', my_obj.headers, 'Skip unneeded column')
+        self.assertIn('Action', my_obj.headers, 'Ensure extra column is added')
+        self.assertFalse(my_obj.managed, 'Default managed setting')
+        self.assertEqual(len(my_obj.pd), 1, 'PD created with initial funding')
+        self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.FUND, 'Funding record parsed')
+        self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
+        my_obj.process()
 
         p = Portfolio.objects.get(name='test_Type')
         self.assertEqual(len(p.p_pd), 6)
@@ -238,8 +239,7 @@ class BasicSetup(TestCase):
         self.assertEqual(this_xa.xa_action, Transaction.FUND)
         self.assertEqual(this_xa.value, 1000)
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'other_stub').process()
+        my_obj = QuestTrade(csv.reader(data_text), 'other_stub')
 
         self.assertEqual(Portfolio.objects.all().count(), 1, 'New Stub is ignored')
         self.assertEqual(this['EffectiveCost'].item(), 1000, 'ReImport does not process old records')
@@ -248,8 +248,7 @@ class BasicSetup(TestCase):
         data_text = [self.csv_header]
         data_text.append('2020-03-04 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type')
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'other_stub').process()
+        my_obj = QuestTrade(csv.reader(data_text), 'other_stub').process()
 
         self.assertEqual(Portfolio.objects.all().count(), 1, 'New Stub is ignored')
 
@@ -267,14 +266,13 @@ class BasicSetup(TestCase):
             '2020-03-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type'
         ]
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            self.assertEqual(len(my_obj.pd), 2, 'PD double fimded with initial funding')
-            self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.FUND, 'Funding record parsed')
-            self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
-            self.assertEqual(my_obj.pd.iloc[1]['XAType'], Transaction.FUND, 'Funding record parsed')
-            self.assertEqual(my_obj.pd.iloc[1]['Amount'], 1000.0, 'Funding amount parsed')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        self.assertEqual(len(my_obj.pd), 2, 'PD double fimded with initial funding')
+        self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.FUND, 'Funding record parsed')
+        self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
+        self.assertEqual(my_obj.pd.iloc[1]['XAType'], Transaction.FUND, 'Funding record parsed')
+        self.assertEqual(my_obj.pd.iloc[1]['Amount'], 1000.0, 'Funding amount parsed')
+        my_obj.process()
 
         p = Portfolio.objects.get(name='test_Type')
         this = p.p_pd.loc[p.p_pd['Date'] == datetime(2020,9,1).date()]
@@ -290,13 +288,12 @@ class BasicSetup(TestCase):
             '2020-03-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type'
         ]
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            self.assertEqual(len(my_obj.pd), 2, 'PD double fimded with initial funding')
-            self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.FUND, 'Funding record parsed')
-            self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
-            self.assertEqual(my_obj.pd.iloc[1]['XAType'], Transaction.FUND, 'Funding record parsed')
-            self.assertEqual(my_obj.pd.iloc[1]['Amount'], 1000.0, 'Funding amount parsed')
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        self.assertEqual(len(my_obj.pd), 2, 'PD double fimded with initial funding')
+        self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.FUND, 'Funding record parsed')
+        self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
+        self.assertEqual(my_obj.pd.iloc[1]['XAType'], Transaction.FUND, 'Funding record parsed')
+        self.assertEqual(my_obj.pd.iloc[1]['Amount'], 1000.0, 'Funding amount parsed')
 
     @patch('requests.get')
     def test_lookups_1(self, get):
@@ -312,21 +309,19 @@ class BasicSetup(TestCase):
                 '2020-04-06 12:00:00 AM,DIV,XXX.TO,,The BCE Dividend,0,0,0,5,CAD,123,Dividends,Type']
 
         get.side_effect = [self.mock_lookup, self.mock_empty]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
-            self.assertEqual(len(my_obj.equities), 2, 'Added one')
+        my_obj = QuestTrade(csv.reader(data), 'test')
+        my_obj.process()
+        self.assertEqual(len(my_obj.equities), 2, 'Added one')
 
 
     @patch('requests.get')
     def test_equities_1(self, get):
         data = [self.csv_header, '2020-03-03 12:00:00 AM,Buy,MYE.TO,x,BCE,50.0,10.0,-5.0,-505.0,CAD,123,Trades,x']
         get.side_effect = [self.mock_lookup, self.mock_empty]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data))):
-            my_obj = QuestTrade('no_file', 'test')
-            self.assertEqual(len(my_obj.equities), 0, 'Empty')
-            my_obj.process()
-            self.assertEqual(len(my_obj.equities), 1, 'Added one')
+        my_obj = QuestTrade(csv.reader(data), 'test')
+        self.assertEqual(len(my_obj.equities), 0, 'Empty')
+        my_obj.process()
+        self.assertEqual(len(my_obj.equities), 1, 'Added one')
 
     @patch('requests.get')
     def test_equities_2(self, get):
@@ -335,13 +330,10 @@ class BasicSetup(TestCase):
                 '2020-03-23 12:00:00 AM,Buy,MYE.TO,x,BCE,50.0,10.0,-5.0,-505.0,CAD,123,Trades,x']
         get.side_effect = [self.mock_lookup, self.mock_empty]
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data))):
-            my_obj = QuestTrade('no_file', 'test')
-            self.assertEqual(len(my_obj.equities), 0, 'Empty')
-            my_obj.process()
-            self.assertEqual(len(my_obj.equities), 1, 'Added just one')
-
-
+        my_obj = QuestTrade(csv.reader(data), 'test')
+        self.assertEqual(len(my_obj.equities), 0, 'Empty')
+        my_obj.process()
+        self.assertEqual(len(my_obj.equities), 1, 'Added just one')
 
     @patch('requests.get')
     def test_XAs(self, get):
@@ -352,9 +344,8 @@ class BasicSetup(TestCase):
             '2020-03-04 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type'
         ]
         get.side_effect = [self.mock_lookup, self.mock_query]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
 
         self.assertEqual(Transaction.objects.count(), 2)
         self.assertEqual(Equity.objects.count(), 1)
@@ -379,19 +370,50 @@ class BasicSetup(TestCase):
             '2020-03-03 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type'
         ]
         get.side_effect = [self.mock_lookup, self.mock_query]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
         self.assertEqual(Transaction.objects.count(), 2, 'Initial Transactions')
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
         self.assertEqual(Transaction.objects.count(), 2, 'Initial extra BUYS')
+
+    @freeze_time('2020-12-01')
+    @patch('requests.get')
+    def test_import_search_fail(self, get):
+        data = [
+            'Transaction Date,Settlement Date,Action,Symbol,Description,Quantity,Price,Gross Amount,Commission,Net Amount,Currency,Account #,Activity Type,Account Type',
+            '2020-09-15 12:00:00 AM,2020-09-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,23.44,CAD,7,Dividends,m',
+            '2020-08-14 12:00:00 AM,2020-08-14 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,23.44,CAD,7,Dividends,m',
+            '2020-07-15 12:00:00 AM,2020-07-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,23.44,CAD,7,Dividends,m',
+            '2020-06-15 12:00:00 AM,2020-06-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,23.44,CAD,7,Dividends,m',
+            '2020-05-15 12:00:00 AM,2020-05-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,23.44,CAD,7,Dividends,m',
+            '2020-04-15 12:00:00 AM,2020-04-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2020-03-16 12:00:00 AM,2020-03-16 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2020-02-14 12:00:00 AM,2020-02-14 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2020-01-15 12:00:00 AM,2020-01-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2019-12-16 12:00:00 AM,2019-12-16 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2019-11-15 12:00:00 AM,2019-11-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2019-10-15 12:00:00 AM,2019-10-15 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2019-09-16 12:00:00 AM,2019-09-16 12:00:00 AM,DIV,H034682,INTER PIPELINE LTD,0,0,0,0,83.51,CAD,7,Dividends,m',
+            '2020-09-16 12:00:00 AM,2020-09-18 12:00:00 AM,Sell,IPL.TO,INTER PIPELINE LTD,-286,13.9634965,3993.56,-5.95,3987.61,CAD,7,Trades,m',
+            '2020-09-16 12:00:00 AM,2020-09-18 12:00:00 AM,Sell,IPL.TO,INTER PIPELINE LTD,-300,13.96,4188,-1.96,4186.04,CAD,7,Trades,m',
+            '2019-07-29 12:00:00 AM,2019-07-31 12:00:00 AM,Buy,IPL.TO,INTER PIPELINE LTD,300,22.16,-6648,-1.05,-6649.05,CAD,7,Trades,m',
+            '2019-07-29 12:00:00 AM,2019-07-31 12:00:00 AM,Buy,IPL.TO,INTER PIPELINE LTD,186,22.15731183,-4121.26,-5.6,-4126.86,CAD,7,Trades,m',
+            '2019-07-29 12:00:00 AM,2019-07-31 12:00:00 AM,Buy,IPL.TO,INTER PIPELINE LTD,100,22.16,-2216,-1.26,-2217.26,CAD,7,Trades,m',
+        ]
+
+        get.side_effect = [self.mock_empty]
+        my_obj = QuestTrade(csv.reader(data), 'test')
+        my_obj.process()
+        self.assertEqual(EquityValue.objects.filter(source=DataSource.UPLOAD.value).count(), 2,
+                         '0 Div value ignored')
+        self.assertEqual(EquityValue.objects.filter(source=DataSource.ESTIMATE.value).count(), 15,
+                         'Estimate the rest')
+
 
 
     @freeze_time('2020-09-01')
@@ -430,9 +452,8 @@ class BasicSetup(TestCase):
         EquityValue.objects.create(equity=e, date=datetime(2020, 6, 1).date(), price=7,
                                    source=DataSource.UPLOAD.value)
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
 
         self.assertEqual(Transaction.objects.count(), 7, 'Buy * 4, Sell, Fund, Withdraw')
 
@@ -451,9 +472,8 @@ class BasicSetup(TestCase):
         self.assertEqual(ev.price, 7, 'Keep original Upload')
         self.assertEqual(ev.source, DataSource.UPLOAD.value)
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
         self.assertEqual(Transaction.objects.count(), 7, 'Nothing New')
 
         self.assertEqual(deposit.value, 1000.0)
@@ -474,9 +494,8 @@ class BasicSetup(TestCase):
         ]
         get.side_effect = [self.mock_lookup, self.mock_empty]
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
 
         self.assertEqual(Transaction.objects.count(), 3)
         p = Portfolio.objects.get(name='test_Type')
@@ -508,9 +527,8 @@ class BasicSetup(TestCase):
             '2020-05-06 12:00:00 AM,DIV,MYE.TO,,MY Equity,0,0,0,5,CAD,123,Dividends,Type',
         ]
         get.side_effect = [self.mock_lookup, self.mock_query]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
 
         self.assertEqual(Transaction.objects.count(), 2)
         self.assertEqual(EquityEvent.objects.count(), 4, 'API is used,  not the upload')
@@ -536,11 +554,11 @@ class BasicSetup(TestCase):
             '2020-03-06 12:00:00 AM,DIV,OTHER,,Other Equity,0,0,0,5,CAD,123,Dividends,Type',
         ]
         get.side_effect = [self.mock_lookup, self.mock_query]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertRaises(Exception) as context:
-                my_obj = QuestTrade('no_file', 'test')
-                my_obj.process()
+        with self.assertRaises(Exception) as context:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            my_obj.process()
             self.assertEqual(str(context.exception), "Failed to lookup OTHER - Other Equity")
+
     @freeze_time('2020-09-01')
     @patch('requests.get')
     def test_div_upload(self, get):
@@ -553,9 +571,8 @@ class BasicSetup(TestCase):
             '2020-05-06 12:00:00 AM,DIV,MYE.TO,,MY Equity,0,0,0,5,CAD,123,Dividends,Type',
         ]
         get.side_effect = [self.mock_empty, self.mock_empty]
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            my_obj = QuestTrade('no_file', 'test')
-            my_obj.process()
+        my_obj = QuestTrade(csv.reader(data_text), 'test')
+        my_obj.process()
 
         self.assertEqual(Transaction.objects.count(), 2)
         self.assertEqual(EquityEvent.objects.count(), 3, 'API is used,  not the upload')
@@ -583,32 +600,28 @@ class ParsingQT(TestCase):
     def test_parsing_date(self):
         data_text = [self.csv_header,
                      '2020-fish-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
-                self.assertEqual(len(captured.records), 1, 'Quiet with no date')
-                self.assertEqual(captured.records[0].levelname, 'DEBUG', 'Error only with DEBUG')
-                self.assertTrue(captured.records[0].msg.startswith('Invalid date 2020-fish-03'), 'Error in log')
+        with self.assertLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
+            self.assertEqual(len(captured.records), 1, 'Quiet with no date')
+            self.assertEqual(captured.records[0].levelname, 'DEBUG', 'Error only with DEBUG')
+            self.assertTrue(captured.records[0].msg.startswith('Invalid date 2020-fish-03'), 'Error in log')
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
+        with self.assertNoLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
 
         data_text = [self.csv_header,
                     ',CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
 
         data_text = [self.csv_header,
                      '2020-03-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
 
     def test_parsing_price(self):
         """
@@ -619,71 +632,64 @@ class ParsingQT(TestCase):
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type']
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 10.1, 'Price incluces commission')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 10.1, 'Price incluces commission')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10,-5.0,-505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 10.1, 'Integers are ok')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 10.1, 'Integers are ok')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,foo,-5.0,-505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 0, 'Try that')
-                self.assertEqual(len(captured.records), 1, 'Log an error')
-                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
-                self.assertTrue(captured.records[0].msg.startswith('Could not convert price'), 'Error in log')
+        with self.assertLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 0, 'Try that')
+            self.assertEqual(len(captured.records), 1, 'Log an error')
+            self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+            self.assertTrue(captured.records[0].msg.startswith('Could not convert price'), 'Error in log')
 
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,bar,foo,-5.0,-505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 0, 'Try that')
-                self.assertEqual(len(captured.records), 2, 'Log an error')
+        with self.assertLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 0, 'Try that')
+            self.assertEqual(len(captured.records), 2, 'Log an error')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,bar,10,-5.0,-505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 10, 'Try that')
-                self.assertEqual(len(captured.records), 2, 'Log an error (twice!)')
-                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
-                self.assertTrue(captured.records[0].msg.startswith('Failed to convert Quantity'), 'Error in log')
-                self.assertEqual(captured.records[0].msg, captured.records[1].msg, 'Hit twice with QT')
+        with self.assertLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 10, 'Try that')
+            self.assertEqual(len(captured.records), 2, 'Log an error (twice!)')
+            self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+            self.assertTrue(captured.records[0].msg.startswith('Failed to convert Quantity'), 'Error in log')
+            self.assertEqual(captured.records[0].msg, captured.records[1].msg, 'Hit twice with QT')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,,10,-5.0,-505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 10, 'Try that')
+        with self.assertNoLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 10, 'Try that')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50,10,-bar,-505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Price'], 10, 'Try that')
-                self.assertEqual(len(captured.records), 1, 'Log an error')
-                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
-                self.assertTrue(captured.records[0].msg.startswith('Could not convert commission'), 'Error in log')
+        with self.assertLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Price'], 10, 'Try that')
+            self.assertEqual(len(captured.records), 1, 'Log an error')
+            self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+            self.assertTrue(captured.records[0].msg.startswith('Could not convert commission'), 'Error in log')
 
     def test_parsing_amount(self):
         """
@@ -694,41 +700,37 @@ class ParsingQT(TestCase):
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type']
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Amount'], -505.0, 'Amount')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Amount'], -505.0, 'Amount')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,0,CAD,123,Trades,Type']
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Amount'], 0, 'Amount')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Amount'], 0, 'Amount')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,,CAD,123,Trades,Type']
 
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Amount'], 0, 'Amount')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Amount'], 0, 'Amount')
 
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,Foo,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['Amount'], 0, 'Amount')
-                self.assertEqual(len(captured.records), 1, 'Log an error')
-                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
-                self.assertTrue(captured.records[0].msg.startswith('Failed to convert Amount'), 'Error in log')
+        with self.assertLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['Amount'], 0, 'Amount')
+            self.assertEqual(len(captured.records), 1, 'Log an error')
+            self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+            self.assertTrue(captured.records[0].msg.startswith('Failed to convert Amount'), 'Error in log')
 
     def test_parsing_xa_type(self):
         """
@@ -761,37 +763,34 @@ class ParsingQT(TestCase):
         # Test blue sky results
         for result, data in clean_data:
             data_text = [self.csv_header, data]
-            with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-                with self.assertNoLogs(level='DEBUG') as captured:
-                    my_obj = QuestTrade('no_file', 'test')
-                    self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                    self.assertEqual(my_obj.pd.iloc[0]['XAType'], result, data)
+            with self.assertNoLogs(level='DEBUG') as captured:
+                my_obj = QuestTrade(csv.reader(data_text), 'test')
+                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+                self.assertEqual(my_obj.pd.iloc[0]['XAType'], result, data)
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Sell,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertNoLogs(level='DEBUG') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.SELL, 'Amount')
+        with self.assertNoLogs(level='DEBUG') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['XAType'], Transaction.SELL, 'Amount')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Foo,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,505.0,CAD,123,Trades,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
-                self.assertEqual(my_obj.pd.iloc[0]['XAType'], JUNK, 'Invalid Record')
-                self.assertEqual(len(captured.records), 1, 'Log an error')
-                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
-                self.assertTrue(captured.records[0].msg.startswith('Unexpected XA value'), 'Error in log')
+        with self.assertLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 1, 'Record Processed')
+            self.assertEqual(my_obj.pd.iloc[0]['XAType'], JUNK, 'Invalid Record')
+            self.assertEqual(len(captured.records), 1, 'Log an error')
+            self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+            self.assertTrue(captured.records[0].msg.startswith('Unexpected XA value'), 'Error in log')
 
         data_text = [self.csv_header,
                      '2020-03-06 12:00:00 AM,Foo,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,505.0,CAD,123,FOO,Type']
-        with patch('builtins.open', mock_open(read_data='\n'.join(data_text))):
-            with self.assertLogs(level='ERROR') as captured:
-                my_obj = QuestTrade('no_file', 'test')
-                self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
-                self.assertEqual(len(captured.records), 1, 'Log an error')
-                self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
-                self.assertTrue(captured.records[0].msg.startswith('Unexpected XA value'), 'Error in log')
+        with self.assertLogs(level='ERROR') as captured:
+            my_obj = QuestTrade(csv.reader(data_text), 'test')
+            self.assertEqual(len(my_obj.pd), 0, 'Record Skipped')
+            self.assertEqual(len(captured.records), 1, 'Log an error')
+            self.assertEqual(captured.records[0].levelname, 'ERROR', 'Error')
+            self.assertTrue(captured.records[0].msg.startswith('Unexpected XA value'), 'Error in log')

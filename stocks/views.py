@@ -15,9 +15,10 @@ from django.views.generic import ListView, DetailView, CreateView, DeleteView, U
 from django.views.generic.dates import DateMixin
 
 
-from .models import Equity, Portfolio, Transaction, normalize_today
+from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
 from .forms import AddEquityForm, TransactionForm, PortfolioForm, UploadFileForm
 from .importers import QuestTrade, Manulife, StockImporter, HEADERS, DIYImportException
+from .tasks import daily_update
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,13 @@ def portfolio_update(request, pk):
     portfolio.update()
     return HttpResponse(status=200)
 
+def diy_update(request):
+    """
+    :param request:
+    :return:
+    """
+    daily_update()
+    return HttpResponseRedirect(reverse('portfolio_list'))
 
 class PortfolioAdd(CreateView):
     model = Portfolio
@@ -188,8 +196,7 @@ def upload_file(request):
                     importer = Manulife(reader, stub)
                 else:
                     importer = StockImporter(reader, HEADERS, stub=stub, managed=False)
-
-                    importer.process()
+                importer.process()
             except DIYImportException as e:
                 #messages.error(request, str(e))
                 # messages.error(request, 'FooBar')
