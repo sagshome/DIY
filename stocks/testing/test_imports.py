@@ -400,6 +400,26 @@ class BasicSetup(TestCase):
                          'Dividends, DIS should be ignored')
         self.assertEqual(len(my_obj.ignored_rows), 1, 'Split ignored')
 
+    @freeze_time('2022-12-01')
+    @patch('requests.get')
+    def test_import_nostub_fail(self, get):
+        data = [
+            'Transaction Date,Settlement Date,Action,Symbol,Description,Quantity,Price,Gross Amount,Commission,Net Amount,Currency,Account #,Activity Type,Account Type',
+            '2019-04-29 12:00:00 AM,2019-04-29 12:00:00 AM,DIV,.CM,CANADIAN IMPERIAL BANK OF COMMERCE CASH ,0.00000,0.00000000,0.00,0.00,109.20,CAD,8,Dividends,k',
+            '2022-05-18 12:00:00 AM,2022-05-18 12:00:00 AM,DIS,CM,CANADIAN IMPERIAL BANK OF COMMERCE STK SPLIT,203.00000,0.00000000,0.00,0.00,0.00,CAD,8,Dividends,k',
+            '2022-01-05 12:00:00 AM,2022-01-07 12:00:00 AM,Buy,CM.TO,CANADIAN IMPERIAL BANK OF COMMERCE WE ,53.00000,150.84000000,-7994.52,-5.14,-7999.66,CAD,8,Trades,k',
+            '2020-09-18 12:00:00 AM,2020-09-22 12:00:00 AM,Buy,CM.TO,CANADIAN IMPERIAL BANK OF COMMERCE WE ,72.00000,102.47000000,-7377.84,-5.20,-7383.04,CAD,8,Trades,k',
+            '2019-01-07 12:00:00 AM,2019-01-09 12:00:00 AM,Buy,CM.TO,CANADIAN IMPERIAL BANK OF COMMERCE WE ,78.00000,103.60000000,-8080.80,-5.22,-8086.02,CAD,8,Trades,k',
+        ]
+
+        get.side_effect = [self.mock_empty]
+        my_obj = QuestTrade(csv.reader(data), None)
+        my_obj.process()
+        self.assertEqual(Portfolio.objects.count(), 1,
+                         'Only one portfolio created')
+        p = Portfolio.objects.all()[0]
+        self.assertEqual(p.name, 'k', 'No STUB value expected')
+
     @freeze_time('2020-12-01')
     @patch('requests.get')
     def test_import_search_fail(self, get):
@@ -432,7 +452,6 @@ class BasicSetup(TestCase):
                          '0 Div value ignored')
         self.assertEqual(EquityValue.objects.filter(source=DataSource.ESTIMATE.value).count(), 15,
                          'Estimate the rest')
-
 
 
     @freeze_time('2020-09-01')

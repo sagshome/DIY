@@ -1,7 +1,13 @@
 /db.sqlite3
-
 /diy/diy.env
 /build/package.json
 /build/package-lock.json
 /.coverage
 /build/node_modules/
+/diy/__pycache__/
+/diy/celery.py
+/stocks/__pycache__/
+/stocks/migrations/__pycache__/
+/stocks/templatetags/__pycache__/
+/stocks/testing/__pycache__/
+/.idea/*

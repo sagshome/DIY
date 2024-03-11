@@ -339,7 +339,8 @@ class StockImporter:
             try:
                 p = Portfolio.objects.get(explicit_name=explicit_name)
             except Portfolio.DoesNotExist:
-                p = Portfolio(name=f'{stub}_{name}', explicit_name=explicit_name, managed=managed)
+                name = name if not stub else f'{stub}_{name}'
+                p = Portfolio(name=name, explicit_name=explicit_name, managed=managed)
                 p.save()
                 p = Portfolio.objects.get(explicit_name=explicit_name)  # Refresh
             self.portfolios[explicit_name] = p

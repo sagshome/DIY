@@ -42,4 +42,13 @@
             {{ custom_error }}
         </div>
     {% endif %}
+    {% if custom_warnings %}
+        <div class="alert alert-warning">
+            <h2>Warnings (skipped lines from CSV upload)</h2>
+                {{ custom_warnings }}
+        </div>
+    {% endif %}
+    <hr>
+    <a href="{% url 'portfolio_list' %}"><button class="rounded spaced menu-button-success">Portfolio List</button></a>
+
 {% endblock content %}
