@@ -23,37 +23,6 @@ from .tasks import daily_update
 logger = logging.getLogger(__name__)
 
 
-@require_http_methods(['GET'])
-def search(request):
-    """
-    Ajax call to run a search and return list of possible values
-    :param request:
-    :return:
-    """
-    string = request.GET.get('string')
-    if string:
-        region = request.GET.get('region')
-
-    if not region:
-        region = 'United States'
-
-    response = Equity.lookup(string)
-    if response:
-        for value in response:
-            logger.debug('%s %s' % (value, type(value)))
-            if '4. region' in value and value['4. region'] == region:
-                result = {'key':  value['1. symbol'],
-                          'name': value['2. name'],
-                          'type': value['3. type'],
-                          'region': value['4. region'],
-                          'symbol': value['1. symbol'].split('.')[0],
-                          'currency': value['8. currency'],
-                          'value': value['6. marketClose'],
-                          }
-                return JsonResponse(status=200, data=result)
-    return JsonResponse(status=407, data={'status': 'false', 'message': f'Lookup of "{string}" for "{region}" not found'})
-
-
 class PortfolioView(ListView):
     model = Portfolio
     template_name = 'stocks/portfolio_list.html'

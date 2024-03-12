@@ -5,7 +5,6 @@ from . import views
 # Base is stocks/
 urlpatterns = [
     path(r'', views.PortfolioView.as_view(), name='portfolio_home'),
-    path(r'lookup', views.search, name="lookup"),
     path(r'upload/', views.upload_file, name='upload'),
 
     path(r'equity/add', views.add_equity, name='add_equity'),

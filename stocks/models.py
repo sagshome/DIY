@@ -274,55 +274,39 @@ class Equity(models.Model):
         else:
             do_update = True
 
-        self.symbol = self.symbol.upper()
-        if self._state.adding and do_update:
-            if not self.validated:
-                self.searchable = self.set_equity_data(self.symbol)
-            self.validated = True
+        if not self.symbol.isupper():
+            self.symbol = self.symbol.upper()
+        if not self.validated and do_update:
+            self.set_equity_data()
 
-        if not self._state.adding and do_update and self.searchable:
-            self.update()
         super(Equity, self).save(*args, **kwargs)
+        if do_update and self.searchable:
+            self._update_equity_data(False)
 
-    @staticmethod
-    def lookup(key: str) -> List[Dict]:
-        """
-        Given a key,   use the API to find the best stock matches.   Not used but should be
-        :param key:  The search key string
-        :return:  A list of dictionary values (top 10) that match - The API is lacking it would be great if it
-                  supported wild cards (request was sent)
-        """
-        search = AV_URL + 'SYMBOL_SEARCH&keywords=' + key + '&apikey=' + AV_API_KEY
+    def set_equity_data(self):
+        search = AV_URL + 'SYMBOL_SEARCH&keywords=' + self.symbol + '&apikey=' + AV_API_KEY
         logger.debug(search)
         request = requests.get(search)
         if request.status_code == 200:
             data = request.json()
-            if 'bestMatches' in data:
-                return data['bestMatches']
-        return []
+            if 'bestMatches' in data and data['bestMatches'][0]['9. matchScore'] == '1.0000':
+                validated =  data['bestMatches'][0]
 
-    @staticmethod
-    def get_equity_data(ticker: str) -> Dict:
-        ticker_set = Equity.lookup(ticker)
-        if ticker_set:
-            if not len(ticker_set) == 1:
-                if not ticker_set[0]['9. matchScore'] == '1.0000':
-                    return {}
-            return ticker_set[0]
-        return {}
-
-    def set_equity_data(self, ticker: str) -> bool:
-        validated = self.get_equity_data(ticker)
-        if validated:
-            self.name = validated['2. name']
-            self.equity_type = validated['3. type']
-            for region in self.REGIONS:
-                if validated['4. region'] == region[1]:
-                    self.region = region[0]
+                self.name = validated['2. name']
+                self.equity_type = validated['3. type']
+                for region in self.REGIONS:
+                    if validated['4. region'] == region[1]:
+                        self.region = region[0]
                     break
-            self.currency = validated['8. currency']
-            return True
-        return False
+                self.currency = validated['8. currency']
+                self.searchable = True
+            else:
+                self.searchable = False
+            self.validated = True
+        else:
+            logger.error('API error:(%s) - %s' % (request.status_code, request.reason))
+            self.validated = False
+            self.searchable = False
 
     def fill_equity_holes(self):
         last_date: date = None

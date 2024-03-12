@@ -12,182 +12,9 @@ from django.test import TestCase, override_settings
 from stocks.importers import QuestTrade, FUND, BUY, SELL, DIV, REDEEM, JUNK
 from stocks.models import ExchangeRate, Inflation, Equity, EquityAlias, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
 from stocks.utils import normalize_date, next_date, last_date, normalize_today
+from stocks.testing.setup import DEFAULT_QUERY, DEFAULT_LOOKUP
 
 logger = logging.getLogger(__name__)
-DEFAULT_QUERY = {
-    "Meta Data": {
-        "1. Information": "Monthly Adjusted Prices and Volumes",
-        "2. Symbol": "BCE.TRT",
-        "3. Last Refreshed": "2021-01-15",
-        "4. Time Zone": "US/Eastern"
-    },
-    "Monthly Adjusted Time Series": {
-        "2020-12-31": {
-            "1. open": "56.6600",
-            "2. high": "58.6700",
-            "3. low": "54.3100",
-            "4. close": "54.4300",
-            "5. adjusted close": "45.4614",
-            "6. volume": "98974886",
-            "7. dividend amount": "0.8325"
-        },
-        "2020-11-30": {
-            "1. open": "53.8800",
-            "2. high": "57.3750",
-            "3. low": "52.5200",
-            "4. close": "56.3000",
-            "5. adjusted close": "46.3546",
-            "6. volume": "49176318",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-10-30": {
-            "1. open": "55.2700",
-            "2. high": "56.8400",
-            "3. low": "53.1850",
-            "4. close": "53.5400",
-            "5. adjusted close": "44.0822",
-            "6. volume": "41046718",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-09-30": {
-            "1. open": "56.0600",
-            "2. high": "57.5100",
-            "3. low": "54.4200",
-            "4. close": "55.2200",
-            "5. adjusted close": "45.4654",
-            "6. volume": "83069227",
-            "7. dividend amount": "0.8325"
-        },
-        "2020-08-31": {
-            "1. open": "56.2800",
-            "2. high": "58.2100",
-            "3. low": "56.0500",
-            "4. close": "56.0600",
-            "5. adjusted close": "45.4822",
-            "6. volume": "35434424",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-07-31": {
-            "1. open": "56.6400",
-            "2. high": "57.7000",
-            "3. low": "54.3300",
-            "4. close": "56.1600",
-            "5. adjusted close": "45.5633",
-            "6. volume": "32047363",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-06-30": {
-            "1. open": "57.0000",
-            "2. high": "60.1400",
-            "3. low": "55.7900",
-            "4. close": "56.6200",
-            "5. adjusted close": "45.9365",
-            "6. volume": "74705435",
-            "7. dividend amount": "0.8325"
-        },
-        "2020-05-29": {
-            "1. open": "55.9400",
-            "2. high": "57.5800",
-            "3. low": "53.2500",
-            "4. close": "57.2300",
-            "5. adjusted close": "45.7633",
-            "6. volume": "39833587",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-04-30": {
-            "1. open": "56.0600",
-            "2. high": "59.3100",
-            "3. low": "54.6900",
-            "4. close": "56.2900",
-            "5. adjusted close": "45.0116",
-            "6. volume": "47054239",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-03-31": {
-            "1. open": "59.4200",
-            "2. high": "63.9000",
-            "3. low": "46.0300",
-            "4. close": "57.7300",
-            "5. adjusted close": "46.1631",
-            "6. volume": "126482836",
-            "7. dividend amount": "0.8325"
-        },
-        "2020-02-28": {
-            "1. open": "62.6800",
-            "2. high": "65.2750",
-            "3. low": "58.8750",
-            "4. close": "58.9500",
-            "5. adjusted close": "46.3657",
-            "6. volume": "48102080",
-            "7. dividend amount": "0.0000"
-        },
-        "2020-01-31": {
-            "1. open": "60.2500",
-            "2. high": "63.3900",
-            "3. low": "59.2800",
-            "4. close": "62.3600",
-            "5. adjusted close": "49.0477",
-            "6. volume": "30837083",
-            "7. dividend amount": "0.0000"
-        },
-    }
-}
-DEFAULT_LOOKUP = {"bestMatches": [{"1. symbol": "BCE.TRT",
-                                   "2. name": "MYE this is better Inc",
-                                   "3. type": "Equity",
-                                   "4. region": "Toronto",
-                                   "5. marketOpen": "09:30",
-                                   "6. marketClose": "16:00",
-                                   "7. timezone": "UTC-05",
-                                   "8. currency": "CAD",
-                                   "9. matchScore": "1.0000"}]}
-'''
-{
-    "bestMatches": [
-        {
-            "1. symbol": "BCE.TRT",
-            "2. name": "BCE Inc",
-            "3. type": "Equity",
-            "4. region": "Toronto",
-            "5. marketOpen": "09:30",
-            "6. marketClose": "16:00",
-            "7. timezone": "UTC-05",
-            "8. currency": "CAD",
-            "9. matchScore": "1.0000"
-        }
-    ]
-}
-
-{
-    "bestMatches": []
-}
-
-{
-    "bestMatches": [
-        {
-            "1. symbol": "B",
-            "2. name": "Barnes Group Inc",
-            "3. type": "Equity",
-            "4. region": "United States",
-            "5. marketOpen": "09:30",
-            "6. marketClose": "16:00",
-            "7. timezone": "UTC-04",
-            "8. currency": "USD",
-            "9. matchScore": "1.0000"
-        },
-        {
-            "1. symbol": "B.TRV",
-            "2. name": "BCM Resources Corp",
-            "3. type": "Equity",
-            "4. region": "Toronto Venture",
-            "5. marketOpen": "09:30",
-            "6. marketClose": "16:00",
-            "7. timezone": "UTC-05",
-            "8. currency": "CAD",
-            "9. matchScore": "0.5000"
-        },
-        
-'''
 
 
 class BasicSetup(TestCase):
@@ -308,7 +135,7 @@ class BasicSetup(TestCase):
                 '2020-03-06 12:00:00 AM,DIV,XXX.TO,,The BCE Dividend,0,0,0,5,CAD,123,Dividends,Type',
                 '2020-04-06 12:00:00 AM,DIV,XXX.TO,,The BCE Dividend,0,0,0,5,CAD,123,Dividends,Type']
 
-        get.side_effect = [self.mock_lookup, self.mock_empty]
+        get.side_effect = [self.mock_lookup, self.mock_empty, self.mock_empty]
         my_obj = QuestTrade(csv.reader(data), 'test')
         my_obj.process()
         self.assertEqual(len(my_obj.equities), 2, 'Added one')
@@ -317,7 +144,7 @@ class BasicSetup(TestCase):
     @patch('requests.get')
     def test_equities_1(self, get):
         data = [self.csv_header, '2020-03-03 12:00:00 AM,Buy,MYE.TO,x,BCE,50.0,10.0,-5.0,-505.0,CAD,123,Trades,x']
-        get.side_effect = [self.mock_lookup, self.mock_empty]
+        get.side_effect = [self.mock_lookup, self.mock_empty, self.mock_empty]
         my_obj = QuestTrade(csv.reader(data), 'test')
         self.assertEqual(len(my_obj.equities), 0, 'Empty')
         my_obj.process()
@@ -328,7 +155,7 @@ class BasicSetup(TestCase):
         data = [self.csv_header,
                 '2020-03-22 12:00:00 AM,Buy,MYE.TO,x,BCE,50.0,10.0,-5.0,-505.0,CAD,123,Trades,x',
                 '2020-03-23 12:00:00 AM,Buy,MYE.TO,x,BCE,50.0,10.0,-5.0,-505.0,CAD,123,Trades,x']
-        get.side_effect = [self.mock_lookup, self.mock_empty]
+        get.side_effect = [self.mock_lookup, self.mock_empty, self.mock_empty]
 
         my_obj = QuestTrade(csv.reader(data), 'test')
         self.assertEqual(len(my_obj.equities), 0, 'Empty')
@@ -530,7 +357,7 @@ class BasicSetup(TestCase):
             '2020-05-20 12:00:00 AM,Sell,MYE.TO,,MY Equity,-10.0,20.0,-5.0,195.0,CAD,123,Trades,Type'
 
         ]
-        get.side_effect = [self.mock_lookup, self.mock_empty]
+        get.side_effect = [self.mock_lookup, self.mock_empty, self.mock_empty]
 
         my_obj = QuestTrade(csv.reader(data_text), 'test')
         my_obj.process()
