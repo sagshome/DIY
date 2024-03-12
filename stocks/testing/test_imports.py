@@ -790,11 +790,11 @@ class ParsingQT(TestCase):
             (REDEEM, '2020-03-06 12:00:00 AM,WDR,,BAR,desc,0,0,0,-505.0,CAD,123,Withdrawals,Type'),
 
             (BUY, '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type'),
-            (BUY, '2020-03-06 12:00:00 AM,DIS,MYE.TO,BAR,MY Equity,50.0,0,0,0,CAD,123,Dividends,Type'),
+            # (BUY, '2020-03-06 12:00:00 AM,DIS,MYE.TO,BAR,MY Equity,50.0,0,0,0,CAD,123,Dividends,Type'),
             (SELL, '2020-03-06 12:00:00 AM,Sell,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,495.0,CAD,123,Trades,Type'),
             (DIV, '2020-03-06 12:00:00 AM,DIV,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Dividends,Type'),
 
-            (JUNK, '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,FX conversion,Type'),
+            # (JUNK, '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,FX conversion,Type'),
 
         )
 

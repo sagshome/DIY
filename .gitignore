@@ -10,4 +10,5 @@
 /stocks/migrations/__pycache__/
 /stocks/templatetags/__pycache__/
 /stocks/testing/__pycache__/
-/.idea/*
+/.idea/DIY.iml
+/.idea/misc.xml
