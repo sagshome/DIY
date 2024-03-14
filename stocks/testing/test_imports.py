@@ -9,7 +9,7 @@ from freezegun import freeze_time
 from unittest.mock import patch, mock_open, Mock
 
 from django.test import TestCase, override_settings
-from stocks.importers import QuestTrade, FUND, BUY, SELL, DIV, REDEEM, JUNK
+from stocks.importers import QuestTrade, FUND, BUY, SELL, DIV, REDEEM, JUNK, SPLIT
 from stocks.models import ExchangeRate, Inflation, Equity, EquityAlias, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
 from stocks.utils import normalize_date, next_date, last_date, normalize_today
 from stocks.testing.setup import DEFAULT_QUERY, DEFAULT_LOOKUP
@@ -224,8 +224,8 @@ class BasicSetup(TestCase):
         my_obj = QuestTrade(csv.reader(data), 'test')
         my_obj.process()
         self.assertEqual(Equity.objects.count(), 1,
-                         'Dividends, DIS should be ignored')
-        self.assertEqual(len(my_obj.ignored_rows), 1, 'Split ignored')
+                         'Different symbol on Dividends, DIS should be ignored')
+        self.assertEqual(len(my_obj.warnings), 1, 'Split ignored')
 
     @freeze_time('2022-12-01')
     @patch('requests.get')
@@ -305,7 +305,7 @@ class BasicSetup(TestCase):
         mock2.status_code = 200
         mock2.json.return_value = second_lookup
 
-        get.side_effect = [self.mock_lookup, mock2, self.mock_query, self.mock_empty]
+        get.side_effect = [self.mock_lookup,  self.mock_query, mock2, self.mock_empty]
 
         e = Equity.objects.create(symbol='myf.trt', name='FOO Bar INC', equity_type='ETF',  validated=True,
                                   searchable=False, last_updated=datetime(2020, 3, 1).date())
@@ -617,7 +617,7 @@ class ParsingQT(TestCase):
             (REDEEM, '2020-03-06 12:00:00 AM,WDR,,BAR,desc,0,0,0,-505.0,CAD,123,Withdrawals,Type'),
 
             (BUY, '2020-03-06 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type'),
-            # (BUY, '2020-03-06 12:00:00 AM,DIS,MYE.TO,BAR,MY Equity,50.0,0,0,0,CAD,123,Dividends,Type'),
+            (SPLIT, '2020-03-06 12:00:00 AM,DIS,MYE.TO,BAR,MY Equity,50.0,0,0,0,CAD,123,Dividends,Type'),
             (SELL, '2020-03-06 12:00:00 AM,Sell,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,495.0,CAD,123,Trades,Type'),
             (DIV, '2020-03-06 12:00:00 AM,DIV,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Dividends,Type'),
 

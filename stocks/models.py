@@ -31,9 +31,10 @@ AV_API_KEY = settings.ALPHAVANTAGEAPI_KEY
 
 class DataSource(Enum):
     MANUAL = 1
-    API = 2
-    UPLOAD = 3
-    ESTIMATE = 4
+    ADJUSTED = 2
+    API = 3
+    UPLOAD = 4
+    ESTIMATE = 5
 
     @classmethod
     def choices(cls):
@@ -276,6 +277,7 @@ class Equity(models.Model):
 
         if not self.symbol.isupper():
             self.symbol = self.symbol.upper()
+
         if not self.validated and do_update:
             self.set_equity_data()
 
@@ -376,6 +378,9 @@ class Equity(models.Model):
                             EquityEvent.get_or_create(equity=self, event_type='Dividend', date=date_value,
                                                       value=dividend, source=DataSource.API.value)
 
+                # Cleanup
+                EquityValue.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
+                EquityEvent.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
                 self.last_updated = now
                 self.save(update=False)
 

@@ -166,9 +166,9 @@ def upload_file(request):
                 else:
                     importer = StockImporter(reader, HEADERS, stub=stub, managed=False)
                 importer.process()
-                if len(importer.ignored_rows) != 0:
+                if len(importer.warnings) != 0:
                     return render(request, "stocks/uploadfile.html",
-                                  {"form": form, 'custom_warnings': importer.ignored_rows})
+                                  {"form": form, 'custom_warnings': importer.warnings})
             except DIYImportException as e:
                 return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': str(e)})
             return HttpResponseRedirect(reverse('portfolio_list'))

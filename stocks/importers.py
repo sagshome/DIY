@@ -19,6 +19,7 @@ JUNK = 7
 REINVESTED = 8
 TRANSFER_IN = 9
 TRANSFER_OUT = 10
+SPLIT = 11
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,8 @@ HEADERS = {
         'Price': 'Price', 'Amount': 'Amount'
     }
 }
+
+SPLIT_MESSAGE = 'Stock split detected,  only the admin can update prior dividends.   They have been contacted'
 
 
 class DIYImportException(Exception):
@@ -44,7 +47,7 @@ class StockImporter:
                           'Quantity', 'Price', 'Amount']
 
     def __init__(self, reader: csv.reader, headers: Dict[str, str], stub: str = None, managed: bool = False):
-        self.ignored_rows = []
+        self.warnings = []
         self.stub = stub if stub else None
         self.managed = managed
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
@@ -75,7 +78,7 @@ class StockImporter:
                                                                        symbol, description, xa_type, currency,
                                                                       quantity, price, amount])
                 else:
-                    self.ignored_rows.append(row)
+                    self.warnings.append(f'{xa_date}:{symbol} - Can not determine transaction type')
 
         self.pd['Date'] = pd.to_datetime(self.pd['Date'])
         self.pd = self.pd.sort_values(['Date', 'AccountKey', 'XAType'], ascending=[True, True, True])
@@ -88,6 +91,7 @@ class StockImporter:
             this_date: date = self.pd_date(prow)
             norm_date = normalize_date(this_date)
             symbol: str = self.pd_symbol(prow)
+            name: str = self.pd_description(prow)
             xa_action: int = self.pd_xa_type(prow)
             amount: float = self.pd_amount(prow)
             price = self.pd_price(prow)
@@ -110,13 +114,17 @@ class StockImporter:
                                            value=amount, xa_action=this_action,
                                            quantity=0, price=0)
 
-            if xa_action in [BUY, SELL, REINVESTED, TRANSFER_IN, TRANSFER_OUT]:
-                equity = self.get_or_create_equity(symbol, self.pd_description(prow), self.pd_currency(prow), False)
+            if xa_action in [BUY, SELL, REINVESTED, TRANSFER_IN, TRANSFER_OUT, SPLIT]:
+                match_name = True if xa_action == SPLIT else False
+                equity = self.get_or_create_equity(symbol, name, self.pd_currency(prow), False, match_name)
                 if equity.key not in equity_totals[portfolio.explicit_name]:
                     equity_totals[portfolio.explicit_name][equity.key] = 0  # First purchase
                 equity_totals[portfolio.explicit_name][equity.key] += quantity
-                buy_price = price if xa_action != REINVESTED else 0
-                this_action = BUY if xa_action in [BUY, REINVESTED, TRANSFER_IN] else SELL
+                buy_price = price if xa_action not in [REINVESTED, SPLIT] else 0
+                this_action = BUY if xa_action in [BUY, REINVESTED, TRANSFER_IN, SPLIT] else SELL
+
+                if xa_action == SPLIT:  # todo actually notify admin - liar liar
+                    self.warnings.append(f'{this_date}:{equity.symbol} - {SPLIT_MESSAGE}')
 
                 if do_process:
                     logger.debug('%s:%sTrading %s shares %s' % (this_date, norm_date, equity, quantity))
@@ -125,7 +133,7 @@ class StockImporter:
                     EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
                                                       source=DataSource.UPLOAD.value)
 
-            if xa_action not in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN, BUY, SELL, REINVESTED] and do_process:
+            if xa_action not in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN, BUY, SELL, REINVESTED, SPLIT] and do_process:
                 equity = self.equity_lookup(symbol, self.pd_description(prow))
                 if xa_action == DIV:  # Dividends
                     value = amount / equity_totals[portfolio.explicit_name][equity.key]
@@ -265,14 +273,19 @@ class StockImporter:
             existing.append(row[self.mappings[added]])
         return existing
 
-    def equity_lookup(self, symbol: str, name: str):
+    def equity_lookup(self, symbol: str, name: str, name_match=False):
         if symbol in self.equities:
             return self.equities[symbol]
-        value = EquityAlias.find_equity(name)
-        if value:
-            self.equities[symbol] = value
-            return self.equities[symbol]
-        raise DIYImportException(f'Failed to lookup {symbol} - {name}')  # pragma: no cover
+        try:
+            equity = Equity.objects.get(symbol=symbol)
+        except Equity.DoesNotExist:
+            #
+
+            value = EquityAlias.find_equity(name)
+            if value:
+                self.equities[symbol] = value
+                return self.equities[symbol]
+            raise DIYImportException(f'Failed to lookup {symbol} - {name}')  # pragma: no cover
 
     def get_or_create_equity(self, symbol: str, name: str, currency: str, managed: bool):
         """
@@ -286,32 +299,28 @@ class StockImporter:
 
         if symbol not in self.equities:  # Not yet cached
             try:
-                equity = Equity.objects.get(symbol=symbol)
-            except Equity.DoesNotExist:
-                equity = Equity.objects.create(symbol=symbol, name=name)
-                changed = False
-                if not equity.region:
-                    changed = True
-                    if currency == 'CAD':
-                        equity.region = 'TRT'
-                        equity.currency = 'CAD'
+                equity = self.equity_lookup(symbol, name)
+            except DIYImportException:
+                try:
+                    equity = Equity.objects.get(symbol=symbol)
+                except Equity.DoesNotExist:
+                    equity = Equity.objects.create(symbol=symbol, name=name)
+                    if not equity.region:
+                        if currency == 'CAD':
+                            equity.region = 'TRT'
+                            equity.currency = 'CAD'
+                        else:
+                            equity.currency = 'USD'
+                    if not equity.equity_type:
+                        if equity.name.find(' ETF') != -1:
+                            equity.equity_type = 'ETF'
+                    elif not managed:
+                        equity.equity_type = 'Equity'
+                    elif name.find('%') != -1 or name.find('SAVINGS') != -1:
+                        equity.equity_type = 'MM'
                     else:
-                        equity.currency = 'USD'
-                if not equity.equity_type:
-                    if equity.name.find(' ETF') != -1:
-                        equity.equity_type = 'ETF'
-                        changed = True
-                elif not managed:
-                    equity.equity_type = 'Equity'
-                    changed = True
-                elif name.find('%') != -1 or name.find('SAVINGS') != -1:
-                    equity.equity_type = 'MM'
-                    changed = True
-                else:
-                    equity.equity_type = 'MF'
-                    changed = True
-                if changed:
-                    equity.save(update=False)
+                        equity.equity_type = 'MF'
+                    equity.save()
 
             if not equity:  # pragma: no cover
                 raise DIYImportException(f'Could not create/lookup equity {symbol} - {name}')
@@ -321,7 +330,6 @@ class StockImporter:
 
             if not EquityAlias.objects.filter(symbol=symbol, name=name).exists():
                 EquityAlias.objects.create(symbol=symbol, name=name, equity=equity)
-
             self.equities[symbol] = equity
         return self.equities[symbol]
 
@@ -454,7 +462,7 @@ class QuestTrade(StockImporter):
                 return JUNK
         elif csv_value == 'Dividends':
             if action == 'DIS':
-                return None  #  I can not suppor stocks split via import
+                return SPLIT
             return DIV
         elif csv_value == 'Interest':  # pragma: no cover
             return INT
