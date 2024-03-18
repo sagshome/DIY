@@ -16,7 +16,6 @@ from stocks.testing.setup import DEFAULT_QUERY, DEFAULT_LOOKUP
 
 logger = logging.getLogger(__name__)
 
-
 class BasicSetup(TestCase):
 
     current = datetime(2020,9,1).date()
@@ -182,9 +181,10 @@ class BasicSetup(TestCase):
         self.assertEqual(t.value, 505.0, 'Total value inluceds commission')
         self.assertEqual(t.price, 10.1, "Include commission in price")
 
-        self.assertEqual(e.symbol, 'MYE.TRT', 'Set symbol to TRT')
+        self.assertEqual(e.symbol, 'MYE', 'Set symbol')
+        self.assertEqual(e.key, 'MYE.TRT', 'Key includes code for canada')
         self.assertEqual(e.currency, 'CAD')
-        self.assertEqual(e.region, 'TRT')
+        self.assertEqual(e.region, 'Canada')
         self.assertEqual(e.name, 'MYE this is better Inc', 'Name from API')
         self.assertTrue(e.validated)
         self.assertTrue(e.searchable)
@@ -280,72 +280,42 @@ class BasicSetup(TestCase):
         self.assertEqual(EquityValue.objects.filter(source=DataSource.ESTIMATE.value).count(), 15,
                          'Estimate the rest')
 
-
     @freeze_time('2020-09-01')
     @patch('requests.get')
-    def test_match_on_real_name(self, get):
+    def test_equity_alias(self, get):
+        'MYE this is better Inc'
         data_text = [
             self.csv_header,
-            '2020-03-03 12:00:00 AM,CON,,BAR,desc,0.00000,0.00000000,0.00,1000.00,CAD,123,Deposits,Type',
-            '2020-03-03 12:00:00 AM,Buy,MYE.TO,BAR,MY Equity,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type',
-            '2020-03-03 12:00:00 AM,Buy,MYF.TO,BAR,MY Equity2,10.0,10.0,-5.0,-105.0,USD,123,Trades,Type',
-            '2020-04-03 12:00:00 AM,Buy,MYF.TO,BAR,MY Equity2,10.0,20.0,-5.0,-105.0,USD,123,Trades,Type',
-            '2020-05-03 12:00:00 AM,Buy,MYF.TO,BAR,MY Equity2,10.0,15.0,-5.0,-105.0,USD,123,Trades,Type',
-            '2020-03-06 12:00:00 AM,DIV,XXX.TO,,FOO Bar INC Div,0,0,0,5,USD,123,Dividends,Type',
-            '2020-04-06 12:00:00 AM,DIV,XXX.TO,,FOO Bar INC Div,0,0,0,5,USD,123,Dividends,Type',
-            '2020-05-06 12:00:00 AM,DIV,XXX.TO,,FOO Bar INC Div,0,0,0,5,USD,123,Dividends,Type',
-            '2020-06-03 12:00:00 AM,Sell,MYF.TO,,MY Equity2,50.0,15.0,-5.0, 745.0,CAD,123,Trades,Type',
-            '2020-06-23 12:00:00 AM,EFT,,ELECTRONIC FUND TRANSFER,0.0,0.0,0.0,0.0,-602.00,CAD,123,Withdrawals,Type',
+            '2020-03-03 12:00:00 AM,Buy,MYE.TO,BAR,POWER CORP OF CANADA SUB-VTG WE ACTED AS AGENT,50.0,10.0,-5.0,-505.0,CAD,123,Trades,Type',
+            '2020-03-03 12:00:00 AM,Buy,MYF,BAR,BCE INC COM WE ACTED AS AGENT AVG ,10.0,10.0,-5.0,-105.0,USD,123,Trades,Type',
+            '2020-03-03 12:00:00 AM,Buy,MYF.TO,BAR,BCE INC COM WE ACTED AS AGENT AVG ,10.0,10.0,-5.0,-105.0,CAD,123,Trades,Type',
+            '2020-03-06 12:00:00 AM,DIV,XXX.TO,,POWER CORP OF CANADA SUB-VTG NEW CASH DIV ON 368  Div,0,0,0,5,CAD,123,Dividends,Type',
+            '2020-04-06 12:00:00 AM,DIV,.BCE.TO,,BCE INC COM NEW CASH DIV ON 368 ,0,0,0,5,CAD,123,Dividends,Type',
+            ]
 
-        ]
         second_lookup = deepcopy(DEFAULT_LOOKUP)
-        second_lookup["bestMatches"][0]["2. name"] = "FOO Bar INC"
+        second_lookup["bestMatches"][0]["2. name"] = "BCE Inc Com"
         second_lookup["bestMatches"][0]["8. currency"] = "USD"
         mock2 = Mock()
         mock2.status_code = 200
         mock2.json.return_value = second_lookup
 
-        get.side_effect = [self.mock_lookup,  self.mock_query, mock2, self.mock_empty]
+        third_lookup = deepcopy(DEFAULT_LOOKUP)
+        third_lookup["bestMatches"][0]["2. name"] = "BCE Com"
+        third_lookup["bestMatches"][0]["8. currency"] = "CAD"
+        mock3 = Mock()
+        mock3.status_code = 200
+        mock3.json.return_value = third_lookup
 
-        e = Equity.objects.create(symbol='myf.trt', name='FOO Bar INC', equity_type='ETF',  validated=True,
-                                  searchable=False, last_updated=datetime(2020, 3, 1).date())
-
-        EquityValue.objects.create(equity=e, date=datetime(2020, 4, 1).date(), price=5,
-                                   source=DataSource.API.value)
-        EquityValue.objects.create(equity=e, date=datetime(2020, 5, 1).date(), price=6,
-                                   source=DataSource.ESTIMATE.value)
-        EquityValue.objects.create(equity=e, date=datetime(2020, 6, 1).date(), price=7,
-                                   source=DataSource.UPLOAD.value)
+        get.side_effect = [self.mock_lookup, self.mock_query, mock2, self.mock_query, mock3, self.mock_query]
 
         my_obj = QuestTrade(csv.reader(data_text), 'test')
         my_obj.process()
 
-        self.assertEqual(Transaction.objects.count(), 7, 'Buy * 4, Sell, Fund, Withdraw')
-
-        deposit = Transaction.objects.get(xa_action=Transaction.FUND)
-        withdraw = Transaction.objects.get(xa_action=Transaction.REDEEM)
-        sell = Transaction.objects.get(xa_action=Transaction.SELL)
-        buy = Transaction.objects.filter(xa_action=Transaction.BUY)
-
-        ev = EquityValue.objects.get(equity=e, date=datetime(2020, 4, 1).date())
-        self.assertEqual(ev.price, 5, 'API is better source')
-        self.assertEqual(ev.source, DataSource.API.value)
-        ev = EquityValue.objects.get(equity=e, date=datetime(2020, 5, 1).date())
-        self.assertEqual(ev.price, 20.5, 'Upload is better source')
-        self.assertEqual(ev.source, DataSource.UPLOAD.value)
-        ev = EquityValue.objects.get(equity=e, date=datetime(2020, 6, 1).date())
-        self.assertEqual(ev.price, 7, 'Keep original Upload')
-        self.assertEqual(ev.source, DataSource.UPLOAD.value)
-
-        my_obj = QuestTrade(csv.reader(data_text), 'test')
-        my_obj.process()
-        self.assertEqual(Transaction.objects.count(), 7, 'Nothing New')
-
-        self.assertEqual(deposit.value, 1000.0)
-        self.assertEqual(withdraw.value, -602.0)
-        self.assertEqual(sell.value, -755.0)
-        self.assertEqual(sell.price, 15.1, 'Includes commission')
-        self.assertEqual(sell.quantity, -50.0)
+        self.assertEqual(EquityAlias.objects.count(), 3, '3 alias records')
+        self.assertEqual(EquityAlias.objects.filter(symbol__startswith='MYF.').count(), 2, '2 for MYF')
+        self.assertEqual(Equity.objects.count(), 3, 'Only three records')
+        self.assertEqual(Equity.objects.filter(symbol='MYF').count(), 2, '2 MYFs')
 
     @freeze_time('2020-09-01')
     @patch('requests.get')

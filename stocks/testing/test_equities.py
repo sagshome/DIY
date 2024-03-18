@@ -32,8 +32,8 @@ class BasicSetup(TestCase):
     def test_defaults(self):
         self.assertEqual(self.equity.symbol, 'E', 'Test Forced UpperCase symbol')
         self.assertEqual(self.equity.name, 'equity nAme', 'Test Name is case preserved')
-        self.assertIsNone(self.equity.region, 'Test region default is Canada')
-        self.assertIsNone(self.equity.currency, 'Test currerency is CDN')
+        self.assertEqual(self.equity.region, 'Canada', 'Test region default is Canada')
+        self.assertEqual(self.equity.currency, 'CAD', 'Test currerency is CAD')
         self.assertIsNone(self.equity.equity_type, 'Ensure no default equity type')
         self.assertIsNone(self.equity.last_updated, 'Ensure no default value on last updated')
 

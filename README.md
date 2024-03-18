@@ -36,31 +36,34 @@ or something like them
     npm install asyncdesign-webui
 
 #### Build your base docker images
-   cd <base>
-   docker build -t diy-app --file build/app-Dockerfile .
-   docker build -t diy-nginx --file build/nginx-Dockerfile .
+    cd <base>
+    docker build -t diy-app --file build/app-Dockerfile .
+    docker build -t diy-nginx --file build/nginx-Dockerfile .
 
 #### Edit your custom config
-   cd <base>
-   cp build/example-diy.env diy/diy.env
-   edit diy/diy.env and change accordingly (you will need to add the alphavantage key for this)
+    cd <base>
+    cp build/example-diy.env diy/diy.env
+    edit diy/diy.env and change accordingly (you will need to add the alphavantage key for this)
 
-   SECRET_KEY=make-a-secret-key
-   ALPHAVANTAGEAPI_KEY=alpahvanateapi_key
-   DIY_DEBUG=False
-
-   MYSQL_ROOT_PASSWORD=my-secret-pw
-   MYSQL_DATABASE=DIY
-   MYSQL_USER=diy_user1
-   MYSQL_PASSWORD=diy_password1
-   DATABASE_HOST=diy_db
+    SECRET_KEY=make-a-secret-key
+    ALPHAVANTAGEAPI_KEY=alpahvanateapi_key
+    DIY_DEBUG=False
+    DIY_LOCALDB=False
+    MYSQL_ROOT_PASSWORD=my-secret-pw
+    MYSQL_DATABASE=DIY
+    MYSQL_USER=diy_user1
+    MYSQL_PASSWORD=diy_password1
+    DATABASE_HOST=diy_db
 
 #### Start things up
 
-   docker network create --subnet=172.20.0.0/16 diy_network
-   docker run --name diy_db     --restart unless-stopped --network diy_network --ip 172.20.0.10 --env-file diy/diy.env -d mysql
-   docker run --name diy_app    --restart unless-stopped --network diy_network --ip 172.20.0.15 --env-file diy/diy.env -d diy-app
-   docker run --name diy_nginx  --restart unless-stopped --network diy_network --ip 172.20.0.20 -p 80:80 -d diy-nginx
+    docker network create --subnet=172.20.0.0/16 diy_network
+
+    docker run --name diy_db     --restart unless-stopped --network diy_network --ip 172.20.0.10 --env-file diy/diy.env -d mysql
+
+    docker run --name diy_app    --restart unless-stopped --network diy_network --ip 172.20.0.15 --env-file diy/diy.env -d diy-app
+
+    docker run --name diy_nginx  --restart unless-stopped --network diy_network --ip 172.20.0.20 -p 80:80 -d diy-nginx
 
 
 ### Your DONE !
@@ -70,27 +73,6 @@ Not too hard I hope.
 ## Things I need to improve
 * External DB
 * Backup DB
-* 
+* Support No API Key
 
-## Personal Notes
-I don't use this tech very often anymore,  notes for me really
-
-
-### Some useful docker commands.  
-
-    docker update --restart unless-stopped <container>
-
-    docker exec -it <container> sh
-
-    docker build -f <docker_file> -t <image_tag> . 
-
-    docker rm <container>
-
-    docker rmi <image_tag>
-
-    docker ps -a
-
-    docker run -it --rm -v /etc -v logs:/var/log centos /bin/produce_some_logs
-
-    docker network ls
 

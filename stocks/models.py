@@ -244,7 +244,11 @@ class Equity(models.Model):
         ('MF', 'Mutual Fund'),
         ('MM', 'Money Market')
     )
-    REGIONS = (('TRT', 'Toronto'), ('', 'United States'))
+
+    REGIONS = (
+        ('Canada', 'Canada'),
+        ('US', 'US'),
+    )
 
     @classmethod
     def region_lookup(cls):
@@ -254,20 +258,26 @@ class Equity(models.Model):
         return result
 
     symbol: str = models.CharField(max_length=32, verbose_name='Trading symbol')  # Symbol
+    region: str = models.CharField(max_length=10, null=False, blank=False, default='Canada')
+
     name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
     equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES)
-    region: str = models.CharField(max_length=10, null=True, blank=True, choices=REGIONS)
-    currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES)
+    currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
     last_updated: date = models.DateField(blank=True, null=True)
-    searchable: bool = models.BooleanField(default=True)  # Set to False, when this is data that was forced into being
+    searchable: bool = models.BooleanField(default=False)  # Set to False, when this is data that was forced into being
     validated: bool = models.BooleanField(default=False)  # Set to True was validation is done
+
+    class Meta:
+        unique_together = ('symbol', 'region')
 
     @property
     def key(self):
-        return self.symbol
+        if self.region == 'Canada':
+            return self.symbol + '.TRT'
+        return self.symbol  # US does not get a region decorator via AV_URL
 
     def __str__(self):
-        return self.symbol
+        return f'{self.symbol} ({self.region})'
 
     def save(self, *args, **kwargs):
         if 'update' in kwargs:
@@ -282,31 +292,26 @@ class Equity(models.Model):
             self.set_equity_data()
 
         super(Equity, self).save(*args, **kwargs)
-        if do_update and self.searchable:
-            self._update_equity_data(False)
+        if self.searchable and do_update:
+            self.update_external_equity_data(False)
 
-    def set_equity_data(self):
-        search = AV_URL + 'SYMBOL_SEARCH&keywords=' + self.symbol + '&apikey=' + AV_API_KEY
+    def set_equity_data(self) -> bool:
+        search = AV_URL + 'SYMBOL_SEARCH&keywords=' + self.key + '&apikey=' + AV_API_KEY
         logger.debug(search)
         request = requests.get(search)
         if request.status_code == 200:
-            data = request.json()
-            if 'bestMatches' in data and data['bestMatches'][0]['9. matchScore'] == '1.0000':
-                validated =  data['bestMatches'][0]
-
-                self.name = validated['2. name']
-                self.equity_type = validated['3. type']
-                for region in self.REGIONS:
-                    if validated['4. region'] == region[1]:
-                        self.region = region[0]
-                    break
-                self.currency = validated['8. currency']
-                self.searchable = True
-            else:
-                self.searchable = False
             self.validated = True
+            data = request.json()
+            if 'bestMatches' in data and len(data['bestMatches']) > 0 and data['bestMatches'][0]['9. matchScore'] == '1.0000':
+                self.name = data['bestMatches'][0]['2. name']
+                self.equity_type = data['bestMatches'][0]['3. type']
+                for region in self.REGIONS:
+                    if data['bestMatches'][0]['4. region'] == region[1]:
+                        self.region = region[0]
+                        break
+                self.currency = data['bestMatches'][0]['8. currency']
+                self.searchable = True
         else:
-            logger.error('API error:(%s) - %s' % (request.status_code, request.reason))
             self.validated = False
             self.searchable = False
 
@@ -341,50 +346,43 @@ class Equity(models.Model):
         except IndexError:
             logger.error('No EquityValue data for:%s' % self)
 
-    def _update_validate(self):
-        self.searchable = self.set_equity_data(self.symbol)
-        self.validated = True
-        self.save(update=False)
+    def update_external_equity_data(self, force):
+        if self.searchable:
+            now = datetime.now().date()
+            if now == self.last_updated and not force:
+                logger.info('%s - Already updated %s' % (self, now))
+            else:
+                url = f'{AV_URL}TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={AV_API_KEY}'
+                data_key = 'Monthly Adjusted Time Series'
+                this_day = normalize_date(datetime.now())
+                logger.debug(url)
+                result = requests.get(url)
+                if not result.status_code == 200:
+                    logger.warning('%s Result is %s - %s' % (url, result.status_code, result.reason))
+                    return
 
-    def _update_equity_data(self, force):
-        now = datetime.now().date()
-        if now == self.last_updated and not force:
-            logger.info('%s - Already updated %s' % (self, now))
-        else:
-            url = f'{AV_URL}TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.symbol}&apikey={AV_API_KEY}'
-            data_key = 'Monthly Adjusted Time Series'
-            this_day = normalize_date(datetime.now())
-            logger.debug(url)
-            result = requests.get(url)
-            if not result.status_code == 200:
-                logger.warning('%s Result is %s - %s' % (url, result.status_code, result.reason))
-                return
+                data = result.json()
+                if data_key in data:
+                    for entry in data[data_key]:
+                        try:
+                            date_value = normalize_date(datetime.strptime(entry, '%Y-%m-%d'))
+                        except ValueError:
+                            logger.error('Invalid date format in: %s' % entry)
+                            return
 
-            data = result.json()
-            if data_key in data:
-                for entry in data[data_key]:
-                    try:
-                        date_value = normalize_date(datetime.strptime(entry, '%Y-%m-%d'))
-                    except ValueError:
-                        logger.error('Invalid date format in: %s' % entry)
-                        return
+                        if date_value >= EPOCH:
+                            EquityValue.get_or_create(equity=self, source=DataSource.API.value, date=date_value,
+                                                      price=float(data[data_key][entry]['4. close']))
 
-                    if date_value >= EPOCH:
-                        EquityValue.get_or_create(equity=self, source=DataSource.API.value, date=date_value,
-                                                  price=float(data[data_key][entry]['4. close']))
+                            dividend = float(data[data_key][entry]['7. dividend amount'])
+                            if dividend != 0:
+                                EquityEvent.get_or_create(equity=self, event_type='Dividend', date=date_value,
+                                                          value=dividend, source=DataSource.API.value)
 
-                        dividend = float(data[data_key][entry]['7. dividend amount'])
-                        if dividend != 0:
-                            EquityEvent.get_or_create(equity=self, event_type='Dividend', date=date_value,
-                                                      value=dividend, source=DataSource.API.value)
+            self.last_updated = now
+            self.save(update=False)
 
-                # Cleanup
-                EquityValue.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
-                EquityEvent.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
-                self.last_updated = now
-                self.save(update=False)
-
-    def update(self, force: bool = False) -> bool:
+    def update(self, force: bool = False):
         """
         For simplification,  I will change the closing date (each month) to the first of the next month.  This
         provides consistency later on when processing transactions (which will also be processed on the first of the
@@ -392,13 +390,11 @@ class Equity(models.Model):
         """
         logger.warning('Updating %s' % self)
         if not self.validated:
-            self._update_validate()
-
-        if self.searchable:
-            self._update_equity_data(force)
-
+            self.set_equity_data()
+            self.save()
+        elif self.searchable:
+            self.update_external_equity_data(force)
         self.fill_equity_holes()
-        return True
 
 
 class EquityAlias(models.Model):
@@ -411,7 +407,8 @@ class EquityAlias(models.Model):
     when I first find XLU in a manulife import,  I will make an alias record using the name we import as'
     I can later match the dividend (and create an alias) for that two.
     '''
-    symbol = models.TextField()
+    symbol: str = models.CharField(max_length=32, verbose_name='Trading symbol')  # Symbol
+    region: str = models.CharField(max_length=10, null=False, blank=False, default='Canada')
     name = models.TextField()
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
 
@@ -419,11 +416,19 @@ class EquityAlias(models.Model):
         return f'{self.symbol} : {self.equity.symbol} - {self.name}'
 
     @staticmethod
-    def find_equity(description: str) -> [Equity]:
+    def find_equity(description: str, region: str) -> Equity:
+
+        try:
+            alias = EquityAlias.objects.get(name=description, region=region)
+            return alias.equity
+        except EquityAlias.DoesNotExist:
+            pass  # Try it the hard way
+
+        """        
         score: int = 0
         matched: bool = False
         match: EquityAlias = None
-        for alias in EquityAlias.objects.all():
+        for alias in EquityAlias.objects.filter(region=region):
             new_score = 0
             limit = len(alias.name) - 1
             for index in range(len(description) - 1):
@@ -438,6 +443,7 @@ class EquityAlias(models.Model):
                 match = alias
         if matched:
             return match.equity
+        """
         return None
 
 

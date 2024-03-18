@@ -65,9 +65,9 @@ class StockImporter:
             xa_date: date = self.csv_date(row)  # Normalize and format date (need to override if date format is off)
             if xa_date:  # Skip blank lines
                 account_name: str = row[self.mappings['AccountName']]
-                account_key: str = row[self.mappings['AccountKey']]
+                account_key: str = self.csv_account_key(row)
                 symbol: str = self.csv_symbol(row)
-                description: str = row[self.mappings['Description']]
+                description: str = self.csv_description(row)
                 xa_type: int = self.csv_xa_type(row)
                 currency: str = row[self.mappings['Currency']]
                 price: float = self.csv_price(row)
@@ -94,6 +94,8 @@ class StockImporter:
             name: str = self.pd_description(prow)
             xa_action: int = self.pd_xa_type(prow)
             amount: float = self.pd_amount(prow)
+            currency: str = self.pd_currency(prow)
+            region = 'Canada' if currency == 'CAD' else 'US'
             price = self.pd_price(prow)
             quantity = self.pd_quantity(prow)
             equity: Equity
@@ -115,8 +117,7 @@ class StockImporter:
                                            quantity=0, price=0)
 
             if xa_action in [BUY, SELL, REINVESTED, TRANSFER_IN, TRANSFER_OUT, SPLIT]:
-                match_name = True if xa_action == SPLIT else False
-                equity = self.get_or_create_equity(symbol, name, self.pd_currency(prow), False, match_name)
+                equity = self.get_or_create_equity(symbol, name, currency, region, False)
                 if equity.key not in equity_totals[portfolio.explicit_name]:
                     equity_totals[portfolio.explicit_name][equity.key] = 0  # First purchase
                 equity_totals[portfolio.explicit_name][equity.key] += quantity
@@ -133,23 +134,22 @@ class StockImporter:
                     EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
                                                       source=DataSource.UPLOAD.value)
 
-            if xa_action not in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN, BUY, SELL, REINVESTED, SPLIT] and do_process:
-                equity = self.equity_lookup(symbol, self.pd_description(prow))
-                if xa_action == DIV:  # Dividends
-                    value = amount / equity_totals[portfolio.explicit_name][equity.key]
-                    if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
-                        EquityEvent.get_or_create(equity=equity, date=norm_date, value=value,
-                                                   event_type='Dividend', source=DataSource.UPLOAD.value)
-                    if price != 0:
-                        EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
-                                                       source=DataSource.UPLOAD.value)
+            elif xa_action == INT:  # pragma: no cover
+                logger.info('Skipping INT action - I will come out as profit when redeeming')
+            elif xa_action in [JUNK, FUND, REDEEM]:  # pragma: no cover
+                pass
+            elif xa_action == DIV and do_process:
+                equity = self.equity_lookup(symbol, self.pd_description(prow), region)
+                value = amount / equity_totals[portfolio.explicit_name][equity.key]
+                if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
+                    EquityEvent.get_or_create(equity=equity, date=norm_date, value=value,
+                                              event_type='Dividend', source=DataSource.UPLOAD.value)
+                if price != 0:
+                    EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
+                                              source=DataSource.UPLOAD.value)
 
-                elif xa_action == INT:  # pragma: no cover
-                    logger.info('Skipping INT action - I will come out as profit when redeeming')
-                elif xa_action == JUNK:  # pragma: no cover
-                    pass
-                else:  # pragma: no cover
-                    raise DIYImportException(f'Unexpected Activity type {xa_action}')
+            else:
+                raise DIYImportException(f'Unexpected Activity type {xa_action}')
 
         for p in self.portfolios:
             if (not self.portfolios[p].last_import) or (last_import and (self.portfolios[p].last_import < last_import)):
@@ -228,6 +228,12 @@ class StockImporter:
         csv_value = row[self.mappings['XAType']]
         return Transaction.TRANSACTION_MAP[csv_value]
 
+    def csv_description(self, row) -> str:
+        return row[self.mappings['Description']]
+
+    def csv_account_key(self, row) -> str:
+        return row[self.mappings['AccountKey']]
+
     @staticmethod
     def pd_get(row, key):
         return row[key]
@@ -273,21 +279,23 @@ class StockImporter:
             existing.append(row[self.mappings[added]])
         return existing
 
-    def equity_lookup(self, symbol: str, name: str, name_match=False):
-        if symbol in self.equities:
-            return self.equities[symbol]
-        try:
-            equity = Equity.objects.get(symbol=symbol)
-        except Equity.DoesNotExist:
-            #
+    def equity_lookup(self, symbol: str, name: str, region: str):
+        lookup = symbol + '.' + region
+        if lookup not in self.equities:
+            try:
+                equity = Equity.objects.get(symbol=symbol, region=region)
+            except Equity.DoesNotExist:
+                try:
+                    alias = EquityAlias.objects.get(symbol=lookup)
+                    equity = alias.equity
+                except EquityAlias.DoesNotExist:
+                    equity = EquityAlias.find_equity(name, region)
+                    if not equity:
+                        raise DIYImportException(f'Failed to lookup {symbol} - {name} @ {region}')
+            self.equities[lookup] = equity
+        return self.equities[lookup]
 
-            value = EquityAlias.find_equity(name)
-            if value:
-                self.equities[symbol] = value
-                return self.equities[symbol]
-            raise DIYImportException(f'Failed to lookup {symbol} - {name}')  # pragma: no cover
-
-    def get_or_create_equity(self, symbol: str, name: str, currency: str, managed: bool):
+    def get_or_create_equity(self, symbol: str, name: str, currency: str, region: str, managed: bool):
         """
         Given a symbol,  and a descriptive name - do your best to lookup and / or create a new equity
         :param symbol:  The basic for the search
@@ -297,41 +305,31 @@ class StockImporter:
         :return:
         """
 
-        if symbol not in self.equities:  # Not yet cached
-            try:
-                equity = self.equity_lookup(symbol, name)
-            except DIYImportException:
-                try:
-                    equity = Equity.objects.get(symbol=symbol)
-                except Equity.DoesNotExist:
-                    equity = Equity.objects.create(symbol=symbol, name=name)
-                    if not equity.region:
-                        if currency == 'CAD':
-                            equity.region = 'TRT'
-                            equity.currency = 'CAD'
-                        else:
-                            equity.currency = 'USD'
-                    if not equity.equity_type:
-                        if equity.name.find(' ETF') != -1:
-                            equity.equity_type = 'ETF'
-                    elif not managed:
-                        equity.equity_type = 'Equity'
-                    elif name.find('%') != -1 or name.find('SAVINGS') != -1:
-                        equity.equity_type = 'MM'
-                    else:
-                        equity.equity_type = 'MF'
-                    equity.save()
+        try:
+            equity = self.equity_lookup(symbol, name, region)
+        except DIYImportException:
+            equity = Equity.objects.create(symbol=symbol, name=name, region=region, currency=currency)
+            if not equity.equity_type:
+                if equity.name.find(' ETF') != -1:
+                    equity.equity_type = 'ETF'
+            elif not managed:
+                equity.equity_type = 'Equity'
+            elif name.find('%') != -1 or name.find('SAVINGS') != -1:
+                equity.equity_type = 'MM'
+            else:
+                equity.equity_type = 'MF'
+            equity.save()
 
-            if not equity:  # pragma: no cover
-                raise DIYImportException(f'Could not create/lookup equity {symbol} - {name}')
+        if not equity:  # pragma: no cover
+            raise DIYImportException(f'Could not create/lookup equity {symbol} - {name}')
 
-            if not EquityAlias.objects.filter(symbol=equity.symbol, name=equity.name).exists():
-                EquityAlias.objects.create(symbol=equity.symbol, name=equity.name, equity=equity)
+        lookup = symbol + '.' + region
+        if not EquityAlias.objects.filter(symbol=lookup, name=name, region=region).exists():
+            EquityAlias.objects.create(symbol=lookup, name=name, equity=equity, region=region)
 
-            if not EquityAlias.objects.filter(symbol=symbol, name=name).exists():
-                EquityAlias.objects.create(symbol=symbol, name=name, equity=equity)
-            self.equities[symbol] = equity
-        return self.equities[symbol]
+        equity.update_external_equity_data(force=False)   # This will only happen once a day.
+        self.equities[lookup] = equity
+        return self.equities[lookup]
 
     def get_or_create_portfolio(self, stub, name, explicit_name, managed):
         """
@@ -420,9 +418,8 @@ class Manulife(StockImporter):
             logger.debug('No Date on row %s' % row)
         return None
 
-    def pd_account_key(self, row) -> str:
-        value = super().pd_account_key(row)
-        return 'Manulife_' + value
+    def csv_account_key(self, row) -> str:
+        return 'Manulife_' + super().csv_account_key(row)
 
 
 class QuestTrade(StockImporter):
@@ -496,16 +493,27 @@ class QuestTrade(StockImporter):
 
     def csv_symbol(self, row) -> str:
         symbol = super().csv_symbol(row)
+        if symbol and symbol[0] == '.':  # Dividends are often reported as '.symbol'
+            symbol = symbol[1:]
+
         parts = symbol.split('.')
         parts_cnt = len(parts)
         if parts_cnt > 1 and parts[parts_cnt - 1] == 'TO':
-            suffix = '.TRT'
             prefix = '-'.join(parts[:parts_cnt - 1])
-            symbol = prefix + suffix
+            symbol = prefix
         else:
             symbol = '-'.join(parts)
         return symbol
 
-    def pd_account_key(self, row) -> str:
-        value = super().pd_account_key(row)
-        return 'QuestTrade_' + value
+    def csv_description(self, row):
+        value = super().csv_description(row)
+        if 'CASH DIV ON' in value:
+            return value.split('CASH DIV ON')[0].rstrip()
+        if 'WE ACTED AS AGENT' in value:
+            return value.split('WE ACTED AS AGENT')[0].rstrip()
+        if 'DIST ON' in value:
+            return value.split('DIST ON')[0].rstrip()
+        return value
+
+    def csv_account_key(self, row) -> str:
+        return 'QuestTrade_' + super().csv_account_key(row)

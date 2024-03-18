@@ -268,7 +268,7 @@ def portfolio_equity_details(request, pk, symbol):
     chart_html = '<p>No chart data available</p>'
     #portfolio.pd['Date'] = pd.to_datetime(portfolio.pd['Date'])
     df_sorted = portfolio.e_pd.sort_values(by='Date')
-    new_df = df_sorted.loc[df_sorted['Equity'] == equity.key]
+    new_df = df_sorted.loc[df_sorted['Equity'] == equity.symbol]
     for element in new_df.to_records():
         extra_data = ''
         if element['Date'] in portfolio.trade_dates(equity):
