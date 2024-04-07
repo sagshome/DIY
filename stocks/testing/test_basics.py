@@ -1,6 +1,4 @@
 import logging
-import os
-import sys
 
 from datetime import datetime, date
 from freezegun import freeze_time
@@ -9,7 +7,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from stocks.models import ExchangeRate, Inflation, Equity, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
-from stocks.utils import normalize_date, next_date, last_date, normalize_today
+from base.utils import normalize_date, next_date, last_date, normalize_today
 
 logger = logging.getLogger(__name__)
 

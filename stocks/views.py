@@ -17,7 +17,8 @@ from django.views.generic.dates import DateMixin
 
 from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
 from .forms import AddEquityForm, TransactionForm, PortfolioForm, UploadFileForm
-from .importers import QuestTrade, Manulife, StockImporter, HEADERS, DIYImportException
+from .importers import QuestTrade, Manulife, StockImporter, HEADERS
+from base.utils import DIYImportException
 from .tasks import daily_update
 
 logger = logging.getLogger(__name__)

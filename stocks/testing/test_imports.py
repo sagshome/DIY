@@ -1,17 +1,14 @@
 import csv
 import logging
-import os
-import sys
 
 from copy import deepcopy
-from datetime import datetime, date
+from datetime import datetime
 from freezegun import freeze_time
-from unittest.mock import patch, mock_open, Mock
+from unittest.mock import patch, Mock
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from stocks.importers import QuestTrade, FUND, BUY, SELL, DIV, REDEEM, JUNK, SPLIT
-from stocks.models import ExchangeRate, Inflation, Equity, EquityAlias, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
-from stocks.utils import normalize_date, next_date, last_date, normalize_today
+from stocks.models import Equity, EquityAlias, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
 from stocks.testing.setup import DEFAULT_QUERY, DEFAULT_LOOKUP
 
 logger = logging.getLogger(__name__)

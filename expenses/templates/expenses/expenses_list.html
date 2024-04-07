@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{title}}{% endblock %}
+{% block content %}
+<form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
+    {% csrf_token %}
+    <div class="flex-container accent-2-dark">
+        <div class="flex-size-2 border-xs border-accent-2 pad-md">
+            Category:&nbsp;{{search_form.category}}
+        </div>
+        <div class="flex-size-2 border-xs border-accent-2 pad-md">
+            Subcategory:&nbsp;{{search_form.category}}
+        </div>
+        <div class="flex-size-2 border-xs border-accent-2 pad-md">
+            Skip Record:&nbsp;{{search_form.ignore}}
+        </div>
+        <div class="flex-size-2 border-xs border-accent-2 pad-md">
+            Search From:&nbsp;{{search_form.start_date}}
+        </div>
+        <div class="flex-size-2 border-xs border-accent-2 pad-md">
+            Search Until:&nbsp;{{search_form.end_date}}
+        </div>
+        <div class="flex-size-3 border-xs border-accent-2 pad-md">
+            Amount:<br>{{search_form.amount_qualifier}}{{search_form.amount}}
+        </div>
+        <div class="border-xs border-accent-2 pad-md">
+            Description:&nbsp;{{search_form.description}}
+        </div>
+    </div>
+
+    <div class="border-xs border-accent-2 pad-md">
+        <div class="text-center"><h3>Expense Item List</h3></div>
+        {{ formset.management_form }}
+        {% for dict in formset.errors %}
+        {% for error in dict.values %}
+        {{ error }}
+        {% endfor %}
+        {% endfor %}
+        <table id="formset" class="form">
+            {% for form in formset.forms %}
+            {% if forloop.first %}
+            <thead>
+            <tr>
+                {% for field in form.visible_fields %}
+                <th>{{ field.label|capfirst }}</th>
+                {% endfor %}
+            </tr>
+            </thead>
+            {% endif %}
+            <tr class="{% cycle 'row1' 'row2' %}">
+                {% for field in form.visible_fields %}
+                <td>
+                    {# Include the hidden fields in the form #}
+                    {% if forloop.first %}
+                    {% for hidden in form.hidden_fields %}
+                    {{ hidden }}
+                    {% endfor %}
+                    {% endif %}
+                    {{ field.errors.as_ul }}
+                    {{ field }}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        <button type="Save">Save</button>
+    </div>
+</form>
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
+    $(document).ready(function() {
+      var url = $("#itemForm").attr("data-subcategories-url");
+      $('.diy-subcategory').each(function(index, element) {
+         var this_id = this.id.slice(8, this.id.length - 12);  // Just the number part
+         var subcat_id = '#' + this.id  // Seems this must be part of the id, not just prepended
+         var cat_id = '#id_form-' + this_id + '-category';
+         $(subcat_id).mousedown(function () {
+            var category_value = $(cat_id).val();
+            $.ajax({
+              url: url,
+              data: {
+                'category': category_value,
+              },
+              success: function (data) {
+                $(subcat_id).html(data);  // replace the contents
+              }
+            });
+         });
+      });
+    });
+</script>
+<script>
+    $(document).ready(function() {
+      var url = $("#itemForm").attr("data-subcategories-url");
+      $('.diy-search-subcategory').each(function(index, element) {
+         $('#id_subcategory').mousedown(function () {
+            var category_value = $('#id_category').val();
+            $.ajax({
+              url: url,
+              data: {
+                'category': category_value,
+              },
+              success: function (data) {
+                $('#id_subcategory').html(data);  // replace the contents
+              }
+            });
+         });
+      });
+    });
+</script>
+{% endblock %}

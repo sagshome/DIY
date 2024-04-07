@@ -23,5 +23,6 @@ from stocks.views import diy_update
 urlpatterns = [
     re_path('admin/', admin.site.urls),
     re_path('stocks/', include('stocks.urls')),
+    re_path('expenses/', include('expenses.urls')),
     path('update/', diy_update)
 ]

@@ -17,13 +17,11 @@ from pandas import DataFrame
 
 from django.urls import reverse
 from django.db import models
-from django.db.models import QuerySet, F, Value, Sum, Avg
+from django.db.models import QuerySet, Sum, Avg
 from django.conf import settings
 from django.utils.functional import cached_property
-from django.utils.translation import gettext_lazy as _
 
-
-from stocks.utils import normalize_date, normalize_today, next_date, last_date
+from base.utils import normalize_date, normalize_today, next_date
 
 logger = logging.getLogger(__name__)
 

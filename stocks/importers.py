@@ -7,7 +7,7 @@ from datetime import datetime, date
 from typing import List, Dict
 
 from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction, DataSource
-from .utils import normalize_date
+from base.utils import normalize_date
 
 FUND = Transaction.FUND
 BUY = Transaction.BUY
@@ -32,10 +32,6 @@ HEADERS = {
 }
 
 SPLIT_MESSAGE = 'Stock split detected,  only the admin can update prior dividends.   They have been contacted'
-
-
-class DIYImportException(Exception):
-    pass
 
 
 class StockImporter:

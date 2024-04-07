@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Expense Templates{% endblock %}
+{% block content %}
+
+  <script src="https://www.kryogenix.org/code/browser/sorttable/sorttable.js"></script>
+
+  <h2>Templates</h2>
+    <p align="right">Click on heading to sort the table</p>
+   <table class="sortable table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
+     <tr>
+         <th width="10%"></th>
+         <th width="5%">Type</th>
+         <th width="30%">Expression</th>
+         <th>Used</th>
+         <th>Category</th>
+         <th>Subcategory</th>
+         <th width="5%">Ignore</th>
+         <th>Spent</th>
+         <th></th>
+    </tr>
+    {% for template in templates %}
+        <tr>
+            <td><a href="{% url 'template_update' template.id %}"><button class="rounded spaced menu-button-warning">Edit</button></a>
+                <a href="{% url 'template_delete' template.id %}"><button class="rounded spaced menu-button-danger">Delete</button></a></td>
+            <td>{{template.type}}</td>
+            <td>{{template.expression}}</td>
+            <td>{{template.count}}</td>
+            <td>{{template.category}}</td>
+            <td>{{template.subcategory}}</td>
+            <td>{{template.ignore}}</td>
+            <td>{{template.amount|floatformat:'2g'}}</td>
+            <td><a href="{% url 'template_reapply' template.id %}"><button class="rounded spaced menu-button-success">Reapply</button></a></td>
+
+
+        </tr>
+   {% endfor %}
+</table>
+
+{% endblock %}

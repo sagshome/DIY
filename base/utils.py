@@ -5,6 +5,10 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 
+class DIYImportException(Exception):
+    pass
+
+
 def normalize_date(this_date) -> datetime.date:
     """
     Make every date the start of the next month.    The alpahvantage website is based on the last trading day each month

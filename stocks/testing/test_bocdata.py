@@ -1,15 +1,11 @@
 import logging
-import os
-import sys
 
-from datetime import datetime, date
-from freezegun import freeze_time
-from unittest.mock import patch, MagicMock
+from datetime import datetime
+from unittest.mock import patch
 
 from django.test import TestCase
 
-from stocks.models import ExchangeRate, Inflation, Equity, EquityAlias, EquityEvent, EquityValue, Portfolio, Transaction
-from stocks.utils import normalize_date, next_date, last_date, normalize_today
+from stocks.models import ExchangeRate, Equity, EquityValue
 
 logger = logging.getLogger(__name__)
 

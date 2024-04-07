@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Expense Category{% endblock %}
+{% load expenses_tags %}
+{% block content %}
+    <h3>Category {{ category.name }}</h3>
+     <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
+       <tr>
+         <th>Name</th>
+         <th>Used</th>
+         <th>Spent</th>
+      </tr>
+      {% for sub in subcategories %}
+         {% expense_count sub items as count %}
+         {% expense_amount sub items as amount %}
+        <tr>
+            <td><a href="{% url 'expense_main' %}">{{sub.name}}</a></td>
+            <td>{{count}}</td>
+            <td>{{amount|floatformat:'2g'}}</td>
+        </tr>
+      {% endfor %}
+
+{% endblock %}

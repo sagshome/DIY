@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Portfolio {{view_verb}}{% endblock %}
+{% block content %}
+  <h1>{{view_verb}} Template:</h1>
+  <form action="" method="post">
+    {% csrf_token %}
+    {{ form.as_table}}
+    <input class="btn btn-primary" type="submit" value="Submit">
+  </form>
+{% endblock %}

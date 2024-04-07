@@ -50,6 +50,7 @@ SECRET_KEY = os.environ['SECRET_KEY']
 # Application definition
 
 INSTALLED_APPS = [
+    'expenses.apps.ExpensesConfig',
     'stocks.apps.StocksConfig',
     'django_bootstrap5',
     'django.contrib.admin',
