@@ -1,0 +1,91 @@
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
+    $(document).ready(function() {
+      var suburl = $("#itemForm").attr("sub-search-url");
+      var caturl = $("#itemForm").attr("cat-search-url");
+
+      var category_id = document.getElementById("id_search_category")
+      var subcategory_id = document.getElementById("id_search_subcategory")
+
+      category_id.addEventListener("mousedown", function() {
+        $.ajax({
+          url: caturl,
+          success: function (data) {
+            $(category_id).html(data);  // replace the contents
+          }
+        });
+      });
+
+      subcategory_id.addEventListener("mousedown", function() {
+        var category = $(category_id).val()
+        $.ajax({
+          url: suburl,
+          data: {
+            'category': category,
+          },
+          success: function (data) {
+            $(subcategory_id).html(data);  // replace the contents
+          }
+        });
+      });
+    });
+</script>
+{% endblock script %}
+
+{% block content %}
+{% if search_form  %}
+<div class="flex-container accent-2-dark">
+    <div class="flex-size-1 border-xs border-accent-2 pad-md">
+        <button type="Save" class="rounded spaced menu-button-success">Reapply Filter</button>
+    </div>
+    <div class="flex-size-2 border-xs border-accent-2 pad-md">
+        Category:{{search_form.search_category}}
+    </div>
+    <div class="flex-size-2 border-xs border-accent-2 pad-md">
+        Subcategory:{{search_form.search_subcategory}}
+    </div>
+    <div class="flex-size-2 border-xs border-accent-2 pad-md">
+        Ignored:{{search_form.search_ignore}}
+    </div>
+    <div class="flex-size-2 border-xs border-accent-2 pad-md">
+        Search From:{{search_form.search_start_date}}
+    </div>
+    <div class="flex-size-2 border-xs border-accent-2 pad-md">
+        Search Until:{{search_form.search_end_date}}
+    </div>
+    <div class="flex-size-3 border-xs border-accent-2 pad-md">
+        Amount:<br>{{search_form.search_amount_qualifier}}{{search_form.search_amount}}
+    </div>
+    <div class="flex-size-6 border-xs border-accent-2 pad-md">
+        Description:<br>{{search_form.search_description}}
+    </div>
+    <div class="flex-size-2 border-xs border-accent-2 pad-md">
+      View:<br>{{search_form.view}}
+    </div>
+</div>
+<div>
+    {{search_form.errors}}
+</div>
+{% endif %}
+
+<script>
+    $(document).ready(function() {
+      var url = $("#itemForm").attr("data-subcategories-url");
+      $('.diy-search-subcategory').each(function(index, element) {
+         $('#id_subcategory').mousedown(function () {
+            var category_value = $('#id_category').val();
+            $.ajax({
+              url: url,
+              data: {
+                'category': category_value,
+              },
+              success: function (data) {
+                $('#id_subcategory').html(data);  // replace the contents
+              }
+            });
+         });
+      });
+    });
+</script>
+{% endblock %}
