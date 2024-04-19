@@ -1,34 +1,43 @@
 import re
 from django import forms
-from expenses.models import Item, SubCategory, Template, Category
+from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
 
 
-class ItemSearchForm(forms.ModelForm):
+class SearchForm(forms.Form):
     """
     A form to support searching of expenses
     - Need to build a subcategory choice list so I can remove non-unique values
     """
-    start_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
-    end_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
-    amount_qualifier = forms.ChoiceField(label='', choices=[('equal', '=='), ('lte', '<='), ('gte', '>='),])
+
+
+    search_category = forms.ChoiceField(choices=Category.get_choices())
+    search_subcategory = forms.ChoiceField(choices=SubCategory.get_choices())
+    search_ignore = forms.ChoiceField(required=False, choices=[(None, '---'), ('Yes', 'Yes'), ('No', 'No')])
+    search_start_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
+    search_end_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
+    search_amount_qualifier = forms.ChoiceField(label='', choices=[('gte', '>='), ('equal', '=='), ('lte', '<=')])
+    search_amount = forms.DecimalField(required=False)
+    search_description = forms.CharField(required=False, max_length=80)
+    # view = forms.ChoiceField(choices=[('chart', 'Chart'), ('list', 'List'), ('both', 'Both')])
     # template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
 
-    class Meta:
-        model = Item
-        fields = ("description", "category", "subcategory", "ignore", "start_date", "end_date", "amount_qualifier", "amount")
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['description'].required = False
-        self.fields['amount'].required = False
-        self.fields["amount"].widget.attrs['style'] = 'width:75px;'
 
+        # Adjusted to make W3C.CSS look nicer
+        self.fields["search_amount"].widget.attrs['style'] = 'width:100px;height:28.5px;'
+        self.fields["search_amount_qualifier"].widget.attrs['style'] = 'height:28.5px;'
+        self.fields["search_start_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
+        self.fields["search_end_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
+        self.fields["search_amount_qualifier"].widget.attrs['style'] = 'height:28.5px;'
+        self.fields["search_category"].widget.attrs['style'] = 'height:28.5px;'
+        self.fields["search_subcategory"].widget.attrs['style'] = 'height:28.5px;'
+        self.fields["search_ignore"].widget.attrs['style'] = 'height:28.5px;'
 
-        self.fields["category"].widget.attrs['class'] = 'diy-search-category'  # Used in the search javascript
-        self.fields["category"].widget.attrs['style'] = 'width:125px;'
-
-        self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
-        self.fields["subcategory"].widget.attrs['class'] = 'diy-search-subcategory'
+        self.fields["search_category"].widget.attrs['class'] = 'diy-search-category'  # Used in the search javascript
+        self.fields["search_subcategory"].widget.attrs['class'] = 'diy-search-subcategory'
 
 
 class TemplateForm(forms.ModelForm):
@@ -52,16 +61,16 @@ class UploadFileForm(forms.Form):
     csv_type = forms.ChoiceField(label="Expense Source",
                                  choices=[('', "----",),
                                           ("Generic", "Generic File"),
-                                          ("VISA", "VISA Statement"),
-                                          ("Account", "Bank Account")])
+                                          ("CIBC_VISA", "CIBC VISA Download"),
+                                          ("CIBC_Bank", "CIBC Bank Download")])
     csv_file = forms.FileField(label="CSV File:")
 
     def clean(self):
         cleaned_data = super().clean()
         csv_type = cleaned_data.get("csv_type")
 
-        if csv_type not in ("VISA", "Account", "Generic"):
-            self.add_error("Expense Source", f"Source Value {csv_type} is not currently supported")
+        if csv_type not in ("CIBC_Bank", "CIBC_VISA", "Generic"):
+            self.add_error("csv_type", f"Source Value {csv_type} is not currently supported")
 
 
 class ItemListForm(forms.ModelForm):
@@ -70,26 +79,26 @@ class ItemListForm(forms.ModelForm):
 
     class Meta:
         model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore")
+        fields = ("date", "amount", "description", "category", "subcategory", "ignore")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
+        #self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
 
-        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:Wheat'
+        #self.fields["description"].widget.attrs['style'] = 'width:250px;background-color:Wheat'
         self.fields["description"].widget.attrs['readonly'] = True
 
-        self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
+        #self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
         self.fields["amount"].widget.attrs['readonly'] = True
 
 
-        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
-        self.fields["category"].widget.attrs['style'] = 'width:125px;'
+        self.fields["category"].widget.attrs['class'] = 'item-list-category'  # Used in the search javascript
+        #self.fields["category"].widget.attrs['style'] = 'width:125px;'
 
-        self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
-        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'
+        #self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
+        self.fields["subcategory"].widget.attrs['class'] = 'item-list-subcategory'
 
     def clean(self):
         super().clean()
@@ -97,6 +106,22 @@ class ItemListForm(forms.ModelForm):
             raise forms.ValidationError(f'Warning: Category {self.cleaned_data["category"]} missing subcategory.')
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
             raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
+
+
+class ItemAddForm(forms.ModelForm):
+    class Meta:
+        model = Item
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["date"].widget.attrs['type'] = 'date'  # todo: Fix this a) gives a format hint or b) uses a picker
+        self.fields["description"].widget.attrs['style'] = 'width:400px;'
+        self.fields["amount"].widget.attrs['style'] = 'width:100px;'
+        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
+        self.fields["category"].widget.attrs['style'] = 'width:125px;'
+        self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
 
 
 class ItemForm(forms.ModelForm):
@@ -151,19 +176,6 @@ class ItemForm(forms.ModelForm):
                                                    category=self.cleaned_data["category"],
                                                    subcategory=self.cleaned_data["subcategory"])
             return template
-
-    def xclean_category(self):
-        if self.cleaned_data["category"] and "subcategory" not in self.cleaned_data:
-            # self.cleaned_data["category"] = None
-            raise forms.ValidationError('Subcategory required.')
-        return self.cleaned_data["category"]
-
-    def xclean_subcategory(self):
-        if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
-            raise forms.ValidationError(
-                f'Subcategory {self.cleaned_data["subcategory"]} was selected without a Category')
-        pass
-        return self.cleaned_data["subcategory"]
 
     def clean(self):
         super().clean()

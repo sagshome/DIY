@@ -16,8 +16,6 @@ class AddEquityForm(forms.Form):
 
 
 
-
-
 class UploadForm(forms.Form):
     """
     Multi entry form

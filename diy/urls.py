@@ -16,13 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, re_path, path
-from django.views.generic import DetailView, ListView
-from stocks.views import diy_update
+from diy.views import diy_main
 
 
 urlpatterns = [
     re_path('admin/', admin.site.urls),
     re_path('stocks/', include('stocks.urls')),
     re_path('expenses/', include('expenses.urls')),
-    path('update/', diy_update)
+    path(r'main/', diy_main, name='diy_main'),
+
 ]

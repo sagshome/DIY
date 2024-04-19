@@ -4,7 +4,6 @@ from datetime import datetime, date
 from django import template
 from django.utils.safestring import mark_safe
 
-from expenses.forms import ItemSearchForm, ItemListForm
 from expenses.models import Item
 register = template.Library()
 

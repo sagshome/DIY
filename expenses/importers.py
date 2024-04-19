@@ -124,7 +124,7 @@ class Generic(ExpenseImporter):
         super().__init__(file_name, DEFAULT, source)
 
 
-class CIBC_Visa(ExpenseImporter):
+class CIBC_VISA(ExpenseImporter):
     """
     Downloaded my transactions from manulife and looking to import them
     :param file_name:
@@ -153,4 +153,17 @@ class CIBC_Visa(ExpenseImporter):
             logger.debug('No Credit on row %s' % row)
 
         return amount
+
+
+class CIBC_Bank(CIBC_VISA):
+    """
+    Same as VISA but no details column    :return:
+    """
+
+    def get_headers(self, csv_reader):
+        """
+        CIBC banking does not have headers - so make them up
+        """
+        return {'Amount': 2, 'Date': 0, 'Transaction': 1, 'Credit': 3}
+
 

@@ -7,6 +7,10 @@ body {
     padding-left: 20px
 }
 
+.m-action-btn {
+  width: 200px;
+  }
+
 .rounded, .input {
   border-radius: 10px;
   padding-top: 5px;

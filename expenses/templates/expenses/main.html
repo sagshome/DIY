@@ -1,56 +1,59 @@
 {% extends "base.html" %}
 {% block title %}Expense Assignment{% endblock %}
 {% load expenses_tags %}
+
 {% block content %}
-
-{% include 'expenses/expenses_list.html' %}
-
-<div class="flex-row">
-  <div class="flex-size-12 border-xs border-accent-2 pad-md">
-    <h3>Categories</h3>
-    <p>To see detail (including subcategories), select the category name</p>
-     <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
-       <tr>
-         <th>Name</th>
-         <th>Used</th>
-         <th>Spent</th>
-      </tr>
-      {% for category in categories %}
-         {% expense_count category None as count %}
-         {% expense_amount category None as amount %}
-        <tr>
-            <td><a href="{% url 'expense_category' category.id %}">{{category.name}}</a></td>
-            <td>{{count}}</td>
-            <td>{{amount|floatformat:'2g'}}</td>
-        </tr>
-      {% endfor %}
-     </table>
-      <p><a href="{% url 'expense_main' %}"><button class="rounded spaced menu-button-success">Add a Category</button></a></p>
-  </div>
-  <div class="flex-size-12 border-xs border-accent-2 pad-md">
-    <h3>Templates</h3>
-      <p><b>Top 10 templates</b> To see the complete list select <a href="{% url 'expenses_templates' %}">this link</a></p>
-     <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
-       <tr>
-         <th width="10%">Type</th>
-         <th>Expression</th>
-         <th>Used</th>
-         <th>Category</th>
-         <th>Subcategory</th>
-         <th>Ignore</th>
-      </tr>
-      {% for template in templates %}
-        <tr>
-            <td>{{template.type}}</td>
-            <td>{{template.expression}}</td>
-            <td>{{template.count}}</td>
-            <td>{{template.category}}</td>
-            <td>{{template.subcategory}}</td>
-            <td>{{template.ignore}}</td>
-        </tr>
-      {% endfor %}
-     </table>
-  </div>
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+    {% block script %}
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+        <script>
+            function toggleDiv(divId) {
+                var div = document.getElementById(divId);
+                if (div.style.display === "none") {
+                    div.style.display = "block";
+                    document.getElementById('id_show_list').value = "Show";
+                } else {
+                    div.style.display = "none";
+                    document.getElementById('id_show_list').value = "Hide";
+                }
+            }
+        </script>
+        <script>
+            $(document).ready(function() {
+              var hide_value = "{{ search_form.show_list.value }}"
+              if (hide_value == "Hide") {
+                toggleDiv("expense_list")
+              }
+            });
+        </script>
+    {% endblock script %}
+    <div class="w3-container">
+        <form method="post" id="itemForm"
+              data-subcategories-url="{% url 'ajax-load-subcategories' %}"
+              sub-search-url="{% url 'ajax-load-subcategories-search' %}"
+              cat-search-url="{% url 'ajax-load-categories-search' %}"
+              novalidate>
+            {% csrf_token %}
+            <div class="w3-row">
+                {% include 'expenses/expenses_search_bar.html' %}
+            </div>
+            <div class="w3-row">
+                <div class="w3-rest container w3-hide-small">
+                    {{ chart | safe }}
+                </div>
+                <div class="w3-third w3-hide-small w3-hide-medium">
+                   <div class="w3-container w3-margin-left">
+                        <p>I have 16px margin the left.</p><br>
+                       I show up on large
+                    </div>
+                </div>
+            </div>
+            <div class="w3-row">
+                <div id="expense_list">
+                    {% include 'expenses/expenses_list.html' %}
+                </div>
+            </div>
+        </form>
+    </div>
 </div>
-
 {% endblock %}

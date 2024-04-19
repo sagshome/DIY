@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Template {{view_verb}}{% endblock %}
+
+{% block content %}
+    {% block script %}
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+        <script>
+            $(document).ready(function() {
+              var url = $("#itemForm").attr("data-subcategories-url");
+
+              var category_id = document.getElementById("id_category")
+              var subcategory_id = document.getElementById("id_subcategory")
+
+              subcategory_id.addEventListener("mousedown", function() {
+                var category = $(category_id).val()
+                $.ajax({
+                  url: url,
+                  data: {
+                    'category': category,
+                  },
+                  success: function (data) {
+                    $(subcategory_id).html(data);  // replace the contents
+                  }
+                });
+              });
+            });
+        </script>
+    {% endblock script %}
+    <div class="flex-row">
+        <div class="flex-size-20">
+           <h1>{{view_verb}} Template: {{me.type}} - {{me}}</h1>
+        </div>
+        <div class="flex-size-4">
+            foobar
+           <a href="{% url 'expense_main %}"><button class="rounded spaced menu-button-warning">Update</button></a>
+        </div>
+    </div>
+
+    <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
+        {% csrf_token %}
+        <div class="flex-row">
+          <div class="flex-size-20">
+            {{ template_form.as_table}}
+            <input class="rounded spaced menu-button-warning" type="submit" value="Submit">
+            {% include 'expenses/expenses_list.html' %}
+          </div>
+            <div class="flex-size-4">
+                <h3>Updating Templates</h3>
+                Updating a template will only impact future imports.<br><br>
+                Once an expense is assigned a category/subcategory
+                or to be ignored it will remain regardless of the template changes.<br><br>
+                You may choose to manually override
+                the template values via the <b>Expense Item List</b>.
+            </div>
+        </div>
+    </form>
+{% endblock content %}

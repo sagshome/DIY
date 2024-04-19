@@ -1,0 +1,70 @@
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
+    $(document).ready(function() {
+      var suburl = $("#itemForm").attr("sub-search-url");
+      var caturl = $("#itemForm").attr("cat-search-url");
+
+      var category_id = document.getElementById("id_search_category")
+      var subcategory_id = document.getElementById("id_search_subcategory")
+
+      category_id.addEventListener("mousedown", function() {
+        $.ajax({
+          url: caturl,
+          success: function (data) {
+            $(category_id).html(data);  // replace the contents
+          }
+        });
+      });
+
+      subcategory_id.addEventListener("mousedown", function() {
+        var category = $(category_id).val()
+        $.ajax({
+          url: suburl,
+          data: {
+            'category': category,
+          },
+          success: function (data) {
+            $(subcategory_id).html(data);  // replace the contents
+          }
+        });
+      });
+    });
+</script>
+{% endblock script %}
+
+{% block content %}
+    {% if search_form  %}
+        {% if search_form.errors %}
+            <div class="w3-panel w3-red">
+                {{search_form.errors}}
+            </div>
+        {% endif %}
+        <div class="w3-bar">
+            <div class="w3-bar-item w3-input w3-hide-small">
+                Hidden Expenses:<br>{{search_form.search_ignore}}
+            </div>
+            <div class="w3-bar-item w3-input">
+                Category:<br>{{search_form.search_category}}
+            </div>
+            <div class="w3-bar-item w3-input">
+                Subcategory:<br>{{search_form.search_subcategory}}
+            </div>
+
+            <div class="w3-bar-item w3-input w3-hide-small">
+                Search From:<br>{{search_form.search_start_date}}
+            </div>
+            <div class="w3-bar-item w3-input w3-hide-small">
+                Search Until:<br>{{search_form.search_end_date}}
+            </div>
+            <div class="w3-bar-item w3-input w3-hide-small">
+                Amount:<br>{{search_form.search_amount_qualifier}}{{search_form.search_amount}}
+            </div>
+            <div class="w3-bar-item w3-input">
+                Description:<br>{{search_form.search_description}}
+            </div>
+            <button type="Save" class="w3-bar-item w3-button w3-button w3-round-xlarge w3-margin-top w3-light-blue">Reapply Filter</button>
+
+        </div>
+    {% endif %}
+{% endblock %}

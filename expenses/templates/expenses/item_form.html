@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Catogorize Item</h2>
+  <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
+    {% csrf_token %}
+    <table>
+      {{ form.as_table }}
+    </table>
+    <button type="submit">Save</button>
+  </form>
+
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script>
+    $("#id_category").change(function () {
+      var url = $("#itemForm").attr("data-subcategories-url");
+      var categoryId = $(this).val();  // get the selected Category ID from the HTML input
+
+      $.ajax({                       // initialize an AJAX request
+        url: url,    // set the url of the request (= localhost:8000/expenses/ajax/load-subcategories/)
+        data: {
+          'category': categoryId       // add the country id to the GET parameters
+        },
+        success: function (data) {   // `data` is the return of the `load_cities` view function
+          $("#id_subcategory").html(data);  // replace the contents of the city input with the data that came from the server
+        }
+      });
+    });
+  </script>
+{% endblock %}

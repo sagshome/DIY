@@ -1,42 +1,45 @@
 {% extends "base.html" %}
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
-<div class="container responsive-gutter-xs">
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
 
-<h2>Update Expense(s)</h2>
+             <h2>Update Expenses - {{count}}</h2>
+
 <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
     {% csrf_token %}
+    {% include 'expenses/expenses_search.html' %}
+
     {{ formset.management_form }}
     {% for dict in formset.errors %}
-    {% for error in dict.values %}
-    {{ error }}
-    {% endfor %}
+        {% for error in dict.values %}
+            {{ error }}
+        {% endfor %}
     {% endfor %}
     <table id="formset" class="form">
         {% for form in formset.forms %}
-        {% if forloop.first %}
-        <thead>
-        <tr>
-            {% for field in form.visible_fields %}
-            <th>{{ field.label|capfirst }}</th>
-            {% endfor %}
-        </tr>
-        </thead>
-        {% endif %}
-        <tr class="{% cycle 'row1' 'row2' %}">
-            {% for field in form.visible_fields %}
-            <td>
-                {# Include the hidden fields in the form #}
-                {% if forloop.first %}
-                {% for hidden in form.hidden_fields %}
-                {{ hidden }}
+            {% if forloop.first %}
+            <thead>
+                <tr>
+                    {% for field in form.visible_fields %}
+                        <th>{{ field.label|capfirst }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            {% endif %}
+            <tr class="{% cycle 'row1' 'row2' %}">
+                {% for field in form.visible_fields %}
+                    <td>
+                        {# Include the hidden fields in the form #}
+                        {% if forloop.first %}
+                            {% for hidden in form.hidden_fields %}
+                                {{ hidden }}
+                            {% endfor %}
+                        {% endif %}
+                        {{ field.errors.as_ul }}
+                        {{ field }}
+                    </td>
                 {% endfor %}
-                {% endif %}
-                {{ field.errors.as_ul }}
-                {{ field }}
-            </td>
-            {% endfor %}
-        </tr>
+            </tr>
         {% endfor %}
     </table>
     <button type="submit">Save</button>

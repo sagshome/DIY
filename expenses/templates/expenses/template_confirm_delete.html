@@ -1,5 +1,13 @@
-<form method="post">{% csrf_token %}
+{% extends "base.html" %}
+{% block title %}Delete Template{% endblock %}
+{% block content %}
+    <h2>Delete Template: {{object.type}} {{object}}</h2>
+        Template are used as part of the import process.   Deleting a template has no impact on existing expense items.
+        this template is used {{object.count}} times.
 
-<p>Are you sure you want to delete "{{ object }}"?</p>
-    <input type="submit" value="Confirm">
-</form>
+    <form method="post">{% csrf_token %}
+        <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
+        <button class="rounded spaced menu-button-success" href="{% url 'expenses_templates' %}">Cancel</button> - or -
+        <input class="rounded spaced menu-button-danger" type="submit" value="Delete">
+    </form>
+{% endblock content %}
