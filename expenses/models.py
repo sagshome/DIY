@@ -35,12 +35,7 @@ class Category(models.Model):
             qfilter = Item.objects.filter(category=self)
         return qfilter.filter(category=self).count()
 
-    @classmethod
-    def get_choices(cls):
-        default = copy.copy(DEFAULT_CATEGORIES)
-        for category in Category.objects.all().order_by("name").values_list('name', flat=True):
-            default.append((category, category))
-        return default
+
 
 
 class SubCategory(models.Model):
@@ -71,12 +66,7 @@ class SubCategory(models.Model):
             qfilter = Item.objects.filter(subcategory=self)
         return qfilter.filter(subcategory=self).count()
 
-    @classmethod
-    def get_choices(cls):
-        default = copy.copy(DEFAULT_CATEGORIES)
-        for subcategory in SubCategory.objects.all().order_by("name").values_list('name', flat=True).distinct():
-            default.append((subcategory, subcategory))
-        return default
+
 
 
 class Template(models.Model):
@@ -176,6 +166,7 @@ class Item(models.Model):
     subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.CASCADE)
     details = models.CharField(max_length=80, blank=True, null=True)
     ignore = models.BooleanField(default=False)
+    # manual = models.BooleanField(default=False)
 
     def __str__(self):
         if self.template:

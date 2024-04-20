@@ -83,10 +83,12 @@ def build_chart(items, filters):
     chart_html = pio.to_html(fig, full_html=False)
     return chart_html
 
+
 class ItemAdd(CreateView):
     model = Item
     form_class = ItemAddForm
     success_url = reverse_lazy('expense_main')
+
 
 class ItemDelete(DeleteView):
     model = Item
