@@ -230,7 +230,6 @@ def assign_expenses(request):
             Item.apply_templates()
         if search_form.is_valid():
             super_set = Item.filter_search(Item.objects.all(), search_form.cleaned_data)
-
     formset = AssignFormSet(queryset=Item.objects.filter(id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
 
     return render(request, "expenses/assign_category.html", {"formset": formset,

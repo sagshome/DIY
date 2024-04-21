@@ -1,6 +1,21 @@
+import copy
 import re
 from django import forms
 from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
+
+
+def get_categories():
+    default = copy.copy(DEFAULT_CATEGORIES)
+    for category in Category.objects.all().order_by("name").values_list('name', flat=True):
+        default.append((category, category))
+    return default
+
+
+def get_subcategories():
+    default = copy.copy(DEFAULT_CATEGORIES)
+    for subcategory in SubCategory.objects.all().order_by("name").values_list('name', flat=True).distinct():
+        default.append((subcategory, subcategory))
+    return default
 
 
 class SearchForm(forms.Form):
@@ -8,8 +23,14 @@ class SearchForm(forms.Form):
     A form to support searching of expenses
     - Need to build a subcategory choice list so I can remove non-unique values
     """
-    search_category = forms.ChoiceField(choices=Category.get_choices())
-    search_subcategory = forms.ChoiceField(choices=SubCategory.get_choices())
+
+
+    search_category = forms.ChoiceField(choices=get_categories())
+    search_subcategory = forms.ChoiceField(choices=get_subcategories())
+    """
+    search_category = forms.ChoiceField(choices=DEFAULT_CATEGORIES)
+    search_subcategory = forms.ChoiceField(choices=DEFAULT_CATEGORIES)
+    """
     search_ignore = forms.ChoiceField(required=False, choices=[(None, '---'), ('Yes', 'Yes'), ('No', 'No')])
     search_start_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
     search_end_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))

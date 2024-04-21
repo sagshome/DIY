@@ -4,7 +4,6 @@ Django settings for diy project.
 - Customization including mandatory are taken from ENVIRONMENT variables (passed in a ENV file for docker)
   or they are read from local_settings.py file (easier for development) - see the diy/diy.env file for required values
 """
-import logging
 import os
 import sys
 from pathlib import Path

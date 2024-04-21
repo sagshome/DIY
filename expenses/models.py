@@ -38,12 +38,6 @@ class Category(models.Model):
             qfilter = Item.objects.filter(category=self)
         return qfilter.filter(category=self).count()
 
-    @classmethod
-    def get_choices(cls):
-        default = copy.copy(DEFAULT_CATEGORIES)
-        for category in Category.objects.all().order_by("name").values_list('name', flat=True):
-            default.append((category, category))
-        return default
 
 
 class SubCategory(models.Model):
@@ -74,12 +68,6 @@ class SubCategory(models.Model):
             qfilter = Item.objects.filter(subcategory=self)
         return qfilter.filter(subcategory=self).count()
 
-    @classmethod
-    def get_choices(cls):
-        default = copy.copy(DEFAULT_CATEGORIES)
-        for subcategory in SubCategory.objects.all().order_by("name").values_list('name', flat=True).distinct():
-            default.append((subcategory, subcategory))
-        return default
 
 
 class Template(models.Model):
@@ -166,8 +154,6 @@ for t in Template.objects.all():
 
 
 class Item(models.Model):
-
-
     """
     One item will exist for each expense,   any item that does not have a category/subcategory will be process by
     applying templates on entry (import or single item)
@@ -190,7 +176,7 @@ class Item(models.Model):
             return f'{self.date}: {self.description} - {self.amount}'
 
     @property
-    def am_amortized(self) -> bool:
+    def is_amortized(self) -> bool:
         return Item.objects.filter(amortized=self).count() != 0
 
     def amortize(self, months:int, direction:str = 'forward') -> str:
