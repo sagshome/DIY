@@ -88,6 +88,12 @@ class ItemAdd(CreateView):
     form_class = ItemAddForm
     success_url = reverse_lazy('expense_main')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['action'] = 'Add'
+        return context
+
+
 class ItemDelete(DeleteView):
     model = Item
     form_class = ItemForm
@@ -97,6 +103,11 @@ class ItemEdit(UpdateView):
     model = Item
     form_class = ItemForm
     success_url = reverse_lazy('expense_main')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['action'] = 'Edit'
+        return context
 
 
 class AssignCategory(UpdateView):

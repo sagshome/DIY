@@ -1,73 +1,69 @@
 {% extends "base.html" %}
 {% block title %}Portfolio Equity Details{% endblock %}
 {% block content %}
-<div class="flex-container flex-items-auto">
-    <div class="row">
-        <div id="heading">
-            <h1>Portfolio: {{portfolio}}</h1>
-            <h2>Target is: {{equity.name}} ({{equity.symbol}})</h2>        </div>
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+
+    <h2 class="w3-margin">{{equity.symbol}} - Details for {{portfolio.name}}</h2>
+
+    <div class="w3-row w3-hide-small">
+        <div class="w3-threequarter w3-container">
+            {{ chart | safe }}
+        </div>
+        <div class="w3-rest w3-container" style="height:50px; overflow-y:scroll;">
+            <div id="documentation">
+                The <b>Return vs Cost</b> tracks and equity in your portfolio based on the following criteria:
+                <ul>
+                    <li><em>Effective Cost</em> is the purchase cost less the sales cost as of that date</li>
+                    <li><em>Present Value</em> is the market value of the shares on that date</li>
+                    <li><em>Effective Value</em> is Present Value, combined with the total dividends</li>
+                    <li><em>Total dividends</em> just tracks the accumulated dividends the equity has received.</li>
+                    <li><em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
+                        the CPI (consumers price index) based on the Bank of Canada's inflation reporting.</li>
+                </ul>
+            </div>
         </div>
     </div>
-</div>
-<div class="flex-container flex-items-auto">
-    <div class="row">
-        <div id="chart" class="col flex-size-16 pad-md rounded">
-            {{ chart|safe }}
-        </div>
-        </div>
-        <div id="documentation" class="col flex-size-8 pad-md">
-            The <b>Return vs Cost</b> tracks and equity in your portfolio based on the following criteria:
-            <ul>
-                <li><em>Effective Cost</em> is the purchase cost less the sales cost as of that date</li>
-                <li><em>Present Value</em> is the market value of the shares on that date</li>
-                <li><em>Effective Value</em> is Present Value, combined with the total dividends</li>
-                <li><em>Total dividends</em> just tracks the accumulated dividends the equity has received.</li>
-                <li><em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
-                    the CPI (consumers price index) based on the Bank of Canada's inflation reporting.</li>
-            </ul>
-        </div>
-    </div>
-</div>
-<div class="flex-container flex-items-auto">
-    <div id="table" class="pad-md">
-    <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
-        <tr>
-            <th>Date</th>
-            <th>Shares Owned</th>
-            <th>Effective Cost</th>
-            <th>Current Value</th>
-            <th>Total Dividends</th>
-            <th>Value (with Dividends)</th>
-            <th>Dividend Amount</th>
-            <th>Share Price</th>
-            <th>Activities</th>
-        </tr>
-        {% for data in context %}
-            <tr>
-                <td>{{ data.0 }}</td>
-                <td>{{data.1|floatformat:'2g'}}</td>
-                <td>${{data.3|floatformat:'2g'}}</td>
-                <td>${{data.2|floatformat:'2g'}}</td>
 
-                <td>${{data.4|floatformat:'2g'}}</td>
-                <td
-                    {% if data.5 < 0 %}
-                         class="bad-text"
-                    {% endif %}>
-                   ${{data.5|floatformat:'2g'}}</td>
-
-                <td>
-                    {% if data.6 == 0 %}
-                        &nbsp;
-                    {% else %}
-                        ${{data.6|floatformat:'2g'}}
-                    {% endif %}
-                </td>
-                <td>${{data.7|floatformat:'2g'}}</td>
-                <td>{{data.8}}</td>
+    <div class="w3-container w3-margin-top">
+        <table class="w3-table w3-stripped">
+            <tr class="w3-margin-bottom">
+                <th>Date</th>
+                <th class="w3-hide-small">Shares Owned</th>
+                <th class="w3-hide-small">Effective Cost</th>
+                <th class="w3-hide-small">Current Value</th>
+                <th class="w3-hide-small">Total Dividends</th>
+                <th>Value (with Dividends)</th>
+                <th>Dividend Amount</th>
+                <th>Share Price</th>
+                <th>Activities</th>
             </tr>
-       {% endfor %}
-    </table>
+            {% for data in context %}
+                <tr>
+                    <td>{{ data.0 | date:'Y-m' }}</td>
+                    <td class="w3-hide-small">{{data.1|floatformat:'0g'}}</td>
+                    <td class="w3-hide-small">${{data.3|floatformat:'2g'}}</td>
+                    <td class="w3-hide-small">${{data.2|floatformat:'2g'}}</td>
+
+                    <td class="w3-hide-small">${{data.4|floatformat:'2g'}}</td>
+                    {% if data.5 < 0 %}
+                        <td class="w3-red">
+                    {% else %}
+                        <td>
+                    {% endif %}
+                    ${{data.5|floatformat:'2g'}}</td>
+
+                    <td>
+                        {% if data.6 == 0 %}
+                            &nbsp;
+                        {% else %}
+                            ${{data.6|floatformat:'2g'}}
+                        {% endif %}
+                    </td>
+                    <td>${{data.7|floatformat:'2g'}}</td>
+                    <td>{{data.8}}</td>
+                </tr>
+           {% endfor %}
+        </table>
     </div>
 </div>
 {% endblock content %}

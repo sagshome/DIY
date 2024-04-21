@@ -1,13 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Delete Template{% endblock %}
+{% block title %}Expense Template Delete{% endblock %}
 {% block content %}
-    <h2>Delete Template: {{object.type}} {{object}}</h2>
-        Template are used as part of the import process.   Deleting a template has no impact on existing expense items.
-        this template is used {{object.count}} times.
+    <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+        <h2>Delete Template: {{object.type}} {{object}}</h2>
+            Template are used as part of the import process.   Deleting a template has no impact on existing expense items.
+            this template is used {{object.count}} times.
 
-    <form method="post">{% csrf_token %}
-        <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
-        <button class="rounded spaced menu-button-success" href="{% url 'expenses_templates' %}">Cancel</button> - or -
-        <input class="rounded spaced menu-button-danger" type="submit" value="Delete">
-    </form>
+        <form method="post">{% csrf_token %}
+            <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
+            <a href="{% url 'expenses_templates' %}">
+                <button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button>
+            </a>
+            - or -
+            <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
+        </form>
+    </div>
 {% endblock content %}

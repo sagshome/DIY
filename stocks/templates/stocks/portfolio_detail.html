@@ -2,79 +2,81 @@
 {% block title %}Portfolio Details{% endblock %}
 {% load stocks_tags %}
 {% block content %}
-<div class="flex-container flex-items-auto">
-    <div class="row">
-        <div id="heading">
-            <p class="indent">Portfolio Details for {{portfolio.name}}
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+
+    <h2 class="w3-margin">Portfolio Details for {{portfolio.name}}</h2>
+
+    <div class="w3-row w3-hide-small">
+        <div class="w3-threequarter w3-container w3-hide-small">
+            {{ chart | safe }}
+        </div>
+        <div class="w3-rest w3-container">
+            <div id="documentation" class="w3-container" style="height:425px; overflow-y:scroll;">
+                The <b>Return vs Cost</b> chart computes the cost of the portfolio by the total of money funded into the portfolio
+                vs money that was redeemed.   <em>Effective Cost</em> is the funded cost less the redeemed cost as of that date.
+                Cash positions inside the portfolio are not realized until they are removed.
+                <br><br>
+                <em>Value</em> is the value of the combined equities/mutual funds/money markets etc as of that date.   It also
+                includes any cash sitting in the portfolio.  The values
+                when possible are tracked against API the report historic values.
+                <br><br>
+                <em>Total dividends</em> just tracks the accumulated dividends the portfolio has received.   Their value is not deducted
+                from the Effective cost (unless the value was redeemed).
+                <br><br>
+                The <em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
+                the CPI (consumers price index) based on the Bank of Canada's inflation reporting.
+                <br><br><br>
+                The Portfolio Detail table,  tracks individual items.   Items with 0 value are historic positions.   Each item
+                in the table can be drilled down to see your specific returns over time.
+                <br><br>
+                The <em>Update</em> action will force an API refresh however,  the values are automatically updated every
+                morning, and they will not update again on the same day.
+            </div>
+        </div>
+    </div>
+    <div class="w3-bar w3-hide-small">
+        <div class="w3-bar-item">
+            <b>Comparison charts</b>:
+        </div>
+        <div class="w3-bar-item">
+            <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-gray">S&P 500(ish)</button></a>
+        </div>
+        <div class="w3-bar-item">
+            <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-gray">TSX Dividend</button></a><br>
+        </div>
+        <div class="w3-bar-item">
+            <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-gray">BMO Global</button></a>
+        </div>
+    </div>
+
+    <div class="w3-row">
+        <div class="w3-half w3-container">
+
+            <table class="w3-table">
+                <tr>
+                    <th>Equity</th>
+                    <th>Shares</th>
+                    <th>Effective<br>Cost</th>
+                    <th>Value</th>
+                    <th>Total<br>Dividends</th>
+                    <th>Actions</th>
+                </tr>
+
+                {% for e in portfolio.equity_keys %}
+                    <tr>
+                        <td class="indent"><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
+                        <td>{% equity_value portfolio e "Shares" "{:.1f}" %}</td>
+                        <td>${% equity_value portfolio e "EffectiveCost" "{:.0f}" %}</td>
+                        <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
+                        <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
+                        <td>
+                            <button id="update-{{equity.symbol}}" onclick=update("{{e}}")
+                                    class="w3-button-small w3-round-large w3-orange">Update</button>
+                        </td>
+                    </tr>
+               {% endfor %}
+            </table>
         </div>
     </div>
 </div>
-<div class="flex-container flex-items-auto">
-    <div class="row">
-        <div id="chart">
-            {{ chart|safe }}
-        </div>
-    </div>
-</div>
-<div class="flex-container flex-items-auto">
-    <div class="column">
-        <p> Comparison charts<br></p>
-        <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}"><button class="rounded spaced menu-button-primary">S&P 500(ish)</button></a>
-                        <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}"><button class="rounded spaced menu-button-primary">TSX Dividend</button></a>
-                        <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}"><button class="rounded spaced menu-button-primary">BMO Global</button></a>
-
-    </div></div>
-<div class="flex-container flex-items-auto">
-    <div id="table" class="flex-size-12 pad-md">
-    <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">
-        <tr>
-            <th>Equity</th>
-            <th>Shares</th>
-            <th>Effective<br>Cost</th>
-            <th>Value</th>
-            <th>Total<br>Dividends</th>
-            <th>Actions</th>
-        </tr>
-
-        {% for e in portfolio.equity_keys %}
-            <tr>
-                <td class="indent"><a href="{% url 'portfolio_equity_details' portfolio.id e %}">{{e}}</a></td>
-                <td>{% equity_value portfolio e "Shares" "{:.1f}" %}</td>
-                <td>${% equity_value portfolio e "EffectiveCost" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
-                <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
-                <td>
-                    <button id="update-{{equity.symbol}}" onclick=update("{{e}}")
-                            class="rounded spaced menu-button-warning">Update</button>
-                </td>
-            </tr>
-       {% endfor %}
-    </table>
-    To add a new Transaction,  select
-    <a href="{% url 'transaction_add' portfolio.id %}"><button class="rounded spaced menu-button-success">New Activity</button></a>
-    </div>
-    <div id="documentation" class="pad-md">
-        The <b>Return vs Cost</b> chart computes the cost of the portfolio by the total of money funded into the portfolio
-        vs money that was redeemed.   <em>Effective Cost</em> is the funded cost less the redeemed cost as of that date.
-        Cash positions inside the portfolio are not realized until they are removed.
-        <br><br>
-        <em>Value</em> is the value of the combined equities/mutual funds/money markets etc as of that date.   It also
-        includes any cash sitting in the portfolio.  The values
-        when possible are tracked against API the report historic values.
-        <br><br>
-        <em>Total dividends</em> just tracks the accumulated dividends the portfolio has received.   Their value is not deducted
-        from the Effective cost (unless the value was redeemed).
-        <br><br>
-        The <em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
-        the CPI (consumers price index) based on the Bank of Canada's inflation reporting.
-        <br><br><br>
-        The Portfolio Detail table,  tracks individual items.   Items with 0 value are historic positions.   Each item
-        in the table can be drilled down to see your specific returns over time.
-        <br><br>
-        The <em>Update</em> action will force an API refresh however,  the values are automatically updated every
-        morning, and they will not update again on the same day.
-    </div>
-
-</div>
-
 {% endblock content %}

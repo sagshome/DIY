@@ -1,41 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Portfolio List{% endblock %}
 {% load stocks_tags %}
-{% block content %}
 
-        <table>
-            <tr>
-                <th>Portfolio Name</th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Effective Cost</th>
-                <th>Present Value</th>
-                <th>Growth</th>
-                <th>Total Dividends</th>
-                <th>Actions</th>
-            </tr>
-            {% for portfolio in object_list %}
-                <tr>
-                    <td><a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></td>
-                    <td class="text-center">{% month_year portfolio 'start' %}</td>
-                    <td class="text-center">{% month_year portfolio 'end' %}</td>
-                    <td>${{portfolio.cost|floatformat:'0g'}}</td>
-                    <td>${{portfolio.value|floatformat:'0g'}}</td>
-                    <td>${{portfolio.growth|floatformat:'0g'}}</td>
-                    <td>${{portfolio.dividends|floatformat:'0g'}}</td>
-                    <td>
-                        <a href="{% url 'portfolio_edit' portfolio.id %}"><button class="rounded spaced menu-button-success">Edit</button></a>
-                        <a href="{% url 'portfolio_copy' portfolio.id %}"><button class="rounded spaced menu-button-success">Copy</button></a>
-                        <button id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}") class="rounded spaced menu-button-warning">Update</button>
-                        <a href="{% url 'portfolio_delete' portfolio.id %}"><button class="rounded spaced menu-button-danger">Delete</button></a>
-                    </td>
-                </tr>
-           {% endfor %}
-        </table>
-        <hr>
-        <a href="{% url 'portfolio_add' %}"><button class="rounded spaced menu-button-success">New Portfolio</button></a>
-
-    </body>
+{% block script %}
     <script>
         function update(id) {
             var xhttp = new XMLHttpRequest();
@@ -55,4 +22,41 @@
             xhttp.send();
         }
     </script>
+{% endblock script %}
+{% block content %}
+
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+        <table class="w3-table w3-striped">
+            <tr>
+                <th>Portfolio Name</th>
+                <th class="w3-hide-small">Start</th>
+                <th class="w3-hide-small">End</th>
+                <th class="w3-hide-small">Effective Cost</th>
+                <th>Present Value</th>
+                <th>Growth</th>
+                <th>Total Dividends</th>
+                <th class="w3-centered">Actions</th>
+            </tr>
+            {% for portfolio in object_list %}
+                <tr>
+                    <td><a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></td>
+                    <td class="text-center w3-hide-small">{% month_year portfolio 'start' %}</td>
+                    <td class="text-center w3-hide-small">{% month_year portfolio 'end' %}</td>
+                    <td class="w3-hide-small">${{portfolio.cost|floatformat:'0g'}}</td>
+                    <td>${{portfolio.value|floatformat:'0g'}}</td>
+                    <td>${{portfolio.growth|floatformat:'0g'}}</td>
+                    <td>${{portfolio.dividends|floatformat:'0g'}}</td>
+                    <td>
+                        <a class="w3-hide-small" href="{% url 'portfolio_edit' portfolio.id %}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green"> Edit </button></a>
+                        <a class="w3-hide-small" href="{% url 'portfolio_copy' portfolio.id %}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green">Copy</button></a>
+                        <button id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}") class="w3-margin w3-button-medium w3-round-large w3-orange">Update</button>
+                        <a class="w3-hide-small" href="{% url 'portfolio_delete' portfolio.id %}"><button class="w3-margin w3-button-medium w3-round-large w3-button-medium w3-round-large w3-red">Delete</button></a>
+                    </td>
+                </tr>
+           {% endfor %}
+        </table>
+        <a href="{% url 'portfolio_add' %}"><button class="w3-margin w3-button-large w3-round-xlarge w3-green">New Portfolio</button></a>
+
+</div>
+
 {% endblock content %}

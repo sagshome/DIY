@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Import Expenses{% endblock title %}
+{% block title %}Expenses Import{% endblock %}
 {% block content %}
-
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
     <div class="flex-container flex-items-auto">
         <div class="row">
             <div id="heading">
@@ -32,7 +32,8 @@
                     </tr>
                     {% endfor %}
                 </table>
-                <button type="submit">Import CSV</button> This may take a moment. Please be patient.
+                <!-- todo: Add a progress bar -->
+                <button class="w3-margin w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Import CSV</button> This may take a moment. Please be patient.
             </form>
         </div>
     </div>

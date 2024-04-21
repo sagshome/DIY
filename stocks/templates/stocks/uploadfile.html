@@ -1,54 +1,45 @@
 {% extends "base.html" %}
 {% block title %}Upload Transactions{% endblock title %}
 {% block content %}
-
-    <div class="flex-container flex-items-auto">
-        <div class="row">
-            <div id="heading">
-                <h2>Upload Transactions</h2>
-            </div>
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+    <h2 class="w3-margin">Upload Transactions</h2>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="w3-row">
+            {{ form.non_field_errors }}
         </div>
-    </div>
+        {% for hidden_field in form.hidden_fields %}
 
-    <div class="flex-container flex-items-auto">
-        <div id="xa_table" class="flex-size-8 pad-md">
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                {{ form.non_field_errors }}
-
-                {% for hidden_field in form.hidden_fields %}
+            <div class="w3-row">
                 {{ hidden_field.errors }}
                 {{ hidden_field }}
-                {% endfor %}
+            </div>
+        {% endfor %}
 
-                <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-md text-sm">
-                    {% for field in form.visible_fields %}
-                    <tr>
-                        <th class="col-3">{{ field.label_tag }}</th>
-                        <td class="col-5 rounded">
-                            {{ field.errors }}
-                            {{ field }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </table>
-                <button type="submit">Import CSV</button> This may take a moment. Please be patient.
-            </form>
-        </div>
-    </div>
+        <table>
+            {% for field in form.visible_fields %}
+                <tr>
+                    <td class="w3-container w3-cell w3-right">{{ field.label_tag }}</td>
+                    <td class="w3-container w3-cell">{{ field }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+        <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Import CSV</button> This may take a moment. Please be patient.
+    </form>
+
     {% if custom_error %}
-        <div class="alert alert-danger">
+        <div class="w3-container w3-red">
             <h2>Errors</h2>
             {{ custom_error }}
         </div>
     {% endif %}
     {% if custom_warnings %}
-        <div class="alert alert-warning">
+        <div class="w3-container w3-orange">
             <h2>Warnings (skipped lines from CSV upload)</h2>
                 {{ custom_warnings }}
         </div>
     {% endif %}
-    <hr>
-    <a href="{% url 'portfolio_list' %}"><button class="rounded spaced menu-button-success">Portfolio List</button></a>
-
+    <a href="{% url 'portfolio_list' %}"><button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green">Portfolio List</button></a>
+    return to the portfolio list
+</div>
 {% endblock content %}

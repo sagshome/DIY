@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Expense Assignment{% endblock %}
+{% load expenses_tags %}
+{% block content %}
+  <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+    <div class="w3-container w3-margin-left">
+      <h2>{{action}} Expense Item</h2>
+      <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
+        {% csrf_token %}
+        <table>
+          <tr class="w3-margin"><td>Date:</td><td><b>{{object.date | date:'Y-m-d'}}</b></td></tr>
+          <tr class="w3-margin"><td>Description:</td><td><b>{{object.description}}</b></td></tr>
+          <tr class="w3-margin"><td>Amount:</td><td><b>{{object.amount | floatformat:2}}</b></td></tr>
+        </table>
+        <p>A deleted item will be gone forever (unless you import it again).<br><br>
+        Are you really sure ?</p>
+        <div class="w3-margin-bottom">
+          <a href="{% url 'expense_main' %}">
+            <button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button>
+          </a>
+        - or -
+        <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
+        </div>
+      </form>
+      </div>
+    </div>
+  </div>
+{% endblock %}

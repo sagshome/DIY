@@ -1,17 +1,9 @@
-{% extends 'base.html' %}
-
-{% block content %}
-  <h2>Catogorize Item</h2>
-  <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
-    {% csrf_token %}
-    <table>
-      {{ form.as_table }}
-    </table>
-    <button type="submit">Save</button>
-  </form>
-
-  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-  <script>
+{% extends "base.html" %}
+{% block title %}Expense Assignment{% endblock %}
+{% load expenses_tags %}
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
     $("#id_category").change(function () {
       var url = $("#itemForm").attr("data-subcategories-url");
       var categoryId = $(this).val();  // get the selected Category ID from the HTML input
@@ -26,5 +18,60 @@
         }
       });
     });
-  </script>
+</script>
+{% endblock script %}
+
+{% block content %}
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+
+    <h2>{{action}} Expense Item</h2>
+    <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
+        {% csrf_token %}
+        <table>
+            <tr class="w3-margin">
+                <td>Date:</td>
+                <td>
+                    {% if action == 'Edit' %}
+                      <b>{{form.instance.date | date:'Y-m-d'}}</b>
+                    {% else %}
+                      {{form.date}}
+                    {% endif %}
+                </td>
+            </tr>
+            <tr class="w3-margin">
+                <td>Description:</td>
+                <td>
+                    {% if action == 'Edit' %}
+                        <b>{{form.instance.description}}</b>
+                    {% else %}
+                      {{form.description}}
+                    {% endif %}
+                </td>
+            </tr>
+            <tr class="w3-margin">
+                <td>Amount:</td>
+                <td>
+                    {% if action == 'Edit' %}
+                      <b>{{form.instance.amount | floatformat:2}}</b>
+                    {% else %}
+                      {{form.amount}}
+                    {% endif %}
+                </td>
+            </tr>
+            <tr class="w3-margin">
+                <td>Category:</td>
+                <td>{{form.category}}</td>
+            </tr>
+            <tr class="w3-margin">
+                <td>SubCategory:</td>
+                <td>{{form.subcategory}}</td>
+            </tr>
+            <tr class="w3-margin">
+                <td>Ignore:</td>
+                <td>{{form.ignore}}</td>
+            </tr>
+        </table>
+        <button class="w3-button-medium w3-round-xlarge w3-orange w3-margin" type="submit">Save</button>
+    </form>
+</div>
 {% endblock %}
