@@ -7,7 +7,7 @@
 
 <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
     {% csrf_token %}
-    {% include 'expenses/expenses_search.html' %}
+    {% include 'expenses/expenses_search_bar.html' %}
 
     {{ formset.management_form }}
     {% for dict in formset.errors %}
