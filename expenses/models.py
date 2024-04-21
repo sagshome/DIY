@@ -1,7 +1,10 @@
 import copy
 import logging
 import re
+
+from dateutil.relativedelta import relativedelta
 from typing import Union
+
 from django.db import models
 from django.db.models import Q, Sum, QuerySet
 
@@ -163,6 +166,8 @@ for t in Template.objects.all():
 
 
 class Item(models.Model):
+
+
     """
     One item will exist for each expense,   any item that does not have a category/subcategory will be process by
     applying templates on entry (import or single item)
@@ -171,17 +176,62 @@ class Item(models.Model):
     description: str = models.CharField(max_length=120, null=False, blank=False)
     amount = models.FloatField(null=False, blank=False)
     source = models.CharField(max_length=40, null=False, blank=False)
-    template = models.ForeignKey(Template, blank=True, null=True, on_delete=models.CASCADE)
-    category = models.ForeignKey(Category, blank=True, null=True, on_delete=models.CASCADE)
-    subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.CASCADE)
+    template = models.ForeignKey(Template, blank=True, null=True, on_delete=models.SET_NULL)
+    category = models.ForeignKey(Category, blank=True, null=True, on_delete=models.SET_NULL)
+    subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.SET_NULL)
     details = models.CharField(max_length=80, blank=True, null=True)
     ignore = models.BooleanField(default=False)
+    amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE)
 
     def __str__(self):
         if self.template:
             return f'{self.date}: {self.description} - {self.amount} ({self.template.expression})'
         else:
             return f'{self.date}: {self.description} - {self.amount}'
+
+    @property
+    def am_amortized(self) -> bool:
+        return Item.objects.filter(amortized=self).count() != 0
+
+    def amortize(self, months:int, direction:str = 'forward') -> str:
+        if self.amortized:
+            logger.error('Attempted to re-amoritize %s' % self)
+            return 'Attempted to re-amoritize %s' % self
+        if direction not in ['forward', 'backward', 'around']:
+            logger.error('Invalid amortization value %s' % direction)
+            return 'Invalid amortization value %s' % direction
+        if months < 2:
+            logger.error("Amortization must be at least two months")
+            return "Amortization must be at least two months"
+
+        new_amount = self.amount / months
+        self.ignore = True
+        self.save()
+
+        if direction == 'forward':
+            start_date = self.date
+        elif direction == 'backward':
+            start_date = self.date - relativedelta(months=months)
+        else:
+            start_date = self.date - relativedelta(months=months/2)
+
+        for mcount in range(months):
+            Item.objects.create(date=start_date + relativedelta(months=mcount),
+                                description=self.description,
+                                amount=new_amount,
+                                category=self.category,
+                                subcategory=self.subcategory,
+                                ignore=self.ignore,
+                                source='Amortized',
+                                details=self.details,
+                                amortized=self)
+
+        return ''
+
+    def deamortize(self):
+        Item.objects.filter(amortized=self).delete()
+        self.ignore = False
+        self.save()
 
     def apply_template(self, template: Template = None) -> bool:
         """

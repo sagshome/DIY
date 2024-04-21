@@ -8,8 +8,6 @@ class SearchForm(forms.Form):
     A form to support searching of expenses
     - Need to build a subcategory choice list so I can remove non-unique values
     """
-
-
     search_category = forms.ChoiceField(choices=Category.get_choices())
     search_subcategory = forms.ChoiceField(choices=SubCategory.get_choices())
     search_ignore = forms.ChoiceField(required=False, choices=[(None, '---'), ('Yes', 'Yes'), ('No', 'No')])
@@ -125,8 +123,14 @@ class ItemAddForm(forms.ModelForm):
 
 
 class ItemForm(forms.ModelForm):
+    direction_choices = ((None, '----'),
+                         ('forward', 'future'),
+                         ('backward', 'back'),
+                         ('around', 'split'))
     template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
     template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
+    direction = forms.ChoiceField(required=False, choices=direction_choices)
+    months = forms.IntegerField(min_value=2, required=False)
 
     class Meta:
         model = Item

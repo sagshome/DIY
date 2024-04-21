@@ -201,10 +201,20 @@ def templates(request):
                   {'templates': templates})
 
 
+class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
+    def save(self, commit=True):
+        # Call the original save method to save the forms in the formset
+        super(AssignFormSet, self).save(commit=commit)
+
+        # Custom action (e.g., send an email notification)
+        if commit:
+            # Perform your custom action here
+            pass
+
+
 def assign_expenses(request):
 
     max_size = 50
-    ItemFormSet = modelformset_factory(Item, form=ItemForm, extra=0)
     search_form = SearchForm(initial={'search_ignore': 'No',
                                       'search_category': '- NONE -',
                                       'search_subcategory': '- NONE -'})
@@ -214,13 +224,14 @@ def assign_expenses(request):
 
     if request.method == "POST":
         search_form = SearchForm(request.POST)
-        formset = ItemFormSet(request.POST)
+        formset = AssignFormSet(request.POST)
         if formset.is_valid():
             formset.save()
             Item.apply_templates()
         if search_form.is_valid():
             super_set = Item.filter_search(Item.objects.all(), search_form.cleaned_data)
-    formset = ItemFormSet(queryset=Item.objects.filter(id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+
+    formset = AssignFormSet(queryset=Item.objects.filter(id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
 
     return render(request, "expenses/assign_category.html", {"formset": formset,
                                                              "search_form": search_form,
