@@ -1,20 +1,27 @@
 import copy
 import re
 from django import forms
+from django.db.utils import OperationalError
 from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
 
 
 def get_categories():
     default = copy.copy(DEFAULT_CATEGORIES)
-    for category in Category.objects.all().order_by("name").values_list('name', flat=True):
-        default.append((category, category))
+    try:
+        for category in Category.objects.all().order_by("name").values_list('name', flat=True):
+            default.append((category, category))
+    except OperationalError:
+        pass  # this happens if the tables do not yet exist.
     return default
 
 
 def get_subcategories():
     default = copy.copy(DEFAULT_CATEGORIES)
-    for subcategory in SubCategory.objects.all().order_by("name").values_list('name', flat=True).distinct():
-        default.append((subcategory, subcategory))
+    try:
+        for subcategory in SubCategory.objects.all().order_by("name").values_list('name', flat=True).distinct():
+            default.append((subcategory, subcategory))
+    except OperationalError:
+        pass  # This happens since the DB may not exist
     return default
 
 
