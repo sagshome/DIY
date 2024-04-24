@@ -1,7 +1,8 @@
 import copy
 import re
 from django import forms
-from django.db.utils import OperationalError
+from django.db.utils import ProgrammingError, OperationalError
+
 from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
 
 
@@ -10,8 +11,10 @@ def get_categories():
     try:
         for category in Category.objects.all().order_by("name").values_list('name', flat=True):
             default.append((category, category))
+    except ProgrammingError:
+        pass  #  Init with mysql
     except OperationalError:
-        pass  # this happens if the tables do not yet exist.
+        pass  # Init with mysql-lite
     return default
 
 
@@ -20,8 +23,10 @@ def get_subcategories():
     try:
         for subcategory in SubCategory.objects.all().order_by("name").values_list('name', flat=True).distinct():
             default.append((subcategory, subcategory))
+    except ProgrammingError:
+        pass  # Init with mysql
     except OperationalError:
-        pass  # This happens since the DB may not exist
+        pass  # Init with mysql-lite
     return default
 
 
@@ -151,14 +156,9 @@ class ItemAddForm(forms.ModelForm):
 
 
 class ItemForm(forms.ModelForm):
-    direction_choices = ((None, '----'),
-                         ('forward', 'future'),
-                         ('backward', 'back'),
-                         ('around', 'split'))
+
     template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
     template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
-    direction = forms.ChoiceField(required=False, choices=direction_choices)
-    months = forms.IntegerField(min_value=2, required=False)
 
     class Meta:
         model = Item
@@ -182,6 +182,8 @@ class ItemForm(forms.ModelForm):
         self.fields["category"].widget.attrs['style'] = 'width:125px;'
 
         self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
+
+        self.fields['ignore'].label = "Hide"
 
     def clean_template(self):
         if self.cleaned_data["template"]:
@@ -215,6 +217,17 @@ class ItemForm(forms.ModelForm):
             raise forms.ValidationError(f'Warning: Category {self.cleaned_data["category"]} missing subcategory.')
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
             raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
+
+class SingleItemForm(ItemForm):
+
+    direction_choices = ((None, '----'),
+                         ('forward', 'future'),
+                         ('backward', 'back'),
+                         ('around', 'split'))
+    direction = forms.ChoiceField(required=False, choices=direction_choices)
+    months = forms.IntegerField(min_value=2, required=False)
+
+
 
 
 class ClassifyItemForm(forms.Form):

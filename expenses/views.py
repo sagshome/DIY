@@ -7,15 +7,14 @@ import plotly.graph_objects as go
 
 from datetime import datetime
 
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.forms import modelformset_factory
-from django.db.models import Q, Sum, QuerySet
+from django.db.models import Q
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import ListView, DetailView, CreateView, DeleteView, UpdateView
+from django.views.generic import CreateView, DeleteView, UpdateView
 
 from expenses.forms import UploadFileForm, SearchForm
-from base.utils import DIYImportException
+from stocks.base.utils import DIYImportException
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank
 from expenses.forms import ItemForm, TemplateForm, ItemListForm, ItemAddForm
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
@@ -83,6 +82,7 @@ def build_chart(items, filters):
     chart_html = pio.to_html(fig, full_html=False)
     return chart_html
 
+
 class ItemAdd(CreateView):
     model = Item
     form_class = ItemAddForm
@@ -98,6 +98,7 @@ class ItemDelete(DeleteView):
     model = Item
     form_class = ItemForm
     success_url = reverse_lazy('expense_main')
+
 
 class ItemEdit(UpdateView):
     model = Item
@@ -149,6 +150,7 @@ def edit_template(request, pk: int):
 def expense_test(request):
     return render(request, "expenses/test.html")
 
+
 def expense_main(request):
     """
     This view support both a search to refresh the data and pagination.   If I change the critera,   I need to
@@ -195,6 +197,7 @@ def expense_main(request):
         'chart': chart,
     })
 
+
 def templates(request):
     templates = Template.objects.all().order_by("expression")
     return render(request, 'expenses/templates.html',
@@ -225,12 +228,15 @@ def assign_expenses(request):
     if request.method == "POST":
         search_form = SearchForm(request.POST)
         formset = AssignFormSet(request.POST)
-        if formset.is_valid():
+        if search_form.is_valid() and formset.is_valid():
+            super_set = Item.filter_search(Item.objects.all(), search_form.cleaned_data)
             formset.save()
             Item.apply_templates()
-        if search_form.is_valid():
-            super_set = Item.filter_search(Item.objects.all(), search_form.cleaned_data)
-    formset = AssignFormSet(queryset=Item.objects.filter(id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+            formset = AssignFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+    else:
+        formset = AssignFormSet(queryset=Item.objects.filter(
+            id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
 
     return render(request, "expenses/assign_category.html", {"formset": formset,
                                                              "search_form": search_form,

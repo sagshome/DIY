@@ -154,7 +154,6 @@ STATIC_ROOT = "static_root/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-    BASE_DIR / "build" / "node_modules" / "asyncdesign-webui" / "dist"
 ]
 
 # Default primary key field type

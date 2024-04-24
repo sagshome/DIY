@@ -2,14 +2,14 @@
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
 <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
-    <h2>Update Expenses - {{count}}</h2>
+    <h2>Update Expenses - Unassigned Count:{{count}}</h2>
 
 <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
     {% csrf_token %}
     {% include 'expenses/expenses_search_bar.html' %}
 
     {{ formset.management_form }}
-    {% for dict in formset.errors %}
+    {% for dict in formset.error_messages %}
         {% for error in dict.values %}
             {{ error }}
         {% endfor %}

@@ -7,7 +7,7 @@ from datetime import datetime, date
 from typing import List, Dict
 
 from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction, DataSource
-from base.utils import normalize_date
+from stocks.base.utils import normalize_date
 
 FUND = Transaction.FUND
 BUY = Transaction.BUY

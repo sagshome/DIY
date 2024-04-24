@@ -6,11 +6,9 @@ import plotly.graph_objects as go
 
 from pandas import DataFrame
 
-from django.contrib import messages
-from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
-from django.views.decorators.http import require_http_methods
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, UpdateView
 from django.views.generic.dates import DateMixin
 
@@ -18,7 +16,7 @@ from django.views.generic.dates import DateMixin
 from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
 from .forms import AddEquityForm, TransactionForm, PortfolioForm, UploadFileForm
 from .importers import QuestTrade, Manulife, StockImporter, HEADERS
-from base.utils import DIYImportException
+from stocks.base.utils import DIYImportException
 from .tasks import daily_update
 
 logger = logging.getLogger(__name__)

@@ -1,14 +1,11 @@
-import copy
 import csv
 import logging
-import re
 
 from datetime import date, datetime
 from typing import Dict
 
-from base.utils import DIYImportException, normalize_date
-from .models import Item, Template, Category, SubCategory
-
+from stocks.base.utils import DIYImportException
+from .models import Item
 
 logger = logging.getLogger(__name__)
 

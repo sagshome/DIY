@@ -25,7 +25,9 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
-    def filter_amount(self, qfilter: Union[QuerySet | None]) -> float:
+
+    # def filter_amount(self, qfilter: Union[QuerySet | None]) -> float:
+    def filter_amount(self, qfilter) -> float:
 
         if not qfilter:
             qfilter = Item.objects.filter(category=self)
@@ -33,7 +35,7 @@ class Category(models.Model):
         value = value if value else 0
         return value
 
-    def filter_count(self, qfilter: Union[QuerySet | None]) -> int:
+    def filter_count(self, qfilter) -> int:
         if not qfilter:
             qfilter = Item.objects.filter(category=self)
         return qfilter.filter(category=self).count()
@@ -53,7 +55,7 @@ class SubCategory(models.Model):
     def __str__(self):
         return self.name
 
-    def filter_amount(self, qfilter: Union[QuerySet | None]) -> float:
+    def filter_amount(self, qfilter) -> float:
 
         if not qfilter:
             qfilter = Item.objects.filter(subcategory=self)
@@ -63,7 +65,7 @@ class SubCategory(models.Model):
         value = value if value else 0
         return value
 
-    def filter_count(self, qfilter: Union[QuerySet | None]) -> int:
+    def filter_count(self, qfilter) -> int:
         if not qfilter:
             qfilter = Item.objects.filter(subcategory=self)
         return qfilter.filter(subcategory=self).count()

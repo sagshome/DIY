@@ -16,6 +16,7 @@ You need to have github https://github.com/ access to pull or download this sour
 You need to have docker hub https://hub.docker.com/ access to pull down base images.    I may end up storing my
 docker images in the future to make these instruction easier.
 
+
 If not already done,  pull the software from https://github.com/sagshome/DIY   The folder where DIY lives will
 be the <base> for these instructions.   You should see something like this when you pull your source tree
 
@@ -27,13 +28,6 @@ be the <base> for these instructions.   You should see something like this when 
 ### Some base software and packages.
 This is unix based.  I am sure you can figure it out.
 
-#### npm - asyncdesign-webui
-This is a css and javascript package.  I don't use much some day I may use more.  Run the following commands 
-or something like them
-
-    cd <base>/build
-    mkdir node_modules
-    npm install asyncdesign-webui
 
 #### Build your base docker images
     cd <base>
