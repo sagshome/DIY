@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Expense Categories{% endblock %}
+
+{% block content %}
+<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
+    {% block script %}
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+        <script>
+            function toggleDiv(divId) {
+                var div = document.getElementById(divId);
+                if (div.style.display === "none") {
+                    div.style.display = "block";
+                    document.getElementById('id_show_list').value = "Show";
+                } else {
+                    div.style.display = "none";
+                    document.getElementById('id_show_list').value = "Hide";
+                }
+            }
+        </script>
+        <script>
+            $(document).ready(function() {
+              var hide_value = "{{ search_form.show_list.value }}"
+              if (hide_value == "Hide") {
+                toggleDiv("expense_list")
+              }
+            });
+        </script>
+    {% endblock script %}
+
+    <div class="w3-container">
+        <form method="post" id="categoryForm"
+              data-subcategories-url="{% url 'ajax-load-subcategories' %}"
+              novalidate>
+            {% csrf_token %}
+            {% for category in category_form.visible_fields %}
+                <div class="w3-row">
+                   {% for subcategory in subcategory_form.visible_fields %}
+
+                {% include 'expenses/expenses_search_bar.html' %}
+            </div>
+            <div class="w3-row">
+                <div class="w3-rest container w3-hide-small">
+                    {{ chart | safe }}
+                </div>
+            </div>
+            <div class="w3-row">
+                <div id="expense_list">
+                    {% include 'expenses/expenses_list.html' %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

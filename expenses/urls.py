@@ -10,6 +10,7 @@ urlpatterns = [
     path(r'main/', views.expense_main, name='expense_main'),
     path(r'upload/', views.upload_expenses, name='expenses_upload'),
     path(r'assign/', views.assign_expenses, name='expenses_assign'),
+    path(r'categories', views.categories, name='categories'),
 
     path(r'item_add/', views.ItemAdd.as_view(), name='expense_add'),
     path(r'<int:pk>/item_edit/', views.ItemEdit.as_view(), name='expense_edit'),

@@ -16,7 +16,7 @@ from django.views.generic import CreateView, DeleteView, UpdateView
 from expenses.forms import UploadFileForm, SearchForm
 from stocks.base.utils import DIYImportException
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank
-from expenses.forms import ItemForm, TemplateForm, ItemListForm, ItemAddForm
+from expenses.forms import CategoryForm, SubCategoryForm, TemplateForm, ItemForm, ItemListForm, ItemAddForm
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
 
 
@@ -243,6 +243,18 @@ def assign_expenses(request):
                                                              "count": super_set.count()})
 
 
+def categories(request):
+    if request.method == 'POST':
+        category_form = CategoryForm(request.POST)
+        subcategory_formset = modelformset_factory(Item, form=ItemForm, extra=0)
+        if category_form.is_valid() and subcategory_form.is_valid():
+            category_form.save()
+            subcategory_form.save()
+
+    return render(request, "expenses/categories.html", {"category_form": category_form,
+                                                                "subcategory_form": subcategory_form})
+
+
 def upload_expenses(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
@@ -265,6 +277,7 @@ def upload_expenses(request):
 
     form = UploadFileForm()
     return render(request, "expenses/uploadfile.html", {"form": form})
+
 
 def load_subcategories(request):
     category = request.GET.get("category")

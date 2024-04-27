@@ -30,6 +30,18 @@ def get_subcategories():
     return default
 
 
+class CategoryForm(forms.ModelForm):
+    class Meta:
+        model = Category
+        fields = ("name", )
+
+
+class SubCategoryForm(forms.ModelForm):
+    class Meta:
+        model = SubCategory
+        fields = ("category", "name", )
+
+
 class SearchForm(forms.Form):
     """
     A form to support searching of expenses
@@ -218,16 +230,16 @@ class ItemForm(forms.ModelForm):
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
             raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
 
+
 class SingleItemForm(ItemForm):
 
     direction_choices = ((None, '----'),
                          ('forward', 'future'),
                          ('backward', 'back'),
                          ('around', 'split'))
+
     direction = forms.ChoiceField(required=False, choices=direction_choices)
     months = forms.IntegerField(min_value=2, required=False)
-
-
 
 
 class ClassifyItemForm(forms.Form):
