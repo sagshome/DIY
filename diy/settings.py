@@ -154,6 +154,7 @@ STATIC_ROOT = "static_root/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
+    BASE_DIR / "contrib"
 ]
 
 # Default primary key field type
