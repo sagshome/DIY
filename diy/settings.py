@@ -47,7 +47,6 @@ ALPHAVANTAGEAPI_KEY = os.environ['ALPHAVANTAGEAPI_KEY']
 SECRET_KEY = os.environ['SECRET_KEY']
 
 # Application definition
-
 INSTALLED_APPS = [
     'expenses.apps.ExpensesConfig',
     'stocks.apps.StocksConfig',
@@ -103,10 +102,12 @@ LOGGING = {
 
 ROOT_URLCONF = 'diy.urls'
 
+LOGIN_URL = '/accounts/login/'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'diy' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

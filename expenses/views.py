@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 
 from datetime import datetime
 
+from django.contrib.auth.decorators import login_required
 from django.forms import modelformset_factory
 from django.db.models import Q
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
@@ -151,6 +152,7 @@ def expense_test(request):
     return render(request, "expenses/test.html")
 
 
+@login_required
 def expense_main(request):
     """
     This view support both a search to refresh the data and pagination.   If I change the critera,   I need to
