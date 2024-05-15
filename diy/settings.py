@@ -45,9 +45,16 @@ else:
 
 ALPHAVANTAGEAPI_KEY = os.environ['ALPHAVANTAGEAPI_KEY']
 SECRET_KEY = os.environ['SECRET_KEY']
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_USE_TLS = True
+EMAIL_PORT = 587
+EMAIL_HOST_USER = os.environ['DIY_EMAIL_USER']
+EMAIL_HOST_PASSWORD = os.environ['DIY_EMAIL_PASSWORD']
 
 # Application definition
 INSTALLED_APPS = [
+    'base.apps.BaseConfig',
     'expenses.apps.ExpensesConfig',
     'stocks.apps.StocksConfig',
     'django_bootstrap5',
@@ -103,6 +110,7 @@ LOGGING = {
 ROOT_URLCONF = 'diy.urls'
 
 LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'
 
 TEMPLATES = [
     {

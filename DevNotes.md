@@ -1,3 +1,22 @@
+## Profiles ##
+* Extend the User model
+
+### Actions Needed ###
+* Login  - Using stock view with customized template
+* Logout - Using stock view with customized template
+* Lost Password - Using stock view with customized template 
+  * Just use the email for the username ?
+* Register
+  * email_address is the only required field
+  * User statis is active = False
+  * On successful submit - redirect to info page telling them to check their email,  and send an email
+  * Confirm / set password
+    * User status is active = True
+* Change Password
+* Change Profile
+
+
+
 ## How do deal with stock splits
 
 Using the API from **alphavantage**,   I get records that look like a Dividend but they are adjusted stock splits.   

@@ -7,7 +7,8 @@ from datetime import datetime, date
 from typing import List, Dict
 
 from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction, DataSource
-from stocks.base.utils import normalize_date
+from base.utils import normalize_date, DIYImportException
+
 
 FUND = Transaction.FUND
 BUY = Transaction.BUY

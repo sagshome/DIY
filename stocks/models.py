@@ -21,7 +21,7 @@ from django.db.models import QuerySet, Sum, Avg
 from django.conf import settings
 from django.utils.functional import cached_property
 
-from stocks.base.utils import normalize_date, normalize_today, next_date
+from base.utils import normalize_date, normalize_today, next_date
 
 logger = logging.getLogger(__name__)
 

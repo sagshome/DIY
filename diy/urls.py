@@ -17,15 +17,17 @@ Including another URLconf
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, re_path, path
-from diy.views import diy_main
+from base.views import diy_main, NewAccountConfirmView, NewAccountDoneView
 
 
 urlpatterns = [
+    path("", diy_main, name='home_page'),
     path("accounts/login/", auth_views.LoginView.as_view()),
-    re_path('admin/', admin.site.urls),
+    path("accounts/password_reset/done/", NewAccountDoneView.as_view(), name="new_account_done"),
+    path("accounts/reset/<uidb64>/<token>/", NewAccountConfirmView.as_view(), name="password_reset_confirm"),
     path("accounts/", include("django.contrib.auth.urls")),
+    re_path('admin/', admin.site.urls),
     re_path('stocks/', include('stocks.urls')),
     re_path('expenses/', include('expenses.urls')),
-    path(r'main/', diy_main, name='diy_main'),
-
+    re_path("base/", include('base.urls')),
 ]

@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Expense Categories{% endblock %}
+{% block title %}DIY Login{% endblock %}
 
 {% block content %}
     <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
-        <div class="w3-container w3-margin">
+        <div class="w3-container">
            {% if form.errors %}
-                <div class="w3-panel w3-red">
+                <div class="w3-panel w3-red w3-margin-top">
                 <p>Your username and password didn't match. Please try again.</p>
                 </div>
             {% endif %}
             {% if next %}
                 {% if user.is_authenticated %}
-                    <p>Your account doesn't have access to this page. To proceed,
+                    <p class="w3-margin-top">Your account doesn't have access to this page. To proceed,
                     please login with an account that has access.</p>
                 {% else %}
-                    <p>Please login to see this page.</p>
+                    <p class="w3-margin-top">Please login to see this page.</p>
                 {% endif %}
             {% endif %}
             <form method="post" action="{% url 'login' %}">
                 {% csrf_token %}
-                <table>
+                <table class="w3-margin-top">
                     <tr>
-                        <td>{{ form.username.label_tag }}</td>
+                        <td>Email Address:</td>
                         <td>{{ form.username }}</td>
                     </tr>
                     <tr>
@@ -33,6 +33,7 @@
                 <input type="hidden" name="next" value="{{ next }}">
             </form>
             <p><a href="{% url 'password_reset' %}">Lost password?</a></p>
+            <p><a href="{% url 'new_account' %}">Request a DIY account?</a></p>
         </div>
     </div>
 {% endblock %}

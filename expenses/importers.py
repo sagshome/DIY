@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime
 from typing import Dict
 
-from stocks.base.utils import DIYImportException
+from base.utils import DIYImportException
 from .models import Item
 
 logger = logging.getLogger(__name__)

@@ -8,6 +8,8 @@ import plotly.graph_objects as go
 from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+
 from django.forms import modelformset_factory
 from django.db.models import Q
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
@@ -15,9 +17,9 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView
 
 from expenses.forms import UploadFileForm, SearchForm
-from stocks.base.utils import DIYImportException
+from base.utils import DIYImportException
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank
-from expenses.forms import CategoryForm, SubCategoryForm, TemplateForm, ItemForm, ItemListForm, ItemAddForm
+from expenses.forms import CategoryForm, TemplateForm, ItemForm, ItemListForm, ItemAddForm
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
 
 
@@ -84,7 +86,7 @@ def build_chart(items, filters):
     return chart_html
 
 
-class ItemAdd(CreateView):
+class ItemAdd(LoginRequiredMixin, CreateView):
     model = Item
     form_class = ItemAddForm
     success_url = reverse_lazy('expense_main')
@@ -95,13 +97,13 @@ class ItemAdd(CreateView):
         return context
 
 
-class ItemDelete(DeleteView):
+class ItemDelete(LoginRequiredMixin, DeleteView):
     model = Item
     form_class = ItemForm
     success_url = reverse_lazy('expense_main')
 
 
-class ItemEdit(UpdateView):
+class ItemEdit(LoginRequiredMixin, UpdateView):
     model = Item
     form_class = ItemForm
     success_url = reverse_lazy('expense_main')
@@ -112,18 +114,19 @@ class ItemEdit(UpdateView):
         return context
 
 
-class AssignCategory(UpdateView):
+class AssignCategory(LoginRequiredMixin, UpdateView):
     model = Item
     form_class = ItemForm
     success_url = reverse_lazy("expense_upload")
 
 
-class DeleteTemplateView(DeleteView):
+class DeleteTemplateView(LoginRequiredMixin, DeleteView):
     model = Template
     template_name = 'expenses/template_confirm_delete.html'
     success_url = reverse_lazy("expenses_templates")
 
 
+@login_required
 def edit_template(request, pk: int):
     obj = get_object_or_404(Template, pk=pk)
 
@@ -200,6 +203,7 @@ def expense_main(request):
     })
 
 
+@login_required
 def templates(request):
     templates = Template.objects.all().order_by("expression")
     return render(request, 'expenses/templates.html',
@@ -217,6 +221,7 @@ class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
             pass
 
 
+@login_required
 def assign_expenses(request):
 
     max_size = 50
@@ -257,6 +262,7 @@ def categories(request):
                                                                 "subcategory_form": subcategory_form})
 
 
+@login_required
 def upload_expenses(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
