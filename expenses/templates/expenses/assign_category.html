@@ -2,7 +2,6 @@
 {% load static %}
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
-<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
     <h2>Update Expenses - Unassigned Count:{{count}}</h2>
 
 <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
@@ -44,7 +43,6 @@
     </table>
     <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Save</button>
 </form><br><br>
-</div>
 <script src="{% static 'jquery/jquery.min.js' %}"></script>
 <script>
     $(document).ready(function() {

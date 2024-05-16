@@ -23,6 +23,9 @@ from base.views import diy_main, NewAccountConfirmView, NewAccountDoneView
 urlpatterns = [
     path("", diy_main, name='home_page'),
     path("accounts/login/", auth_views.LoginView.as_view()),
+    path("accounts/logout/", auth_views.LogoutView.as_view()),
+
+
     path("accounts/password_reset/done/", NewAccountDoneView.as_view(), name="new_account_done"),
     path("accounts/reset/<uidb64>/<token>/", NewAccountConfirmView.as_view(), name="password_reset_confirm"),
     path("accounts/", include("django.contrib.auth.urls")),
