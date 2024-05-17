@@ -15,6 +15,7 @@ from time import sleep
 from pandas import DataFrame
 
 
+from django.contrib.auth.models import User
 from django.urls import reverse
 from django.db import models
 from django.db.models import QuerySet, Sum, Avg
@@ -62,7 +63,7 @@ https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/json?recent_
    - above to calculate inflatin
 '''
 
-my_currency = 'CAD'  # todo: Should be set via a user profile
+# my_currency = 'CAD'  # todo: Should be set via a user profile
 EQUITY_COL = ['Date', 'Equity', 'Shares', 'Dividend', 'Price', 'Value', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 PORTFOLIO_COL = ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost', 'Cash']
 
@@ -767,6 +768,8 @@ class Portfolio(models.Model):
                                           help_text='The name as imported')
     managed: bool = models.BooleanField(default=True)
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+
 
     # These Values are updated to allow for a quick loading of portfolio_list
     cost: int = models.IntegerField(null=True, blank=True)  # Effective cost of all shares ever purchased
@@ -931,6 +934,8 @@ class Transaction(models.Model):
     quantity: float = models.FloatField()
     value: float = models.FloatField(null=True, blank=True)
     xa_action: int = models.IntegerField(choices=TRANSACTION_TYPE)
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+
 
     @classmethod
     def transaction_value(cls, xa_string: str) -> int:

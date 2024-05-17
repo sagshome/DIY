@@ -56,10 +56,12 @@
       </div>
     </div>
 
-    <form title="log out" action="{% url 'logout' %}" method="post">
-      {% csrf_token %}
-      <button class="w3-bar-item w3-button w3-padding-large w3-right" title="Investments">LOGOUT</button>
-    </form>
+    {% if request.user.is_authenticated %}
+      <form title="log out" action="{% url 'logout' %}" method="post">
+        {% csrf_token %}
+        <button class="w3-bar-item w3-button w3-padding-large w3-right" title="Investments">LOGOUT</button>
+      </form>
+    {% endif %}
 
   </div>
 

@@ -5,6 +5,7 @@ import re
 from dateutil.relativedelta import relativedelta
 from typing import Union
 
+from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Q, Sum, QuerySet
 
@@ -21,6 +22,7 @@ class Category(models.Model):
     Top level classification for expense categorization
     """
     name = models.CharField(unique=True, max_length=32, null=False, blank=False, verbose_name="Expense Category")
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
@@ -48,6 +50,7 @@ class SubCategory(models.Model):
     """
     name = models.CharField(max_length=32, null=False, blank=False, verbose_name="SubCategory")
     category = models.ForeignKey(Category, null=False, blank=False, verbose_name="Category", on_delete=models.CASCADE)
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
     class Meta:
         unique_together = ("name", "category")
@@ -95,6 +98,7 @@ for t in Template.objects.all():
     subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.CASCADE)
     count = models.IntegerField(default=0)
     ignore = models.BooleanField(default=False)  # Used to indicate an expression is to ignore the item
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
     def __str__(self):
         return(self.expression)
@@ -170,6 +174,7 @@ class Item(models.Model):
     details = models.CharField(max_length=80, blank=True, null=True)
     ignore = models.BooleanField(default=False)
     amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
     def __str__(self):
         if self.template:
