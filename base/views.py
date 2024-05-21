@@ -21,10 +21,16 @@ from django.contrib.auth.views import PasswordResetView, PasswordResetConfirmVie
 from django.contrib.auth import login as auth_login
 from django.views.generic.base import TemplateView
 
+from expenses.models import Item
+
 @login_required
 def diy_main(request):
-    user = request.user
-    return render(request, "base/diy_main.html", {'user': user})
+    items = Item.objects.filter(user=request.user)
+
+    return render(request, "base/diy_main.html",
+                  {'expense_total': items.count(),
+                   'expenses_ignored': items.filter(ignore=True).count(),
+                   'expenses_uncategorized': items.filter(ignore=False, category__isnull=True)})
 
 
 class NewAccountView(PasswordResetView):

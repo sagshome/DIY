@@ -11,11 +11,13 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 
 from django.forms import modelformset_factory
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView
+from django.http import JsonResponse
 
+from base.models import COLORS
 from expenses.forms import UploadFileForm, SearchForm
 from base.utils import DIYImportException
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank
@@ -154,7 +156,6 @@ def edit_template(request, pk: int):
         'view_verb': 'Update',
         'me': obj,
     })
-
 
 @login_required
 def expense_main(request):
@@ -312,5 +313,18 @@ def load_categories_search(request):
     for category in Category.objects.all().order_by("name").values_list('name', flat=True):
         default.append((category, category))
     return render(request, "expenses/search_options.html", {"options": default})
+
+
+@login_required
+def expense_pie(request):
+    data = []
+    labels = []
+
+    for item in Item.objects.filter(user=request.user, ignore=False, amortized__isnull=True).values('category__name').annotate(sum=Sum('amount')):
+        if item['sum'] > 0:
+            labels.append(item['category__name'])
+            data.append(int(item['sum']))
+    return JsonResponse({'data': data, 'labels': labels, 'colors': COLORS})
+
 
 

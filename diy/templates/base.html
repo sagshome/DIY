@@ -14,6 +14,10 @@
     body {font-family: "Lato", sans-serif}
     .mySlides {display: none}
   </style>
+
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+
 </head>
 
 {% block navscript %}
@@ -37,9 +41,8 @@
       <button class="w3-padding-large w3-button w3-black" title="Expenses">EXPENSES <i class="fa fa-caret-down"></i></button>
       <div class="w3-dropdown-content w3-bar-block w3-card-4">
         <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Main Page</a>
-        <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large">Add an Expense</a>
+        <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">Add an Expense</a>
         <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
-        <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Categories</a>
         <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Templates</a>
       </div>
     </div>
@@ -66,12 +69,12 @@
 </div>
 {% endblock navbar %}
 
-    <div class="w3-content " style="max-width:2000px;margin-top:46px">
-        <div class="w3-container">
+<div class="w3-content " style="max-width:2000px;margin-top:46px">
+  <div class="w3-container">
 {% block content %}
 {% endblock content %}
-        </div>
-    </div>
+  </div>
+</div>
 {% block footer %}
 <div class="w3-botton w3-container w3-grey">
     <p>This is the footer</p>

@@ -18,7 +18,9 @@ urlpatterns = [
 
     path('ajax/load-subcategories/', views.load_subcategories, name='ajax-load-subcategories'),
     path('ajax/load-subcategories-search/', views.load_subcategories_search, name='ajax-load-subcategories-search'),
-    path('ajax/load-categories-search/', views.load_categories_search, name='ajax-load-categories-search')
+    path('ajax/load-categories-search/', views.load_categories_search, name='ajax-load-categories-search'),
+
+    path('ajax/expense-pie', views.expense_pie, name='ajax-expense-pie')
 
 ]
 
