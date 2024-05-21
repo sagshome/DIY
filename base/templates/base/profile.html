@@ -2,15 +2,12 @@
 {% block title %}DIY New User{% endblock %}
 
 {% block content %}
-    <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
-        <div class="w3-container">
-          <h2 class="w3-margin-top">Create a new DIY User</h2>
-          <form class="w3-margin-bottom" method="post">
-            {% csrf_token %}
-            {{ user_form.as_p }}
-            {{ profile_form.as_p }}
-            <button type="submit">Save changes</button>
-          </form>
-        </div>
-    </div>
+  <h2 class="w3-margin-top">Create a new DIY User</h2>
+  <form class="w3-margin-bottom" method="post">
+    {% csrf_token %}
+    {{ user_form.as_p }}
+    {{ profile_form.as_p }}
+    <button type="submit">Save changes</button>
+  </form>
+
 {% endblock %}

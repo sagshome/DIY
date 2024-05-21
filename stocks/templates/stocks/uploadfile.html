@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Upload Transactions{% endblock title %}
 {% block content %}
-<div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
     <h2 class="w3-margin">Upload Transactions</h2>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        <div class="w3-row">
+        <div class="w3-row w3-red">
             {{ form.non_field_errors }}
         </div>
         {% for hidden_field in form.hidden_fields %}
 
-            <div class="w3-row">
+            <div class="w3-row w3-blue">
                 {{ hidden_field.errors }}
                 {{ hidden_field }}
             </div>
@@ -41,5 +40,4 @@
     {% endif %}
     <a href="{% url 'portfolio_list' %}"><button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green">Portfolio List</button></a>
     return to the portfolio list
-</div>
 {% endblock content %}

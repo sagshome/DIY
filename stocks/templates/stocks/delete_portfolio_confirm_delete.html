@@ -3,20 +3,18 @@
 {% block title %}Portfolio {{view_verb}}{% endblock %}
 {% block content %}
 
-  <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
-      <div class="w3-container w3-margin">
-        <h2>Delete Portfolio:{{object}}</h2>
-            Portfolio contain a set of transactions when you delete a portfolio all the data will be lost.
-      </div>
-        <div class="w3-container w3-margin">
-            <form method="post">{% csrf_token %}
-                <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
-                <a href="{% url 'portfolio_home' %}">
-                    <button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button>
-                </a>
-                - or -
-                <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
-            </form>
-        </div>
+  <div class="w3-container w3-margin">
+    <h2>Delete Portfolio:{{object}}</h2>
+        Portfolio contain a set of transactions when you delete a portfolio all the data will be lost.
+  </div>
+    <div class="w3-container w3-margin">
+        <form method="post">{% csrf_token %}
+            <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
+            <a href="{% url 'portfolio_home' %}">
+                <button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button>
+            </a>
+            - or -
+            <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
+        </form>
     </div>
 {% endblock %}

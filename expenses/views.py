@@ -91,6 +91,11 @@ class ItemAdd(LoginRequiredMixin, CreateView):
     form_class = ItemAddForm
     success_url = reverse_lazy('expense_main')
 
+    def get_initial(self):
+        super().get_initial()
+        self.initial['user'] = self.request.user.id
+        return self.initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['action'] = 'Add'
@@ -99,7 +104,7 @@ class ItemAdd(LoginRequiredMixin, CreateView):
 
 class ItemDelete(LoginRequiredMixin, DeleteView):
     model = Item
-    form_class = ItemForm
+    template_name = 'expenses/item_confirm_delete.html'
     success_url = reverse_lazy('expense_main')
 
 
@@ -149,10 +154,6 @@ def edit_template(request, pk: int):
         'view_verb': 'Update',
         'me': obj,
     })
-
-
-def expense_test(request):
-    return render(request, "expenses/test.html")
 
 
 @login_required
@@ -248,18 +249,6 @@ def assign_expenses(request):
     return render(request, "expenses/assign_category.html", {"formset": formset,
                                                              "search_form": search_form,
                                                              "count": super_set.count()})
-
-
-def categories(request):
-    if request.method == 'POST':
-        category_form = CategoryForm(request.POST)
-        subcategory_formset = modelformset_factory(Item, form=ItemForm, extra=0)
-        if category_form.is_valid() and subcategory_form.is_valid():
-            category_form.save()
-            subcategory_form.save()
-
-    return render(request, "expenses/categories.html", {"category_form": category_form,
-                                                                "subcategory_form": subcategory_form})
 
 
 @login_required

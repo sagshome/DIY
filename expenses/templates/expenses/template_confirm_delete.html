@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Expense Template Delete{% endblock %}
 {% block content %}
-    <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
         <h2>Delete Template: {{object.type}} {{object}}</h2>
             Template are used as part of the import process.   Deleting a template has no impact on existing expense items.
             this template is used {{object.count}} times.
@@ -14,5 +13,4 @@
             - or -
             <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
         </form>
-    </div>
 {% endblock content %}

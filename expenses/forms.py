@@ -154,7 +154,10 @@ class ItemListForm(forms.ModelForm):
 class ItemAddForm(forms.ModelForm):
     class Meta:
         model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore")
+        fields = ("user", "date", "description", "amount", "category", "subcategory", "ignore")
+        widgets = {
+            'user': forms.HiddenInput(),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

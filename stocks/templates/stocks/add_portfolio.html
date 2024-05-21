@@ -1,21 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Portfolio {{view_verb}}{% endblock %}
 {% block content %}
-  <div class="w3-content w3-pale-yellow" style="max-width:2000px;margin-top:46px">
-    <div class="w3-container">
-      <h1 class="w3-margin">{{view_verb}} Portfolio:</h1>
-      <form action="" method="post">
-        {% csrf_token %}
-        <table>
-            {% for field in form.visible_fields %}
-                <tr>
-                    <td class="w3-container w3-cell w3-right">{{ field.label_tag }}</td>
-                    <td class="w3-container w3-cell">{{ field }}</td>
-                </tr>
-            {% endfor %}
-        </table>
-        <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
-      </form>
-    </div>
-  </div>
+  <h1 class="w3-margin">{{view_verb}} Portfolio:</h1>
+  <form action="" method="post">
+    {% csrf_token %}
+    {% for error in form.non_field_errors %}
+        <div class="w3-row w3-red">
+            {{ error }}
+        </div>
+    {% endfor %}
+    {% for hidden_field in form.hidden_fields %}
+        <div class="w3-row w3-blue">
+            {{ hidden_field.errors }}
+            {{ hidden_field }}
+        </div>
+    {% endfor %}
+    <table>
+        {% for field in form.visible_fields %}
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>
+                <td class="w3-container w3-margin"> {{ field }}</td>
+                {% if field.errors %}
+                    {% for error in field.errors %}
+                        <td class="w3-red w3-round-xlarge"> {{ error }} </td>
+                    {% endfor %}
+                {% endif %}
+            </tr>
+        {% endfor %}
+    </table>
+    <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
+  </form>
 {% endblock %}

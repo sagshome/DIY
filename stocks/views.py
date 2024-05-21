@@ -5,6 +5,8 @@ import plotly.io as pio
 import plotly.graph_objects as go
 
 from pandas import DataFrame
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
@@ -14,7 +16,7 @@ from django.views.generic.dates import DateMixin
 
 
 from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
-from .forms import AddEquityForm, TransactionForm, PortfolioForm, UploadFileForm
+from .forms import *
 from .importers import QuestTrade, Manulife, StockImporter, HEADERS
 from base.utils import DIYImportException
 from .tasks import daily_update
@@ -22,9 +24,20 @@ from .tasks import daily_update
 logger = logging.getLogger(__name__)
 
 
-class PortfolioView(ListView):
+class PortfolioView(LoginRequiredMixin, ListView):
     model = Portfolio
     template_name = 'stocks/portfolio_list.html'
+
+    def get_context_data(self, **kwargs):
+        """
+        Add a list of all the equities in this portfolio
+        :param kwargs:
+        :return:
+        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
+        """
+        context = super().get_context_data(**kwargs)
+        context['portfolio_list'] = Portfolio.objects.filter(user=self.request.user)
+        return context
 
 
 class PortfolioDeleteView(DeleteView):
@@ -46,22 +59,26 @@ class PortfolioDetailView(DetailView):
         """
         context = super().get_context_data(**kwargs)
         p: Portfolio = context['portfolio']
-        x = sorted(p.p_pd['Date'].unique())
-        cost = p.p_pd['EffectiveCost']
-        value = p.p_pd['Value'] + p.p_pd['Cash']
-        inflation = p.p_pd['InflatedCost']
-        dividends = p.p_pd['TotalDividends']
+        if p.transactions:
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x, y=dividends, mode='lines', name='Total Dividends'))
-        fig.add_trace(go.Scatter(x=x, y=cost, mode='lines', name='Effective Cost'))
-        fig.add_trace(go.Scatter(x=x, y=value, mode='lines', name='Value'))
-        fig.add_trace(go.Scatter(x=x, y=inflation, mode='lines', name='Inflation Cost'))
+            x = sorted(p.p_pd['Date'].unique())
+            cost = p.p_pd['EffectiveCost']
+            value = p.p_pd['Value'] + p.p_pd['Cash']
+            inflation = p.p_pd['InflatedCost']
+            dividends = p.p_pd['TotalDividends']
 
-        fig.update_layout(title='Return vs Cost', xaxis_title='Month', yaxis_title='Dollars')
-        chart_html = pio.to_html(fig, full_html=False)
-        context = {'portfolio': p, 'chart': chart_html}
-        return context
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x, y=dividends, mode='lines', name='Total Dividends'))
+            fig.add_trace(go.Scatter(x=x, y=cost, mode='lines', name='Effective Cost'))
+            fig.add_trace(go.Scatter(x=x, y=value, mode='lines', name='Value'))
+            fig.add_trace(go.Scatter(x=x, y=inflation, mode='lines', name='Inflation Cost'))
+
+            fig.update_layout(title='Return vs Cost', xaxis_title='Month', yaxis_title='Dollars')
+            chart_html = pio.to_html(fig, full_html=False)
+        else:
+            chart_html = None
+
+        return {'portfolio': p, 'chart': chart_html}
 
 
 def portfolio_update(request, pk):
@@ -75,6 +92,7 @@ def portfolio_update(request, pk):
     portfolio.update()
     return HttpResponse(status=200)
 
+
 def diy_update(request):
     """
     :param request:
@@ -84,19 +102,18 @@ def diy_update(request):
     return HttpResponseRedirect(reverse('portfolio_list'))
 
 
-class PortfolioAdd(CreateView):
+class PortfolioAdd(LoginRequiredMixin, CreateView):
     model = Portfolio
     template_name = 'stocks/add_portfolio.html'
-    fields = ['name', 'currency', 'managed']
-    # form_class = AddPortfolioForm
+    form_class = PortfolioAddForm
 
     def get_success_url(self):
         return reverse('portfolio_details', kwargs={'pk': self.object.id})
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['view_verb'] = 'Add'
-        return context
+    def get_initial(self):
+        super().get_initial()
+        self.initial['user'] = self.request.user.id
+        return self.initial
 
 
 class PortfolioEdit(UpdateView, DateMixin):
@@ -113,7 +130,8 @@ class PortfolioEdit(UpdateView, DateMixin):
         original = Portfolio.objects.get(pk=self.kwargs['pk'])
         return {'name': original.name,
                 'currency': original.currency,
-                'managed': original.managed}
+                'managed': original.managed,
+                'user': original.user}
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -124,11 +142,15 @@ class PortfolioEdit(UpdateView, DateMixin):
 class PortfolioCopy(CreateView):
     model = Portfolio
     template_name = 'stocks/add_portfolio.html'
-    fields = ['name']
+    form_class = PortfolioCopyForm
 
     def get_initial(self):
         original = Portfolio.objects.get(pk=self.kwargs['pk'])
-        return {'name': f'{original.name}_copy'}
+        return {'name': f'{original.name}_copy',
+                'user': original.user,
+                'managed': original.managed,
+                'currency': original.currency,
+                'end': original.end}
 
     def form_valid(self, form):
         """

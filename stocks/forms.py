@@ -7,13 +7,14 @@ def popover_html(label, content):
     return label + ' <a tabindex="0" role="button" data-toggle="popover" data-html="true" \
                             data-trigger="hover" data-placement="auto" data-content="' + content + '"> \
                             <span class="glyphicon glyphicon-info-sign"></span></a>'
+
+
 class AddEquityForm(forms.Form):
 
     search = forms.CharField(max_length=30,
                              widget=forms.TextInput(
                                                     attrs={'onkeyup':'fillOtherWindow()'}))
     region = forms.ChoiceField(choices=Equity.REGIONS)
-
 
 
 class UploadForm(forms.Form):
@@ -26,9 +27,31 @@ class UploadForm(forms.Form):
 class PortfolioForm(forms.ModelForm):
     class Meta:
         model = Portfolio
-        fields = ('name', 'currency', 'managed', 'end')
+        fields = ('name', 'currency', 'managed', 'user', 'end')
         widgets = {
-            'end': forms.TextInput(attrs={'type': 'date'})
+            'end': forms.TextInput(attrs={'type': 'date'}),
+            'user': forms.HiddenInput(),
+        }
+
+
+class PortfolioCopyForm(forms.ModelForm):
+    class Meta:
+        model = Portfolio
+        fields = ('name', 'currency', 'managed', 'user', 'end')
+        widgets = {
+            'end': forms.HiddenInput(),
+            'user': forms.HiddenInput(),
+            'currency': forms.HiddenInput(),
+            'managed': forms.HiddenInput(),
+        }
+
+
+class PortfolioAddForm(forms.ModelForm):
+    class Meta:
+        model = Portfolio
+        fields = ('name', 'currency', 'managed', 'user')
+        widgets = {
+            'user': forms.HiddenInput(),
         }
 
 
@@ -48,6 +71,7 @@ class TransactionForm(forms.Form):
                                           (Transaction.BUY, 'Buy'),
                                           (Transaction.SELL, 'Sell'),
                                           (Transaction.REDEEM, 'Redeem')])
+
 
 class UploadFileForm(forms.Form):
     stub = forms.CharField(label="Portfolio Prefix", required=False, max_length=16,

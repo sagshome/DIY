@@ -571,17 +571,12 @@ class PortfolioSummary:
     def pd(self) -> DataFrame:
         now = datetime.now()
         monthly_inflation: Dict[date, float] = dict(Inflation.objects.all().values_list('date', 'inflation'))
-        this_date = self.xas.order_by('date')[0].date
         final_date = normalize_today()
         new = pd.DataFrame(columns=PORTFOLIO_COL)
+        if not self.xas:  # Portfolio is new/empty
+            return new
 
-        """
-        funding = list(self.xas.filter(xa_action__in=[Transaction.FUND, Transaction.REDEEM]).
-                       values_list('date', flat=True).distinct())
-        sales = list(self.xas.filter(xa_action__in=[Transaction.BUY, Transaction.SELL]).
-                     values_list('date', flat=True).distinct())
-        """
-
+        this_date = self.xas.order_by('date')[0].date
         xa_dates = list(self.xas.values_list('date', flat=True).distinct())
         effective_cost = inflated_cost = cash = 0
         while this_date <= final_date:
@@ -761,7 +756,7 @@ class Portfolio(models.Model):
 
     """
 
-    name: str = models.CharField(max_length=128, unique=True, primary_key=False,
+    name: str = models.CharField(max_length=128, primary_key=False,
                                  help_text='Enter a unique name for this portfolio')
 
     explicit_name: str = models.CharField(max_length=128, null=True, blank=True, unique=True,
@@ -778,6 +773,9 @@ class Portfolio(models.Model):
     start: date = models.DateField(null=True, blank=True)
     end: date = models.DateField(null=True, blank=True, help_text='Date this portfolio was Closed')
     last_import: date = models.DateField(null=True, blank=True)
+
+    class Meta:
+        unique_together = (('name', 'user'),)
 
     def __init__(self, *args, **kwargs):
         super(Portfolio, self).__init__(*args, **kwargs)
