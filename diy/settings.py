@@ -16,15 +16,23 @@ load_dotenv(BASE_DIR / 'diy' / 'diy.env')
 
 try:
     DEBUG = os.environ['DIY_DEBUG']
+    DEBUG = DEBUG == 'True'
 except KeyError:
     DEBUG = False
+
+try:
+    DIY_LOCALDB = os.environ['DIY_LOCALDB']
+    DIY_LOCALDB = DIY_LOCALDB == 'True'
+except KeyError:
+    DIY_LOCALDB = False
 
 ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
 
 if ('test' in sys.argv  # set with manage.py test
         or 'test' in sys.argv[0]  # set with pytest
         or ('PYTEST_RUN_CONFIG' in os.environ and os.environ['PYTEST_RUN_CONFIG'])
-        or ('DIY_LOCALDB' in os.environ and os.environ['DIY_LOCALDB'])):  # set with local pycharm tests
+        or DIY_LOCALDB):  # set with local pycharm tests
+    print(f'Using a local DB - {DIY_LOCALDB}')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -32,6 +40,7 @@ if ('test' in sys.argv  # set with manage.py test
         }
     }
 else:
+    print('Using a remote DB')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -45,8 +54,10 @@ else:
 
 ALPHAVANTAGEAPI_KEY = os.environ['ALPHAVANTAGEAPI_KEY']
 SECRET_KEY = os.environ['SECRET_KEY']
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
+
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587
 EMAIL_HOST_USER = os.environ['DIY_EMAIL_USER']
@@ -57,6 +68,7 @@ INSTALLED_APPS = [
     'base.apps.BaseConfig',
     'expenses.apps.ExpensesConfig',
     'stocks.apps.StocksConfig',
+
     'django_bootstrap5',
     'django.contrib.admin',
     'django.contrib.auth',

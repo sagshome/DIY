@@ -21,9 +21,12 @@ If not already done,  pull the software from https://github.com/sagshome/DIY   T
 be the <base> for these instructions.   You should see something like this when you pull your source tree
 
     DIY 
+       base
        build
        diy
+       expenses
        stocks
+
 
 ### Some base software and packages.
 This is unix based.  I am sure you can figure it out.
@@ -43,11 +46,15 @@ This is unix based.  I am sure you can figure it out.
     ALPHAVANTAGEAPI_KEY=alpahvanateapi_key
     DIY_DEBUG=False
     DIY_LOCALDB=False
+    DIY_EMAIL_USER=email_account
+    DIY_EMAIL_PASSWORD=email_password
+
     MYSQL_ROOT_PASSWORD=my-secret-pw
     MYSQL_DATABASE=DIY
     MYSQL_USER=diy_user1
     MYSQL_PASSWORD=diy_password1
     DATABASE_HOST=diy_db
+
 
 #### Start things up
 

@@ -48,7 +48,6 @@ class SearchForm(forms.Form):
     - Need to build a subcategory choice list so I can remove non-unique values
     """
 
-
     search_category = forms.ChoiceField(choices=get_categories())
     search_subcategory = forms.ChoiceField(choices=get_subcategories())
     """

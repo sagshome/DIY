@@ -6,6 +6,7 @@ import plotly.io as pio
 import plotly.graph_objects as go
 
 from datetime import datetime
+from dateutil import relativedelta
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -16,6 +17,7 @@ from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_o
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView
 from django.http import JsonResponse
+from django.db.models.functions import TruncMonth
 
 from base.models import COLORS
 from expenses.forms import UploadFileForm, SearchForm
@@ -27,8 +29,8 @@ from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEG
 
 logger = logging.getLogger(__name__)
 
-
 def build_chart(items, filters):
+    return '<p>Chart goes here</p>'
 
     with_category = items.filter(category__isnull=False)
     without_category = items.filter(category__isnull=True)
@@ -157,6 +159,25 @@ def edit_template(request, pk: int):
         'me': obj,
     })
 
+
+def expense_test(request):
+    default = datetime.now().replace(year=datetime.now().year-7).date().replace(day=1)
+    search_form = SearchForm(initial={'search_ignore': 'No',
+                                      'search_start_date': default,
+                                      'show_list': 'Hide'})
+    super_set = Item.objects.filter(ignore=False, user=request.user, date__gte=default).order_by('-date')
+
+    if request.method == "POST":
+        search_form = SearchForm(request.POST)
+        if search_form.is_valid():
+            super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data)
+            chart = build_chart(super_set, search_form.cleaned_data)
+
+    return render(request, "expenses/main.html", {
+        'search_form': search_form,
+    })
+
+
 @login_required
 def expense_main(request):
     """
@@ -174,7 +195,7 @@ def expense_main(request):
     search_form = SearchForm(initial={'search_ignore': 'No',
                                       'search_start_date': default,
                                       'show_list': 'Hide'})
-    super_set = Item.objects.filter(ignore=False, date__gte=default).order_by('-date')
+    super_set = Item.objects.filter(ignore=False, user=request.user, date__gte=default).order_by('-date')
 
     if request.method == "POST":
         upload_form = UploadFileForm(request.POST)
@@ -183,10 +204,10 @@ def expense_main(request):
         if formset.is_valid():
             formset.save()
         if search_form.is_valid():
-            super_set = Item.filter_search(Item.objects.all(), search_form.cleaned_data)
-            chart = build_chart(super_set, search_form.cleaned_data)
-    else:
-        chart = build_chart(super_set, None)
+            super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data)
+            # chart = build_chart(super_set, search_form.cleaned_data)
+    # else:
+        # chart = build_chart(super_set, None)
 
     formset = ItemFormSet(queryset=Item.objects.filter(id__in=list(super_set.values_list('id', flat=True).order_by('-date')[:max_size])))
     upload_form = UploadFileForm()
@@ -201,7 +222,7 @@ def expense_main(request):
         'search_form': search_form,
         'upload_form': upload_form,
         'upload_error': upload_error,
-        'chart': chart,
+        # 'chart': chart,
     })
 
 
@@ -262,11 +283,11 @@ def upload_expenses(request):
             reader = csv.reader(text_file.splitlines())
             try:
                 if form.cleaned_data["csv_type"] == "Generic":
-                    importer = Generic(reader, "Generic")
+                    importer = Generic(reader,  request.user, "Generic")
                 elif form.cleaned_data["csv_type"] == 'CIBC_VISA':
-                    importer = CIBC_VISA(reader, form.cleaned_data["csv_type"])
+                    importer = CIBC_VISA(reader, request.user, form.cleaned_data["csv_type"])
                 elif form.cleaned_data["csv_type"] == 'CIBC_Bank':
-                    importer = CIBC_Bank(reader, form.cleaned_data["csv_type"])
+                    importer = CIBC_Bank(reader, request.user, form.cleaned_data["csv_type"])
             except DIYImportException as e:
                 return render(request, "expenses/uploadfile.html", {"form": form, "custom_error": str(e)})
             if Item.unassigned().count() > 0:
@@ -327,4 +348,63 @@ def expense_pie(request):
     return JsonResponse({'data': data, 'labels': labels, 'colors': COLORS})
 
 
+@login_required
+def expense_bar(request):
+    """
+    Build the chart.js data for a bar chart based on the standard search_filter
+    """
 
+    super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
+    show_sub = False if request.GET['search_category'] == '- ALL -' else True
+
+    # Start and end months for the chart data
+    if not request.GET['search_start_date'] == '':
+        first_date = datetime.strptime(request.GET['search_start_date'], '%Y-%m-%d').replace(day=1).date()
+    else:
+        if super_set.count() > 0:
+            super_set = super_set.order_by('date')
+            first_date = super_set[0].date.replace(day=1)
+        else:
+            first_date = datetime.now().replace(day=1).date()
+    if not request.GET['search_end_date'] == '':
+        last_date = datetime.strptime(request.GET['search_end_date'], '%Y-%m-%d').replace(day=1).date()
+    else:
+        last_date = datetime.now().replace(day=1).date()
+
+    months = []
+    month_dict = {}
+    next_date = first_date
+    while next_date <= last_date:
+        months.append(next_date)
+        month_dict[next_date] = len(months) - 1
+        next_date = next_date + relativedelta.relativedelta(months=1)
+
+    if show_sub:
+        values = list(super_set.order_by('subcategory__name').values_list('subcategory__name', flat=True).distinct())
+        raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
+                                                                                                             'sum',
+                                                                                                             'subcategory__name')
+    else:
+        values = list(super_set.order_by('category__name').values_list('category__name', flat=True).distinct())
+        raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
+                                                                                                             'sum',
+                                                                                                             'category__name')
+
+    colors = COLORS.copy()
+    colors.reverse()
+
+    initial_data = [0 for i in range(len(months) - 1)]
+    datasets = []
+
+    data_dict = {}
+    for element in raw_data:
+        name = element['subcategory__name'] if show_sub else element['category__name']
+        this_date = element['month']
+        if name not in data_dict:
+            datasets.append({'label': name,
+                             'data': initial_data.copy(),
+                             'backgroundColor': colors.pop()})
+            data_dict[name] = len(datasets) - 1
+        datasets[data_dict[name]]['data'][month_dict[element['month']]] = element['sum']
+
+    return JsonResponse({'datasets': datasets, 'labels': months, 'colors': COLORS})

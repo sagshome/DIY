@@ -3,7 +3,7 @@
 {% load expenses_tags %}
 
 {% block content %}
-    {% block script %}
+    {% block main_scripts %}
         <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
         <script>
             function toggleDiv(divId) {
@@ -25,7 +25,101 @@
               }
             });
         </script>
-    {% endblock script %}
+        <script>
+            $(document).ready(function() {
+              var cat_filter = $("#id_search_category").val();
+              var sub_filter = $("#id_search_subcategory").val();
+              var ignore_filter = $("#id_search_ignore").val();
+              var from_filter = $("#id_search_start_date").val();
+              var to_filter = $("#id_search_end_date").val();
+              var amt_string = $("#id_search_amount_qualifier").val();
+              var amt_value = $("#id_search_amount").val();
+              var description = $("#id_search_description").val();
+
+              $.ajax({
+                url: "{% url 'ajax-expense-bar' %}",
+                data: {'search_category': cat_filter,
+                       'search_subcategory': sub_filter,
+                       'search_ignore': ignore_filter,
+                       'search_start_date': from_filter,
+                       'search_end_date': to_filter,
+                       'search_amount_qualifier': amt_string,
+                       'search_amount': amt_value,
+                       'search_description': description},
+                success: function (data) {
+                  new Chart("barChart", {
+                    type: "bar",
+                    data: {
+                        labels: data['labels'],
+                        datasets: data['datasets']
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        title: {
+                          display: true,
+                          text: "Expenses - breakdown by category"
+                        },
+                        legend: {
+                            display: true,
+                            position: 'right',
+                            align: 'center'
+                        },
+                        scales: {
+                            xAxes: [{
+                                stacked: true // this should be set to make the bars stacked
+                            }],
+                            yAxes: [{
+                                stacked: true // this also..
+                            }]
+                        }
+                    }
+                  });
+                }
+              });
+            });
+        </script>
+
+        <script>
+            $(document).ready(function() {
+              $.ajax({
+                url: "{% url 'ajax-expense-pie' %}",
+                data: {},
+                success: function (data) {
+                  new Chart("pieChart", {
+                    type: "pie",
+                    data: {
+                        labels: data['labels'],
+                        datasets: [{
+                          data: data['data'],
+                          backgroundColor: data['colors'],
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        maintainAspectRatio: false,
+                        title: {
+                          display: true,
+                          text: "Expenses - breakdown by category"
+                        },
+                        animation: {
+                            animateScale: true,
+                            animateRotate: true
+                        },
+                        legend: {
+                            display: true,
+                            position: 'right',
+                            align: 'center'
+                        },
+
+                    }
+                  });
+                }
+              });
+            });
+        </script>
+    {% endblock main_scripts %}
+
     <div class="w3-container">
         <form method="post" id="itemForm"
               data-subcategories-url="{% url 'ajax-load-subcategories' %}"
@@ -36,9 +130,16 @@
             <div class="w3-row">
                 {% include 'expenses/expenses_search_bar.html' %}
             </div>
-            <div class="w3-row">
-                <div class="w3-rest container w3-hide-small">
-                    {{ chart | safe }}
+            <div class="w3-cell-row w3-margin">
+                <div class="w3-cell">
+                    <div style="height:310px;" >
+                        <canvas id="pieChart" class="w3-card-2"></canvas>
+                    </div>
+                </div>
+                <div class="w3-cell">
+                    <div style="height:310px;">
+                        <canvas id="barChart" class="w3-card-2"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="w3-row">

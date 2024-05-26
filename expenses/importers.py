@@ -4,6 +4,7 @@ import logging
 from datetime import date, datetime
 from typing import Dict
 
+from django.contrib.auth.models import User
 from base.utils import DIYImportException
 from .models import Item
 
@@ -24,7 +25,7 @@ class ExpenseImporter:
     """
 
 
-    def __init__(self, reader: csv.reader, headers: Dict[str, str], source: str):
+    def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], source: str):
         self.source = source
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
         self.mappings = self.get_headers(reader)
@@ -59,8 +60,7 @@ class ExpenseImporter:
                     for c_detail in self.cache[c_date][c_amount][c_description]:
                         for record in range(self.cache[c_date][c_amount][c_description][c_detail]):
                             this_detail = None if c_detail == NO_DETAILS else c_detail
-                            logger.debug('Adding: %s %s %s %s' % (c_date, c_description, c_amount, this_detail))
-                            Item.objects.create(date=c_date, description=c_description, amount=c_amount,
+                            Item.objects.create(date=c_date, user=user, description=c_description, amount=c_amount,
                                                 details=this_detail, source=self.source)
 
     def get_headers(self, csv_reader):
@@ -117,8 +117,8 @@ class Generic(ExpenseImporter):
     :param file_name:
     :return:
     """
-    def __init__(self, file_name: csv.reader, source: str):
-        super().__init__(file_name, DEFAULT, source)
+    def __init__(self, file_name: csv.reader, user: User, source: str):
+        super().__init__(file_name, user, DEFAULT, source)
 
 
 class CIBC_VISA(ExpenseImporter):
@@ -127,8 +127,8 @@ class CIBC_VISA(ExpenseImporter):
     :param file_name:
     :return:
     """
-    def __init__(self, file_name: csv.reader, source: str):
-        super().__init__(file_name, {}, source)
+    def __init__(self, file_name: csv.reader, user: User, source: str):
+        super().__init__(file_name, user,{}, source)
 
     def get_headers(self, csv_reader):
         """

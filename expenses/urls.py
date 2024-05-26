@@ -2,8 +2,9 @@ from django.urls import path
 
 from . import views
 
-# Base is stocks/
+# Base is expenses/
 urlpatterns = [
+    path(r'test/', views.expense_test, name='expense_test'),
     path(r'main/', views.expense_main, name='expense_main'),
     path(r'upload/', views.upload_expenses, name='expenses_upload'),
     path(r'assign/', views.assign_expenses, name='expenses_assign'),
@@ -20,7 +21,7 @@ urlpatterns = [
     path('ajax/load-subcategories-search/', views.load_subcategories_search, name='ajax-load-subcategories-search'),
     path('ajax/load-categories-search/', views.load_categories_search, name='ajax-load-categories-search'),
 
-    path('ajax/expense-pie', views.expense_pie, name='ajax-expense-pie')
-
+    path('ajax/expense-pie', views.expense_pie, name='ajax-expense-pie'),
+    path('ajax/expense-bar', views.expense_bar, name='ajax-expense-bar')
 ]
 
