@@ -51,6 +51,7 @@
                 {% if forloop.first %}
                 <thead>
                 <tr>
+                    <th></th>
                     {% for field in form.visible_fields %}
                         {% if field.name == 'category' or field.name == 'subcategory' or field.name == 'ignore' %}
                             <th class="w3-hide-small">
@@ -63,6 +64,7 @@
                 </thead>
                 {% endif %}
                 <tr>
+                    <td><a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a></td>
                     {% for field in form.visible_fields %}
                         <!--
                         {# Include the hidden fields in the form #}

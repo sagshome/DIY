@@ -169,6 +169,44 @@ class ItemAddForm(forms.ModelForm):
         self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
 
 
+class ItemEditForm(forms.ModelForm):
+
+    amortize_months = forms.IntegerField(required=False)
+
+    class Meta:
+        model = Item
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "amortize_months", "notes")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["date"].widget.attrs['style'] = 'width:110px;background-color:Wheat'
+        self.fields["date"].widget.attrs['readonly'] = True
+
+        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:Wheat'
+        self.fields["description"].widget.attrs['readonly'] = True
+
+        self.fields["amount"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
+        self.fields["amount"].widget.attrs['readonly'] = True
+
+    def clean(self):
+        super().clean()
+        if self.cleaned_data["category"] and not self.cleaned_data["subcategory"]:
+            raise forms.ValidationError(f'Warning: Category {self.cleaned_data["category"]} missing subcategory.')
+        if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
+            raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
+
+        if self.cleaned_data["amortize_months"] and self.cleaned_data["amortize_months"] != 0:
+            if self.instance.amortized:
+                raise forms.ValidationError(
+                    f'Error: this item is already amortized')
+            self.instance.amortize(self.cleaned_data["amortize_months"])
+            self.cleaned_data["ignore"] = True
+        else:
+            if self.instance.parent and self.cleaned_data["amortize_months"] == 0:
+                self.instance.deamortize()
+                self.cleaned_data["ignore"] = False
+
+
 class ItemForm(forms.ModelForm):
 
     template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)

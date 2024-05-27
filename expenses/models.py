@@ -43,7 +43,6 @@ class Category(models.Model):
         return qfilter.filter(category=self).count()
 
 
-
 class SubCategory(models.Model):
     """
     Second level classification for expense categorization
@@ -72,7 +71,6 @@ class SubCategory(models.Model):
         if not qfilter:
             qfilter = Item.objects.filter(subcategory=self)
         return qfilter.filter(subcategory=self).count()
-
 
 
 class Template(models.Model):
@@ -173,8 +171,10 @@ class Item(models.Model):
     subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.SET_NULL)
     details = models.CharField(max_length=80, blank=True, null=True)
     ignore = models.BooleanField(default=False)
-    amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE)
+    amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='parent')
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+    notes = models.TextField(blank=True, null=True)
+
 
     def __str__(self):
         if self.template:
@@ -214,9 +214,10 @@ class Item(models.Model):
                                 amount=new_amount,
                                 category=self.category,
                                 subcategory=self.subcategory,
-                                ignore=self.ignore,
+                                ignore=False,
                                 source='Amortized',
                                 details=self.details,
+                                user=self.user,
                                 amortized=self)
 
         return ''

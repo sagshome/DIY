@@ -20,10 +20,9 @@ from django.http import JsonResponse
 from django.db.models.functions import TruncMonth
 
 from base.models import COLORS
-from expenses.forms import UploadFileForm, SearchForm
 from base.utils import DIYImportException
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank
-from expenses.forms import CategoryForm, TemplateForm, ItemForm, ItemListForm, ItemAddForm
+from expenses.forms import *
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
 
 
@@ -114,12 +113,15 @@ class ItemDelete(LoginRequiredMixin, DeleteView):
 
 class ItemEdit(LoginRequiredMixin, UpdateView):
     model = Item
-    form_class = ItemForm
+    form_class = ItemEditForm
     success_url = reverse_lazy('expense_main')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['action'] = 'Edit'
+        if self.object.parent:
+            context['children'] = self.object.parent.all()
+
         return context
 
 
