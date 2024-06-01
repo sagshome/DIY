@@ -172,6 +172,7 @@ class PortfolioCopy(CreateView):
         return reverse('portfolio_details', kwargs={'pk': self.object.id})
 
 
+@login_required
 def upload_file(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
@@ -182,11 +183,11 @@ def upload_file(request):
             stub = form.cleaned_data['stub'] if form.cleaned_data['stub'] else None
             try:
                 if form.cleaned_data["csv_type"] == 'QuestTrade':
-                    importer = QuestTrade(reader, stub)
+                    importer = QuestTrade(reader, request.user, stub)
                 elif form.cleaned_data["csv_type"] == 'Manulife':
-                    importer = Manulife(reader, stub)
+                    importer = Manulife(reader, request.user, stub)
                 else:
-                    importer = StockImporter(reader, HEADERS, stub=stub, managed=False)
+                    importer = StockImporter(reader, request.user, HEADERS, stub=stub, managed=False)
                 importer.process()
                 if len(importer.warnings) != 0:
                     return render(request, "stocks/uploadfile.html",

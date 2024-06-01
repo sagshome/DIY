@@ -6,6 +6,8 @@ import pandas as pd
 from datetime import datetime, date
 from typing import List, Dict
 
+from django.contrib.auth.models import User
+
 from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction, DataSource
 from base.utils import normalize_date, DIYImportException
 
@@ -43,8 +45,9 @@ class StockImporter:
     default_pd_columns = ['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency',
                           'Quantity', 'Price', 'Amount']
 
-    def __init__(self, reader: csv.reader, headers: Dict[str, str], stub: str = None, managed: bool = False):
+    def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], stub: str = None, managed: bool = False):
         self.warnings = []
+        self.user = user
         self.stub = stub if stub else None
         self.managed = managed
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
@@ -99,7 +102,7 @@ class StockImporter:
 
             #
             portfolio: Portfolio = self.get_or_create_portfolio(
-                self.stub, self.pd_account_name(prow), self.pd_account_key(prow), False)
+                self.stub, self.user, self.pd_account_name(prow), self.pd_account_key(prow), False)
             if portfolio.explicit_name not in equity_totals:
                 equity_totals[portfolio.explicit_name] = {}
             if portfolio.last_import and (this_date <= portfolio.last_import):
@@ -109,7 +112,7 @@ class StockImporter:
 
             if xa_action in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN] and do_process:
                 this_action = FUND if xa_action in [FUND, TRANSFER_IN] else REDEEM
-                Transaction.objects.create(date=this_date, portfolio=portfolio,
+                Transaction.objects.create(date=this_date, portfolio=portfolio, user=self.user,
                                            value=amount, xa_action=this_action,
                                            quantity=0, price=0)
 
@@ -126,7 +129,7 @@ class StockImporter:
 
                 if do_process:
                     logger.debug('%s:%sTrading %s shares %s' % (this_date, norm_date, equity, quantity))
-                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=norm_date,
+                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=norm_date, user=self.user,
                                                xa_action=this_action, price=buy_price, quantity=quantity)
                     EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
                                                       source=DataSource.UPLOAD.value)
@@ -328,7 +331,7 @@ class StockImporter:
         self.equities[lookup] = equity
         return self.equities[lookup]
 
-    def get_or_create_portfolio(self, stub, name, explicit_name, managed):
+    def get_or_create_portfolio(self, stub, user, name, explicit_name, managed):
         """
 
         :param stub: A prefix to the action name
@@ -340,12 +343,12 @@ class StockImporter:
         if explicit_name not in self.portfolios:
             p: Portfolio
             try:
-                p = Portfolio.objects.get(explicit_name=explicit_name)
+                p = Portfolio.objects.get(explicit_name=explicit_name, user=user)
             except Portfolio.DoesNotExist:
                 name = name if not stub else f'{stub}_{name}'
-                p = Portfolio(name=name, explicit_name=explicit_name, managed=managed)
+                p = Portfolio(name=name, user=user, explicit_name=explicit_name, managed=managed)
                 p.save()
-                p = Portfolio.objects.get(explicit_name=explicit_name)  # Refresh
+                p = Portfolio.objects.get(explicit_name=explicit_name, user=user)  # Refresh
             self.portfolios[explicit_name] = p
         return self.portfolios[explicit_name]
 
@@ -380,8 +383,8 @@ class Manulife(StockImporter):
         'Date': 'Process Date',
     }
 
-    def __init__(self, file_name: csv.reader, name_stub: str):
-        super().__init__(file_name, self.ManulifeKeys, stub=name_stub, managed=True)
+    def __init__(self, file_name: csv.reader, name_stub: str, user: User):
+        super().__init__(file_name, user, self.ManulifeKeys, stub=name_stub, managed=True)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
@@ -436,8 +439,8 @@ class QuestTrade(StockImporter):
         'AccountKey': 'Account #'
     }
 
-    def __init__(self, reader: csv.reader,  name_stub: str):
-        super().__init__(reader, self.QuestTradeKeys, stub=name_stub, managed=False)
+    def __init__(self, reader: csv.reader,  user, name_stub: str):
+        super().__init__(reader, user, self.QuestTradeKeys, stub=name_stub, managed=False)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]

@@ -1,9 +1,5 @@
-import copy
 import csv
 import logging
-import pandas as pd
-import plotly.io as pio
-import plotly.graph_objects as go
 
 from datetime import datetime
 from dateutil import relativedelta
