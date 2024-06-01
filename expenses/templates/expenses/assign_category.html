@@ -21,6 +21,9 @@
                 <tr>
                     {% for field in form.visible_fields %}
                         <th>{{ field.label|capfirst }}</th>
+                        {% if field.name == 'amount' %}
+                           <th>Short Cuts</th>
+                        {% endif %}
                     {% endfor %}
                 </tr>
             </thead>
@@ -35,8 +38,27 @@
                             {% endfor %}
                         {% endif %}
                         {{ field.errors.as_ul }}
-                        {{ field }}
+                        {% if field.name == 'description' %}
+                            <a href="{% url 'expense_edit' form.instance.id %}">{{field}}</a>
+                        {% else %}
+                            {{ field }}
+                        {% endif %}
+
                     </td>
+                    {% if field.name == 'amount' %}
+                    <td>
+                        <span onclick="setValues(this, 'Housing', 'Other')"><i title="Housing - Other" class="fa fa-home"></i></span>
+                        <span onclick="setValues(this, 'Housing', 'Maintenance')"><i title="Housing - Maintenance" class="fa fa-wrench"></i></span>
+                        <span onclick="setValues(this, 'Food', 'TakeOut')"><i title="Food - Takeout" class="fa fa-cutlery"></i></span>
+                        <span onclick="setValues(this, 'Food', 'Dinning')"><i title="Food - Dinning" class="fa fa-glass"></i></span>
+                        <span onclick="setValues(this, 'Food', 'Grocery')"><i title="Food - Grocery" class="fa fa-shopping-cart"></i></span>
+                        <span onclick="setValues(this, 'Transportation', 'Fuel')"><i title="Transportation - Fuel" class="fa fa-car"></i></span>
+                        <span onclick="setValues(this, 'Personal Care', 'Clothing')"><i title="Personal Care - Clothing" class="fa fa-male"></i></span>
+                        <span onclick="setValues(this, 'Recreation', 'Other')"><i title="Recreation - Other" class="fa fa-smile-o"></i></span>
+                        <span onclick="setValues(this, 'Recreation', 'Camping')"><i title="Recreation - Camping" class="fa fa-free-code-camp"></i></span>
+                        <span onclick="setValues(this, 'Other', 'Unknown')"><i title="Other - Unknown" class="fa fa-question-circle"></i></span>
+                    </td>
+                    {% endif %}
                 {% endfor %}
             </tr>
         {% endfor %}
@@ -44,6 +66,29 @@
     <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Save</button>
 </form><br><br>
 <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
+    function setValues(button, cat, sub) {
+        // ShortCuts must be in the table just before Category and Subcategory
+        let my_cell = $(button).closest('td');
+        let cat_cell = my_cell.next('td');
+        let cat_id = cat_cell.children()[0].getAttribute('id');
+        let sub_id = cat_cell.next('td').children()[0].getAttribute('id');
+
+        for (var option of document.getElementById(cat_id).options) {
+            if (option.text === cat) {
+                option.selected = true;
+                break;
+            }
+        }
+
+        for (var option of document.getElementById(sub_id).options) {
+            if (option.text === sub) {
+                option.selected = true;
+                break;
+            }
+        }
+    }
+</script>
 <script>
     $(document).ready(function() {
       var url = $("#itemForm").attr("data-subcategories-url");

@@ -101,6 +101,8 @@ class ExpenseImporter:
     def csv_amount(self, row) -> float:
         try:
             data = row[self.mappings['Amount']]
+            if data.startswith('$'):
+                data = data[1:]
             if data:
                 try:
                     return float(data)
@@ -119,6 +121,18 @@ class Generic(ExpenseImporter):
     """
     def __init__(self, file_name: csv.reader, user: User, source: str):
         super().__init__(file_name, user, DEFAULT, source)
+
+
+class PersonalCSV(ExpenseImporter):
+
+    def __init__(self, file_name: csv.reader, user: User, source: str):
+        super().__init__(file_name, user, {
+        'Date': 'Date',
+        'Transaction': 'Transaction',
+        'Amount': 'Debit',
+        'Credit': 'Credit',
+        'Detail': 'Card'
+    }, source)
 
 
 class CIBC_VISA(ExpenseImporter):

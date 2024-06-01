@@ -4,8 +4,8 @@ from . import views
 
 # Base is expenses/
 urlpatterns = [
-    path(r'test/', views.expense_test, name='expense_test'),
     path(r'main/', views.expense_main, name='expense_main'),
+
     path(r'upload/', views.upload_expenses, name='expenses_upload'),
     path(r'assign/', views.assign_expenses, name='expenses_assign'),
 

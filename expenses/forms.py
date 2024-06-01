@@ -104,21 +104,19 @@ class UploadFileForm(forms.Form):
                                  choices=[('', "----",),
                                           ("Generic", "Generic File"),
                                           ("CIBC_VISA", "CIBC VISA Download"),
-                                          ("CIBC_Bank", "CIBC Bank Download")])
+                                          ("CIBC_Bank", "CIBC Bank Download"),
+                                          ("Personal", "Scott's Legacy CSV")])
     csv_file = forms.FileField(label="CSV File:")
 
     def clean(self):
         cleaned_data = super().clean()
         csv_type = cleaned_data.get("csv_type")
 
-        if csv_type not in ("CIBC_Bank", "CIBC_VISA", "Generic"):
+        if csv_type not in ("CIBC_Bank", "CIBC_VISA", "Generic", "Personal"):
             self.add_error("csv_type", f"Source Value {csv_type} is not currently supported")
 
 
 class ItemListForm(forms.ModelForm):
-    #template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
-    #template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
-
     class Meta:
         model = Item
         fields = ("date", "amount", "description", "category", "subcategory", "ignore")
@@ -126,13 +124,13 @@ class ItemListForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        #self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
+        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
 
-        #self.fields["description"].widget.attrs['style'] = 'width:250px;background-color:Wheat'
+        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:LightBlue'
         self.fields["description"].widget.attrs['readonly'] = True
 
-        #self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
+        self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
         self.fields["amount"].widget.attrs['readonly'] = True
 
 
@@ -170,12 +168,16 @@ class ItemAddForm(forms.ModelForm):
 
 
 class ItemEditForm(forms.ModelForm):
-
+    ['forward', 'backward', 'around']
+    amortize_type = forms.ChoiceField(required=False, choices=(('backward', 'Past - Historic Savings'),
+                                                                             ('forward', 'Future budget item'),
+                                                                             ('around', 'Split expense around the date')))
     amortize_months = forms.IntegerField(required=False)
+
 
     class Meta:
         model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "amortize_months", "notes")
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "amortize_months", "amortize_type", "notes")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -199,7 +201,7 @@ class ItemEditForm(forms.ModelForm):
             if self.instance.amortized:
                 raise forms.ValidationError(
                     f'Error: this item is already amortized')
-            self.instance.amortize(self.cleaned_data["amortize_months"])
+            self.instance.amortize(self.cleaned_data["amortize_months"], direction=self.cleaned_data["amortize_type"])
             self.cleaned_data["ignore"] = True
         else:
             if self.instance.parent and self.cleaned_data["amortize_months"] == 0:
@@ -221,7 +223,7 @@ class ItemForm(forms.ModelForm):
         self.fields["date"].widget.attrs['style'] = 'width:110px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
 
-        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:Wheat'
+        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:LightBlue'
         self.fields["description"].widget.attrs['readonly'] = True
 
         self.fields["amount"].widget.attrs['style'] = 'width:100px;background-color:Wheat'

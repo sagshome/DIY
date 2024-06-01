@@ -15,78 +15,19 @@ from django.forms import modelformset_factory
 from django.db.models import Q, Sum
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, UpdateView
+from django.views.generic import CreateView, DeleteView, UpdateView, FormView
 from django.http import JsonResponse
 from django.db.models.functions import TruncMonth
 
 from base.models import COLORS
 from base.utils import DIYImportException
-from expenses.importers import Generic, CIBC_VISA, CIBC_Bank
+from expenses.importers import Generic, CIBC_VISA, CIBC_Bank, PersonalCSV
 from expenses.forms import *
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
 
 
 logger = logging.getLogger(__name__)
 
-def build_chart(items, filters):
-    return '<p>Chart goes here</p>'
-
-    with_category = items.filter(category__isnull=False)
-    without_category = items.filter(category__isnull=True)
-
-    chart_type = 'Category'
-    if filters and 'subcategory' in filters and filters['subcategory'] != '- ALL -':
-        chart_type = 'Subcategory'
-
-    df = pd.DataFrame.from_records(list(with_category.values(
-        'date', 'category__name', 'subcategory__name', 'amount')))
-    if not df.empty:
-        df['date'] = pd.to_datetime(df['date'])
-        df['year_month'] = df['date'].dt.strftime('%Y-%m')
-
-    blank_df = pd.DataFrame.from_records(list(without_category.values('date', 'amount')))
-    if not blank_df.empty:
-        blank_df['date'] = pd.to_datetime(blank_df['date'])
-        blank_df['year_month'] = blank_df['date'].dt.strftime('%Y-%m')
-
-    fig = go.Figure()
-    if not blank_df.empty:
-        fig.add_trace(go.Bar(
-            x=blank_df['year_month'],
-            y=blank_df['amount'],
-            name='None',
-            # text=subset_df['date'].dt.day,
-            textposition='auto',
-            orientation='v'
-        ))
-
-    if not df.empty:
-        if chart_type == 'Category':
-            for category in df['category__name'].unique():
-                subset_df = df[df['category__name'] == category]
-                fig.add_trace(go.Bar(
-                    x=subset_df['year_month'],
-                    y=subset_df['amount'],
-                    name=category,
-                    # text=subset_df['date'].dt.day,
-                    textposition='auto',
-                    orientation='v'
-                ))
-        else:
-            for subcategory in df['subcategory__name'].unique():
-                subset_df = df[df['category__name'] == subcategory]
-                fig.add_trace(go.Bar(
-                    x=subset_df['year_month'],
-                    y=subset_df['amount'],
-                    name=subcategory,
-                    textposition='auto',
-                    orientation='v'
-                ))
-
-    fig.update_layout(barmode='stack')
-    fig.update_layout(title=chart_type, xaxis_title='Date', yaxis_title='Expenses')
-    chart_html = pio.to_html(fig, full_html=False)
-    return chart_html
 
 
 class ItemAdd(LoginRequiredMixin, CreateView):
@@ -162,22 +103,15 @@ def edit_template(request, pk: int):
     })
 
 
-def expense_test(request):
-    default = datetime.now().replace(year=datetime.now().year-7).date().replace(day=1)
-    search_form = SearchForm(initial={'search_ignore': 'No',
-                                      'search_start_date': default,
-                                      'show_list': 'Hide'})
-    super_set = Item.objects.filter(ignore=False, user=request.user, date__gte=default).order_by('-date')
+class ItemFormSet(modelformset_factory(Item, form=ItemListForm, extra=0)):
+    def save(self, commit=True):
+        # Call the original save method to save the forms in the formset
+        super(ItemFormSet, self).save(commit=commit)
 
-    if request.method == "POST":
-        search_form = SearchForm(request.POST)
-        if search_form.is_valid():
-            super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data)
-            chart = build_chart(super_set, search_form.cleaned_data)
-
-    return render(request, "expenses/main.html", {
-        'search_form': search_form,
-    })
+        # Custom action (e.g., send an email notification)
+        if commit:
+            # Perform your custom action here
+            pass
 
 
 @login_required
@@ -188,43 +122,41 @@ def expense_main(request):
     """
 
     warnings = {}
-    chart = None
-    max_size = 50
-    default = datetime.now().replace(year=datetime.now().year-7).date().replace(day=1)
-    upload_error = None
+    default_end = datetime.now().date()
+    default_start = datetime.now().replace(year=datetime.now().year-7).date().replace(day=1)
 
-    ItemFormSet = modelformset_factory(Item, form=ItemListForm, extra=0)
+    max_size = 50
     search_form = SearchForm(initial={'search_ignore': 'No',
-                                      'search_start_date': default,
+                                      'search_start_date': default_start,
+                                      'search_end_date': default_end,
                                       'show_list': 'Hide'})
-    super_set = Item.objects.filter(ignore=False, user=request.user, date__gte=default).order_by('-date')
 
     if request.method == "POST":
-        upload_form = UploadFileForm(request.POST)
         search_form = SearchForm(request.POST)
         formset = ItemFormSet(request.POST)
-        if formset.is_valid():
-            formset.save()
-        if search_form.is_valid():
+        if search_form.is_valid() and formset.is_valid():
             super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data)
-            # chart = build_chart(super_set, search_form.cleaned_data)
-    # else:
-        # chart = build_chart(super_set, None)
+            total = super_set.aggregate(Sum('amount'))['amount__sum']
+            formset.save()
+            formset = ItemFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
 
-    formset = ItemFormSet(queryset=Item.objects.filter(id__in=list(super_set.values_list('id', flat=True).order_by('-date')[:max_size])))
-    upload_form = UploadFileForm()
+    else:
+        super_set = Item.objects.filter(
+            ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date')
+        total = super_set.aggregate(Sum('amount'))['amount__sum']
+        formset = ItemFormSet(queryset=Item.objects.filter(
+            id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
 
     unassigned = Item.unassigned()
     if unassigned.count() != 0:
-        warnings['Unassigned Expenses'] = f'{unassigned.count()} Expense Items have not been processed.'
+        warnings = f'{unassigned.count()} Expense Items have not been processed.'
 
     return render(request, "expenses/main.html", {
         'warnings': warnings,
         'formset': formset,
         'search_form': search_form,
-        'upload_form': upload_form,
-        'upload_error': upload_error,
-        # 'chart': chart,
+        'total': total,
     })
 
 
@@ -250,29 +182,30 @@ class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
 def assign_expenses(request):
 
     max_size = 50
+
     search_form = SearchForm(initial={'search_ignore': 'No',
                                       'search_category': '- NONE -',
                                       'search_subcategory': '- NONE -'})
 
-    super_set = Item.objects.filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(
-        ignore=True).order_by('-date').values_list('id', flat=True)
-
+    basic_filter = Item.objects.filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
+    count = basic_filter.count()
     if request.method == "POST":
         search_form = SearchForm(request.POST)
         formset = AssignFormSet(request.POST)
         if search_form.is_valid() and formset.is_valid():
-            super_set = Item.filter_search(Item.objects.all(), search_form.cleaned_data)
             formset.save()
             Item.apply_templates()
-            formset = AssignFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+            filtered_set = Item.filter_search(basic_filter, search_form.cleaned_data)
+            count = filtered_set.count()
+            queryset = Item.objects.filter(id__in=list(filtered_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')
+            formset = AssignFormSet(queryset=queryset)
     else:
-        formset = AssignFormSet(queryset=Item.objects.filter(
-            id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+        queryset = Item.objects.filter(id__in=list(basic_filter.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')
+        formset = AssignFormSet(queryset=queryset)
 
     return render(request, "expenses/assign_category.html", {"formset": formset,
                                                              "search_form": search_form,
-                                                             "count": super_set.count()})
+                                                             "count": count})
 
 
 @login_required
@@ -290,6 +223,8 @@ def upload_expenses(request):
                     importer = CIBC_VISA(reader, request.user, form.cleaned_data["csv_type"])
                 elif form.cleaned_data["csv_type"] == 'CIBC_Bank':
                     importer = CIBC_Bank(reader, request.user, form.cleaned_data["csv_type"])
+                elif form.cleaned_data["csv_type"] == 'Personal':
+                    importer = PersonalCSV(reader, request.user, form.cleaned_data["csv_type"])
             except DIYImportException as e:
                 return render(request, "expenses/uploadfile.html", {"form": form, "custom_error": str(e)})
             if Item.unassigned().count() > 0:
@@ -342,11 +277,13 @@ def load_categories_search(request):
 def expense_pie(request):
     data = []
     labels = []
-
-    for item in Item.objects.filter(user=request.user, ignore=False, amortized__isnull=True).values('category__name').annotate(sum=Sum('amount')):
-        if item['sum'] > 0:
-            labels.append(item['category__name'])
-            data.append(int(item['sum']))
+    super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
+    category_list = super_set.order_by('category__name').values_list('category__name', flat=True).distinct()
+    for category in category_list:
+        item = super_set.filter(category__name=category).aggregate(sum=Sum('amount'))
+        labels.append(category)
+        value = int(item['sum'])
+        data.append(value)
     return JsonResponse({'data': data, 'labels': labels, 'colors': COLORS})
 
 
@@ -359,19 +296,11 @@ def expense_bar(request):
     super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
     show_sub = False if request.GET['search_category'] == '- ALL -' else True
 
-    # Start and end months for the chart data
-    if not request.GET['search_start_date'] == '':
-        first_date = datetime.strptime(request.GET['search_start_date'], '%Y-%m-%d').replace(day=1).date()
-    else:
-        if super_set.count() > 0:
-            super_set = super_set.order_by('date')
-            first_date = super_set[0].date.replace(day=1)
-        else:
-            first_date = datetime.now().replace(day=1).date()
-    if not request.GET['search_end_date'] == '':
-        last_date = datetime.strptime(request.GET['search_end_date'], '%Y-%m-%d').replace(day=1).date()
-    else:
-        last_date = datetime.now().replace(day=1).date()
+    if super_set.count() == 0:
+        return JsonResponse({'datasets': [], 'labels': []})
+
+    first_date = super_set.earliest('date').date.replace(day=1)
+    last_date = super_set.latest('date').date.replace(day=1)
 
     months = []
     month_dict = {}
@@ -382,12 +311,10 @@ def expense_bar(request):
         next_date = next_date + relativedelta.relativedelta(months=1)
 
     if show_sub:
-        values = list(super_set.order_by('subcategory__name').values_list('subcategory__name', flat=True).distinct())
         raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
                                                                                                              'sum',
                                                                                                              'subcategory__name')
     else:
-        values = list(super_set.order_by('category__name').values_list('category__name', flat=True).distinct())
         raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
                                                                                                              'sum',
                                                                                                              'category__name')
@@ -395,7 +322,7 @@ def expense_bar(request):
     colors = COLORS.copy()
     colors.reverse()
 
-    initial_data = [0 for i in range(len(months) - 1)]
+    initial_data = [0 for i in range(len(months))]
     datasets = []
 
     data_dict = {}
@@ -407,6 +334,9 @@ def expense_bar(request):
                              'data': initial_data.copy(),
                              'backgroundColor': colors.pop()})
             data_dict[name] = len(datasets) - 1
-        datasets[data_dict[name]]['data'][month_dict[element['month']]] = element['sum']
+        try:
+            datasets[data_dict[name]]['data'][month_dict[element['month']]] += element['sum']
+        except KeyError:
+            print(f'Failed on:{element}')
 
     return JsonResponse({'datasets': datasets, 'labels': months, 'colors': COLORS})

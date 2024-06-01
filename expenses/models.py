@@ -2,6 +2,7 @@ import copy
 import logging
 import re
 
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Union
 
@@ -350,4 +351,5 @@ class Item(models.Model):
             elif search_dict['search_amount_qualifier'] == 'gte':
                 item_filter = item_filter.filter(amount__gte=search_dict['search_amount'])
 
+        item_filter = item_filter.order_by('-date')
         return item_filter
