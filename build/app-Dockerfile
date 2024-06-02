@@ -12,6 +12,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["docker-entrypoint.sh"]
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+COPY crontab.file /app
+RUN crontab crontab.file
 COPY manage.py /app
 COPY base /app/base
 COPY diy /app/diy

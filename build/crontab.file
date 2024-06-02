@@ -1,0 +1,1 @@
+23 17 * * 1,2,3,4,5 python /app/manage.py stock_update

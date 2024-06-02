@@ -27,6 +27,8 @@ except KeyError:
     DIY_LOCALDB = False
 
 ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
 
 if ('test' in sys.argv  # set with manage.py test
         or 'test' in sys.argv[0]  # set with pytest
