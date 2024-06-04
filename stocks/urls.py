@@ -12,6 +12,9 @@ urlpatterns = [
 
     path(r'portfolio/', views.PortfolioView.as_view(), name='portfolio_list'),
     path(r'portfolio/add/', views.PortfolioAdd.as_view(), name='portfolio_add'),
+    path(r'portfolio/cost_value/', views.cost_value_chart, name='cost_value_chart'),
+    path(r'portfolio/growth_chart/', views.growth_chart, name='growth_chart'),
+
     path(r'portfolio/<pk>/', views.PortfolioDetailView.as_view(), name='portfolio_details'),
     path(r'portfolio/<pk>/edit/', views.PortfolioEdit.as_view(), name='portfolio_edit'),
     path(r'portfolio/<pk>/copy/', views.PortfolioCopy.as_view(), name='portfolio_copy'),
@@ -21,5 +24,6 @@ urlpatterns = [
     path(r'portfolio/<pk>/<symbol>/compare/', views.portfolio_compare, name='portfolio_compare'),
 
     path(r'portfolio/<pk>/buy/', views.add_transaction,  name='transaction_add'),
+
 
 ]

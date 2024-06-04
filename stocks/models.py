@@ -381,18 +381,19 @@ class Equity(models.Model):
             self.last_updated = now
             self.save(update=False)
 
-    def update(self, force: bool = False):
+    def update(self, force: bool = False, key: str = None):
         """
         For simplification,  I will change the closing date (each month) to the first of the next month.  This
         provides consistency later on when processing transactions (which will also be processed on the first of the
         next month).
         """
-        logger.warning('Updating %s' % self)
-        if not self.validated:
-            self.set_equity_data()
-            self.save()
-        elif self.searchable:
-            self.update_external_equity_data(force)
+        if key:
+            if not self.validated:
+                self.set_equity_data()
+                self.save()
+            elif self.searchable:
+                self.update_external_equity_data(force)
+
         self.fill_equity_holes()
 
 
@@ -588,6 +589,7 @@ class PortfolioSummary:
                     inflated_cost += this_funding
                     cash += this_funding
                     logger.debug('%s:Change: Cost:%s ConvCost:%s Cash:%s Value:%s' % (
+
                         this_date, this_funding, this_funding, cash,
                         self.epd.loc[self.epd['Date'] == this_date]['Value'].sum()))
 
@@ -622,7 +624,6 @@ class PortfolioSummary:
                             this_date, 0, 0, cash,
                             self.epd.loc[self.epd['Date'] == this_date]['Value'].sum()))
 
-
             dividends = self.epd.loc[self.epd['Date'] == this_date]['Dividend'].sum()
             if dividends:
                 cash += dividends
@@ -648,12 +649,14 @@ class PortfolioEquitySummary:
     not reference raw portfolio or transaction data.   This is done so that we can compare / create speculative data
     """
 
-    def __init__(self, name: str, xas: QuerySet, currency: str, managed: bool = False, fakequity: Equity = None):
+    def __init__(self, name: str, xas: QuerySet, currency: str, managed: bool = False,
+                 fake_equity: Equity = None, real_equity: Equity = None):
         self.name = name
         self.xas = xas
         self.currency = currency
         self.managed = managed  # We do not extract dividends
-        self.fakequity = fakequity
+        self.fake_equity = fake_equity
+        self.real_equity = real_equity
         self.inflation_rates: Dict[date, float] = dict(Inflation.objects.all().values_list('date', 'inflation'))
 
     def currency_factor(self, exchange_date: date, input_currency: str) -> float:
@@ -680,7 +683,7 @@ class PortfolioEquitySummary:
             logger.error('Transaction set %s:  No Trades in transaction data' % eq)
             return df
 
-        search_equity = self.fakequity if self.fakequity else eq
+        search_equity = self.fake_equity if self.fake_equity else eq
         xa_dates = list(trades.order_by('date').values_list('date', flat=True))
         first = xa_dates[0]
 
@@ -700,14 +703,14 @@ class PortfolioEquitySummary:
                 if change['quantity__sum']:  # Off chance, we bought and sold on the same normalised day
                     trade_value = change['value__sum'] * cf
                     if trade_value == 0:  # Gifted some shares (split or dividends)
-                        if not self.fakequity:
+                        if not self.fake_equity:
                             shares += change['quantity__sum']
                         else:
                             if self.managed:
                                 shares += trade_value / value.price
                     else:
                         change_cost = change['value__sum'] * cf if change['value__sum'] else 0
-                        shares += trade_value / value.price if self.fakequity else change['quantity__sum']
+                        shares += trade_value / value.price if self.fake_equity else change['quantity__sum']
                     effective_cost += change_cost
 
             if effective_cost < 0:
@@ -715,9 +718,17 @@ class PortfolioEquitySummary:
 
             inflation += change_cost
 
-            this_dividend = shares * dividend if not self.managed else 0
+
+            this_dividend = shares * dividend * cf if not self.managed else 0
             total_dividends += this_dividend
-            this_value = value.price * shares
+            this_value = value.price * shares * cf
+
+            if inflation < 0:
+                inflation = 0
+
+            if this_value < 0:
+                this_value = 0
+
 
             df.loc[len(df.index)] = [value.date, search_equity.symbol, shares, this_dividend,
                                                value.price * cf,
@@ -743,7 +754,11 @@ class PortfolioEquitySummary:
             return new
 
         for equity in Equity.objects.filter(transaction__in=self.xas).distinct():
-            self.process_equity(equity, new)
+            if self.real_equity:
+                if self.real_equity == equity:
+                    self.process_equity(equity, new)
+            else:
+                self.process_equity(equity, new)
         logger.warning('Created Equity DataFrame for %s in %s' % (self.name, (datetime.now() - now).seconds))
         return new
 
@@ -805,12 +820,15 @@ class Portfolio(models.Model):
         '''
         return PortfolioSummary(str(self.name), self.transactions,  self.e_pd, self.currency,  managed=self.managed).pd
 
-    def switch(self, new_equity: Equity) -> DataFrame:
+    def switch(self, new_equity: Equity, original: Equity = None) -> DataFrame:
         return PortfolioEquitySummary(str(self.name),
                                       self.transactions,
                                       self.currency,
                                       managed=self.managed,
-                                      fakequity=new_equity).pd
+                                      fake_equity=new_equity,
+                                      real_equity=original).pd
+
+
 
     @property
     def equities(self) -> QuerySet[Equity]:
@@ -830,10 +848,10 @@ class Portfolio(models.Model):
         """
         return Transaction.objects.filter(portfolio=self)
 
-    def trade_dates(self, equity_key) -> List[date]:
+    def trade_dates(self, equity) -> List[date]:
         return list(
             Transaction.objects.filter(portfolio=self,
-                                       equity__symbol=equity_key,
+                                       equity=equity,
                                        xa_action__in=[Transaction.BUY, Transaction.SELL]).values_list(
                 'date', flat=True).order_by('date'))
 

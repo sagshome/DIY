@@ -2,49 +2,120 @@
 {% block title %}Portfolio Details{% endblock %}
 {% load stocks_tags %}
 {% block content %}
+        <script>
+            $(document).ready(function() {
 
+              $.ajax({
+                url: "{% url 'cost_value_chart' %}",
+                data: {'portfolio_id': {{ portfolio.id }}},
+                success: function (data) {
+                  new Chart("lineChart", {
+                    type: "line",
+                    data: data,
+                    options: {
+                        scales: {
+                            yAxes: [{
+                                ticks: {
+                                    beginAtZero: true
+                                }
+                            }]
+                        },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        title: {
+                          display: true,
+                          text: "Return vs Cost"
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'center'
+                        },
+                    }
+                  });
+                }
+              });
+            });
+        </script>
+
+    <script>
+            $(document).ready(function() {
+
+              $.ajax({
+                url: "{% url 'growth_chart' %}",
+                data: {'portfolio_id': {{ portfolio.id }}},
+                success: function (data) {
+                  new Chart("growthChart", {
+                    type: "bar",
+                    data: data,
+                    options: {
+                        scales: {
+                            yAxes: [{
+                                stacked: true,
+                                ticks: {
+                                    beginAtZero: true
+                                }
+
+                            }],
+                            xAxes: [{
+                                stacked: true // this should be set to make the bars stacked
+                            }],
+                        },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        title: {
+                          display: true,
+                          text: "Growth Comparison"
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'center'
+                        },
+                    }
+                  });
+                }
+              });
+            });
+        </script>
     <h2 class="w3-margin">Portfolio Details for {{portfolio.name}}</h2>
 
-    <div class="w3-row w3-hide-small">
-        <div class="w3-threequarter w3-container w3-hide-small">
-            {{ chart | safe }}
+    <div  class="w3-row">
+        <div style="height:350px;" class="w3-threequarter w3-container">
+            <canvas id="lineChart" class="w3-card-2"></canvas>
         </div>
         <div class="w3-rest w3-container">
-            <div id="documentation" class="w3-container" style="height:425px; overflow-y:scroll;">
-                The <b>Return vs Cost</b> chart computes the cost of the portfolio by the total of money funded into the portfolio
-                vs money that was redeemed.   <em>Effective Cost</em> is the funded cost less the redeemed cost as of that date.
-                Cash positions inside the portfolio are not realized until they are removed.
-                <br><br>
-                <em>Value</em> is the value of the combined equities/mutual funds/money markets etc as of that date.   It also
-                includes any cash sitting in the portfolio.  The values
-                when possible are tracked against API the report historic values.
-                <br><br>
-                <em>Total dividends</em> just tracks the accumulated dividends the portfolio has received.   Their value is not deducted
-                from the Effective cost (unless the value was redeemed).
-                <br><br>
-                The <em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
-                the CPI (consumers price index) based on the Bank of Canada's inflation reporting.
-                <br><br><br>
-                The Portfolio Detail table,  tracks individual items.   Items with 0 value are historic positions.   Each item
-                in the table can be drilled down to see your specific returns over time.
-                <br><br>
-                The <em>Update</em> action will force an API refresh however,  the values are automatically updated every
-                morning, and they will not update again on the same day.
+            <div id="documentation" class="w3-hide-small w3-container">
+                The <b>Return vs Cost</b> chart computes the <em>Effective Cost</em> of the portfolio by subtracting the
+                money returned (via dividends or sales) to the book value of the funds.
             </div>
         </div>
     </div>
+    <div  class="w3-row">
+        <div style="height:350px;" class="w3-threequarter w3-container">
+            <canvas id="growthChart" class="w3-card-2"></canvas>
+        </div>
+        <div class="w3-rest w3-container">
+            <div id="groth_documentation" class="w3-hide-small w3-container">
+                The <b>Return vs Cost</b> chart computes the <em>Effective Cost</em> of the portfolio by subtracting the
+                money returned (via dividends or sales) to the book value of the funds.
+            </div>
+        </div>
+    </div>
+
+
     <div class="w3-bar w3-hide-small">
-        <div class="w3-bar-item">
+        <div class="w3-bar-item w3-margin-top">
             <b>Comparison charts</b>:
         </div>
         <div class="w3-bar-item">
-            <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-gray">S&P 500(ish)</button></a>
+            <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">S&P 500(ish)</button></a>
         </div>
         <div class="w3-bar-item">
-            <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-gray">TSX Dividend</button></a><br>
+            <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">TSX Dividend</button></a><br>
         </div>
         <div class="w3-bar-item">
-            <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-gray">BMO Global</button></a>
+            <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}"><button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">BMO Global</button></a>
         </div>
     </div>
 
@@ -69,8 +140,14 @@
                         <td>${% equity_value portfolio e "Value" "{:.0f}" %}</td>
                         <td>${% equity_value portfolio e "TotalDividends" "{:.0f}" %}</td>
                         <td>
-                            <button id="update-{{equity.symbol}}" onclick=update("{{e}}")
-                                    class="w3-button-small w3-round-large w3-orange">Update</button>
+                            <button
+                                    {% if can_update == False %}
+                                        disabled class="w3-margin-left w3-button-medium w3-round-large w3-gray"
+                                    {% else %}
+                                        class="w3-margin-left w3-button-medium w3-round-large w3-orange"
+                                    {% endif %}
+                            id="update-{{equity.symbol}}" onclick=update("{{e}}")
+                            >Update</button>
                         </td>
                     </tr>
                {% endfor %}

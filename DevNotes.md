@@ -48,3 +48,10 @@ I don't use this tech very often anymore,  notes for me really
     docker run -it --rm -v /etc -v logs:/var/log centos /bin/produce_some_logs
 
     docker network ls
+
+DataFrames
+EPD 393 rows
+ Date Equity  Shares    Dividend       Price    Value  TotalDividends  EffectiveCost  InflatedCost
+
+PPD 63 Rows
+ Date  EffectiveCost      Value  TotalDividends   InflatedCost           Cash

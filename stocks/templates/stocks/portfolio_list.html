@@ -2,13 +2,14 @@
 {% block title %}Portfolio List{% endblock %}
 {% load stocks_tags %}
 
-{% block script %}
+{% block content %}
+{% block local_script %}
     <script>
         function update(id) {
             var xhttp = new XMLHttpRequest();
             var tag_id = "update-" + id
             xhttp.onreadystatechange = function() {
-              if (this.readyState == 4 && this.status == 200) {
+              if (this.readyState == 4 && this.status == 200 || this.status == 404) {
                 setTimeout(function(){
                   document.getElementById(tag_id).innerHTML = 'Update';
                 }, 2000);
@@ -22,8 +23,7 @@
             xhttp.send();
         }
     </script>
-{% endblock script %}
-{% block content %}
+{% endblock local_script %}
     <table class="w3-table w3-striped">
         <tr>
             <th>Portfolio Name</th>
@@ -47,7 +47,12 @@
                 <td class="w3-container">
                     <a class="w3-hide-small" href="{% url 'portfolio_edit' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-green"> Edit </button></a>
                     <a class="w3-hide-small" href="{% url 'portfolio_copy' portfolio.id %}"><button class="w3-margin-left w3-button-medium w3-round-large w3-green">Copy</button></a>
-                    <button id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}") class="w3-margin-left w3-button-medium w3-round-large w3-orange">Update</button>
+                    <button {% if can_update == False %}
+                            disabled class="w3-margin-left w3-button-medium w3-round-large w3-gray"
+                            {% else %}
+                            class="w3-margin-left w3-button-medium w3-round-large w3-orange"
+                            {% endif %}
+                            id="update-{{portfolio.id}}" onclick=update("{{portfolio.id}}")>Update</button>
                     <a class="w3-hide-small" href="{% url 'portfolio_delete' portfolio.id %}"><button class="w3-margin-left w3-button-medium w3-round-large w3-button-medium w3-round-large w3-red">Delete</button></a>
                 </td>
             </tr>

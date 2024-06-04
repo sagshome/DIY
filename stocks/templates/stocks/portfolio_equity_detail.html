@@ -1,35 +1,111 @@
 {% extends "base.html" %}
 {% block title %}Portfolio Equity Details{% endblock %}
 {% block content %}
+        <script>
+            $(document).ready(function() {
 
-    <h2 class="w3-margin">{{equity.symbol}} - Details for {{portfolio.name}}</h2>
+              $.ajax({
+                url: "{% url 'cost_value_chart' %}",
+                data: {'portfolio_id': {{ portfolio.id }},
+                       'symbol': {{ equity.id}} },
+                success: function (data) {
+                  new Chart("lineChart", {
+                    type: "line",
+                    data: data,
+                    options: {
+                        scales: {
+                            yAxes: [{
+                                ticks: {
+                                    beginAtZero: true
+                                }
+                            }]
+                        },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        title: {
+                          display: true,
+                          text: "Return vs Cost"
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'center'
+                        },
+                    }
+                  });
+                }
+              });
+            });
+        </script>
 
-    <div class="w3-row w3-hide-small">
-        <div class="w3-threequarter w3-container">
-            {{ chart | safe }}
+        <script>
+            $(document).ready(function() {
+
+              $.ajax({
+                url: "{% url 'growth_chart' %}",
+                data: {'portfolio_id': {{ portfolio.id }},
+                       'equity_id': {{ equity.id}},
+                       'compare_id': 18 },
+                success: function (data) {
+                  new Chart("growthChart", {
+                    type: "bar",
+                    data: data,
+                    options: {
+                        scales: {
+                            yAxes: [{
+                                ticks: {
+                                    beginAtZero: true
+                                }
+                            }]
+                        },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        title: {
+                          display: true,
+                          text: "Growth Comparison"
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'center'
+                        },
+                    }
+                  });
+                }
+              });
+            });
+        </script>
+
+    <h2 class="w3-margin">{{equity.symbol}} - Details for <a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></h2>
+    <div  class="w3-row">
+        <div style="height:350px;" class="w3-threequarter w3-container">
+            <canvas id="lineChart" class="w3-card-2"></canvas>
         </div>
-        <div class="w3-rest w3-container" style="height:50px; overflow-y:scroll;">
-            <div id="documentation">
-                The <b>Return vs Cost</b> tracks and equity in your portfolio based on the following criteria:
-                <ul>
-                    <li><em>Effective Cost</em> is the purchase cost less the sales cost as of that date</li>
-                    <li><em>Present Value</em> is the market value of the shares on that date</li>
-                    <li><em>Effective Value</em> is Present Value, combined with the total dividends</li>
-                    <li><em>Total dividends</em> just tracks the accumulated dividends the equity has received.</li>
-                    <li><em>Inflated Cost</em> is the amount the Effective Funds would be worth if they earned a payback equal to
-                        the CPI (consumers price index) based on the Bank of Canada's inflation reporting.</li>
-                </ul>
+        <div class="w3-rest w3-container">
+            <div id="documentation" class="w3-hide-small w3-container">
+                The <b>Return vs Cost</b> chart computes the <em>Effective Cost</em> of the portfolio by subtracting the
+                money returned (via dividends or sales) to the book value of the funds.
             </div>
         </div>
     </div>
-
+    <div  class="w3-row">
+        <div style="height:350px;" class="w3-threequarter w3-container">
+            <canvas id="growthChart" class="w3-card-2"></canvas>
+        </div>
+        <div class="w3-rest w3-container">
+            <div id="groth_documentation" class="w3-hide-small w3-container">
+                The <b>Return vs Cost</b> chart computes the <em>Effective Cost</em> of the portfolio by subtracting the
+                money returned (via dividends or sales) to the book value of the funds.
+            </div>
+        </div>
+    </div>
     <div class="w3-container w3-margin-top">
         <table class="w3-table w3-stripped">
             <tr class="w3-margin-bottom">
                 <th>Date</th>
                 <th class="w3-hide-small">Shares Owned</th>
-                <th class="w3-hide-small">Effective Cost</th>
-                <th class="w3-hide-small">Current Value</th>
+                <th class="w3-hide-small">Cost</th>
+                <th class="w3-hide-small">Value</th>
                 <th class="w3-hide-small">Total Dividends</th>
                 <th>Value (with Dividends)</th>
                 <th>Dividend Amount</th>
@@ -37,6 +113,7 @@
                 <th>Activities</th>
             </tr>
             {% for data in context %}
+
                 <tr>
                     <td>{{ data.0 | date:'Y-m' }}</td>
                     <td class="w3-hide-small">{{data.1|floatformat:'0g'}}</td>

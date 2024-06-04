@@ -25,7 +25,6 @@ from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEG
 logger = logging.getLogger(__name__)
 
 
-
 class ItemAdd(LoginRequiredMixin, CreateView):
     model = Item
     form_class = ItemAddForm
@@ -47,11 +46,17 @@ class ItemDelete(LoginRequiredMixin, DeleteView):
     template_name = 'expenses/item_confirm_delete.html'
     success_url = reverse_lazy('expense_main')
 
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
+
 
 class ItemEdit(LoginRequiredMixin, UpdateView):
     model = Item
     form_class = ItemEditForm
     success_url = reverse_lazy('expense_main')
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -72,6 +77,8 @@ class DeleteTemplateView(LoginRequiredMixin, DeleteView):
     model = Template
     template_name = 'expenses/template_confirm_delete.html'
     success_url = reverse_lazy("expenses_templates")
+
+
 
 
 @login_required
