@@ -1,3 +1,5 @@
+# todo:  I need a add a transaction (buy, sell, redeem, fund, dividend - etc..)
+
 import csv
 import logging
 import json
@@ -210,31 +212,39 @@ def upload_file(request):
 
 
 @login_required
-def add_transaction(request, pk):
-    portfolio = get_object_or_404(Portfolio, pk=pk)
-
+def add_transaction(request):
     if request.method == 'POST':
-        form = TransactionForm(request.POST)
+        form = TransactionAddForm(request.POST, initial={'user': request.user})
         if form.is_valid():
-            new = Transaction.objects.create(equity=form.cleaned_data['equity'],
-                                             user=request.user,
-                                             date=form.cleaned_data['date'],
-                                             price=form.cleaned_data['price'],
-                                             quantity=form.cleaned_data['quantity'],
-                                             xa_action=form.cleaned_data['action'],
-                                             portfolio=portfolio)
+            action = form.cleaned_data['xa_action']
+            if action == Transaction.FUND or Transaction.SELL:
+                new = Transaction.objects.create(user=request.user,
+                                                 date=form.cleaned_data['date'],
+                                                 price=0,
+                                                 quantity=0,
+                                                 value=form.cleaned_data['value'],
+                                                 xa_action=form.cleaned_data['xa_action'],
+                                                 portfolio=form.cleaned_data['portfolio'])
+            else:
+                new = Transaction.objects.create(user=request.user,
+                                                 equity=form.cleaned_data['equity'],
+                                                 date=form.cleaned_data['date'],
+                                                 price=form.cleaned_data['price'],
+                                                 quantity=form.cleaned_data['quantity'],
+                                                 xa_action=form.cleaned_data['xa_action'])
+
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
-                form = TransactionForm(initial={'portfolio': portfolio,
+                form = TransactionAddForm(initial={'user': request.user,
+                                                'portfolio': new.portfolio,
                                                 'equity': new.equity,
                                                 'date': new.date})
             else:
-                return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': portfolio.id}))
+                return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': new.portfolio.id}))
     else:  # Initial get
-        form = TransactionForm(initial={'portfolio': portfolio.name})
+        form = TransactionAddForm(initial={'user': request.user})
 
     context = {
         'form': form,
-        'portfolio': portfolio,
     }
     return render(request, 'stocks/add_transaction.html', context)
 

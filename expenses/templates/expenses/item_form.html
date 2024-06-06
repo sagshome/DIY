@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Expense Assignment{% endblock %}
 {% load expenses_tags %}
-
-
 {% block content %}
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script>
@@ -40,13 +38,14 @@
     {% endfor %}
     <table>
         {% if object.amortized %}
-        <tr>
-            <td class="w3-container w3-margin w3-right-align">Parent Item:</td>
-            <td class="w3-container w3-margin">
-                <a href="{% url 'expense_edit' object.amortized.id %}">{{object.amortized.description}}</a>
-            </td>
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">Parent Item:</td>
+                <td class="w3-container w3-margin">
+                    <a href="{% url 'expense_edit' object.amortized.id %}">{{object.amortized.description}}</a>
+                </td>
+            </tr>
         {% endif %}
-        </tr>
+
         {% for field in form.visible_fields %}
             <tr>
                 <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>

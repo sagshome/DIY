@@ -23,7 +23,5 @@ urlpatterns = [
     path(r'portfolio/<pk>/<symbol>/details/', views.portfolio_equity_details, name='portfolio_equity_details'),
     path(r'portfolio/<pk>/<symbol>/compare/', views.portfolio_compare, name='portfolio_compare'),
 
-    path(r'portfolio/<pk>/buy/', views.add_transaction,  name='transaction_add'),
-
-
+    path(r'portfolio/transaction/add/', views.add_transaction,  name='transaction_add'),
 ]

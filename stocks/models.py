@@ -3,6 +3,11 @@ The models here,  are used to build a monthly snapshot of finicial data.   To no
 day of the month is normalized to the first date of the next month.  So,  data as of Feb 1st 2022,  would really
 be the last trading day of January 2022.
 """
+
+# todo:  what should I do when someone trys to buy something via import or manual and they do not have the cash
+#  1. Warning them and silently give them the cash ?  If they fix it up by doing a proper transaction,  how do I clear
+#     old one.
+
 import logging
 
 import pandas as pd
@@ -949,7 +954,7 @@ class Transaction(models.Model):
     price: float = models.FloatField()
     quantity: float = models.FloatField()
     value: float = models.FloatField(null=True, blank=True)
-    xa_action: int = models.IntegerField(choices=TRANSACTION_TYPE)
+    xa_action: int = models.IntegerField(help_text="Select a Portfolio", choices=TRANSACTION_TYPE)
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
 

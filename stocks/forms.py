@@ -55,22 +55,83 @@ class PortfolioAddForm(forms.ModelForm):
         }
 
 
+class TransactionAddForm(forms.ModelForm):
+    class Meta:
+        model = Transaction
+        fields = ("user", "portfolio", "xa_action", "equity", "date", "price", "quantity", "value")
+        widgets = {
+            'user': forms.HiddenInput(),
+            'xa_action': forms.Select(),
+            'date': forms.TextInput(
+                attrs={'type': 'date',
+                       'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        valid_actions = [(None, '------'),
+                         (Transaction.FUND, 'Fund'),
+                         (Transaction.BUY, 'Buy'),
+                         (Transaction.SELL, 'Sell'),
+                         (Transaction.REDEEM, 'Redeem')]
+        self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.filter(user=self.initial['user']))
+        self.fields['xa_action'].choices = valid_actions
+        self.fields['price'].required = False
+        self.fields['value'].required = False
+        self.fields['quantity'].required = False
+
+    def clean_equity(self):
+        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['equity']:
+            raise ValidationError("Buy and Sell actions require an equity value", code="Empty Field")
+        elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL] and self.cleaned_data['equity']:
+            raise ValidationError("Fund and Redeem actions DO NOT require an equity value", code="Extra Field")
+        return self.cleaned_data['equity']
+
+
+    def clean_price(self):
+        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['price']:
+            raise ValidationError("Buy and Sell actions require an price", code="Empty Field")
+        else:
+            return self.cleaned_data['price']
+
+    def clean_quantity(self):
+        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['quantity']:
+            raise ValidationError("Buy and Sell actions require an quantity", code="Empty Field")
+        else:
+            return self.cleaned_data['price']
+
+    def clean_value(self):
+        if self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['value']:
+            raise ValidationError("Fund and Redeem actions require an value", code="Empty Field")
+        else:
+            return self.cleaned_data['value']
+
+
+
+
 class TransactionForm(forms.Form):
     """
     Multi entry form
     """
-
-    equity = forms.ModelChoiceField(label='Equity', queryset=Equity.objects.all().order_by('symbol'))
-    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
-                                                         'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
-                           label='Date')
-    price = forms.DecimalField(label='Price')
-    quantity = forms.DecimalField(label='Quantity')
     action = forms.ChoiceField(label='Transaction Type',
-                                 choices=[(Transaction.FUND, 'Fund'),
+                                 choices=[(None, '------'),
+                                          (Transaction.FUND, 'Fund'),
                                           (Transaction.BUY, 'Buy'),
                                           (Transaction.SELL, 'Sell'),
                                           (Transaction.REDEEM, 'Redeem')])
+
+    equity = forms.ModelChoiceField(label='Equity', required=False, queryset=Equity.objects.all().order_by('symbol'))
+    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
+                                                         'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
+                           label='Date')
+    amount = forms.DecimalField(label='Amount', required=False)
+    price = forms.DecimalField(label='Price', required=False)
+    quantity = forms.DecimalField(label='Quantity', required=False)
+
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        pass
 
 
 class UploadFileForm(forms.Form):
@@ -87,6 +148,10 @@ class UploadFileForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        csv_type = cleaned_data.get("csv_type")
+
+        if csv_type not in ('QuestTrade', 'Manulife'):
+            self.add_error('csv_type', f"CSV Type {csv_type} is not currently valid")
         csv_type = cleaned_data.get("csv_type")
 
         if csv_type not in ('QuestTrade', 'Manulife'):

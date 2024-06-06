@@ -154,12 +154,12 @@ class ItemAddForm(forms.ModelForm):
         fields = ("user", "date", "description", "amount", "category", "subcategory", "ignore")
         widgets = {
             'user': forms.HiddenInput(),
+            'date': forms.TextInput(attrs={'type': 'date'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["date"].widget.attrs['type'] = 'date'  # todo: Fix this a) gives a format hint or b) uses a picker
         self.fields["description"].widget.attrs['style'] = 'width:400px;'
         self.fields["amount"].widget.attrs['style'] = 'width:100px;'
         self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript

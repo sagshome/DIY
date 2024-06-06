@@ -1,48 +1,108 @@
 ﻿{% extends "base.html" %}
-{% block title %}Add Equity to Portfolio{% endblock title %}
-{% block scripts %}
-    <script>
-        $(document).ready(function() {
-            $("#datepicker").datepicker();
-        });
-    </script>
-{% endblock scripts %}
+{% block title %}Tranaction Add{% endblock %}
+
 {% block content %}
-    <div class="flex-container flex-items-auto">
-        <div class="row">
-            <div id="heading">
-                <h2>Portfolio Transactions</h2>
-            </div>
-        </div>
-    </div>
-    <div class="flex-container flex-items-auto">
-        <div id="xa_table" class="flex-size-8 pad-md">
-            <form method="post">{% csrf_token %}
-                {{ form.non_field_errors }}
+        <script>
+            function hideDiv(divId) {
+               var div = document.getElementById(divId);
+               if (div === null) {
+               }
+               else {
+                div.style.display = "none";
+                }
+            }
+            function showDiv(divId) {
+                var div = document.getElementById(divId);
+                if (div === null) {
+                }
+                else {
+                div.style.display = "block";
+                }
+            }
+            function show_hide() {
+                var action_value = $("#id_xa_action").val();
+                if (action_value == 1 || action_value == 5) {
+                    hideDiv('equityRow')
+                    hideDiv('priceRow')
+                    hideDiv('quantityRow')
+                    showDiv('valueRow')
+                } else if (action_value == 2 || action_value == 4) {
+                    showDiv('equityRow')
+                    showDiv('priceRow')
+                    showDiv('quantityRow')
+                    hideDiv('valueRow')
+                } else {
+                    hideDiv('equityRow')
+                    hideDiv('priceRow')
+                    hideDiv('quantityRow')
+                    hideDiv('valueRow')
+                }
+            }
+        </script>
+        <script>
+            $(document).ready(function() {
+              var action_id = document.getElementById("id_xa_action");
+              action_id.addEventListener("mouseup", show_hide);
+              show_hide();
+            });
+</script>
 
-                {% for hidden_field in form.hidden_fields %}
-                {{ hidden_field.errors }}
-                {{ hidden_field }}
-                {% endfor %}
+    <h2>Portfolio Transactions</h2>
+        <form method="post" id="XAForm" novalidate>
+            {% csrf_token %}
+            {% for error in form.non_field_errors %}
+                <div class="w3-row w3-red">
+                    {{ error }}
+                </div>
+            {% endfor %}
+            {% for hidden_field in form.hidden_fields %}
+                <div class="w3-row w3-blue">
+                    {{ hidden_field.errors }}
+                    {{ hidden_field }}
+                </div>
+            {% endfor %}
+            <table>
+                <tr class=w3-container" style="display: block;">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.portfolio.label_tag }}</td>
+                    <td> {{ form.portfolio }}</td>
+                    <td>{{ form.portfolio.errors }}</td>
+                </tr>
+                <tr class=w3-container" style="display: block;">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.xa_action.label_tag }}</td>
+                    <td> {{ form.xa_action }}</td>
+                    <td> {{ form.xa_action.errors }}</td>
+                </tr>
+                <tr style="display: block;">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.date.label_tag }}</td>
+                    <td class="w3-container w3-margin"> {{ form.date }}</td>
+                    <td> {{ form.date.errors }}</td>
+                </tr>
+                <tr style="display: block;" id="equityRow">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.equity.label_tag }}</td>
+                    <td class="w3-container w3-margin"> {{ form.equity }}</td>
+                    <td> {{ form.equity.errors }}</td>
+                </tr>
+                <tr style="display: block;" id="priceRow">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.price.label_tag }}</td>
+                    <td class="w3-container w3-margin">{{ form.price }}</td>
+                    <td>{{ form.price.errors }}</td>
+                </tr>
+                <tr style="display: block;" id="quantityRow">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.quantity.label_tag }}</td>
+                    <td class="w3-container w3-margin">{{ form.quantity}}</td>
+                    <td>{{ form.quantity.errors }}</td>
+                </tr>
+                <tr style="display: block;" id="valueRow">
+                    <td class="w3-container w3-margin w3-right-align">{{ form.value.label_tag }}</td>
+                    <td class="w3-container w3-margin"> {{ form.value }}</td>
+                    <td> {{ form.value.errors }}</td>
+                </tr>
+            </table>
+            <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Submit">
+            <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Add Another">
+        </form>
 
-                <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-md text-sm">
-                    {% for field in form.visible_fields %}
-                    <tr>
-                        <th class="col-3">{{ field.label_tag }}</th>
-                        <td class="col-5 rounded">
-                            {{ field.errors }}
-                            {{ field }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </table>
-                <input type="submit" class="rounded spaced menu-button-info" name="submit-type" value="Add Another">
-                <input type="submit" class="rounded spaced menu-button-success" name="submit-type" value="Submit">
-            </form>
-        </div>
         <div id="documentation" class="pad-md">
             Add a Fund, Buy, Sell or Redeem transaction for {{portfolio.name}}
-
         </div>
-    </div>
 {% endblock content %}
