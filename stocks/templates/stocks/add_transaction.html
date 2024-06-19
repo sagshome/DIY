@@ -99,7 +99,9 @@
                 </tr>
             </table>
             <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Submit">
-            <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Add Another">
+            {% if view_verb != 'Edit' %}
+                <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Add Another">
+            {% endif %}
         </form>
 
         <div id="documentation" class="pad-md">

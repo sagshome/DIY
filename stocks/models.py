@@ -957,13 +957,30 @@ class Transaction(models.Model):
     xa_action: int = models.IntegerField(help_text="Select a Portfolio", choices=TRANSACTION_TYPE)
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
-
     @classmethod
     def transaction_value(cls, xa_string: str) -> int:
         for key, value in cls.TRANSACTION_TYPE:
             if value == xa_string:
                 return key
         raise AssertionError(f'Invalid transaction string: {xa_string}')
+
+    @property
+    def action_str(self):
+        if self.xa_action == self.FUND:
+            value = 'Funding'
+        elif self.xa_action == self.BUY:
+            value = 'Purchase'
+        elif self.xa_action == self.DIV:
+            value = 'Dividend'
+        elif self.xa_action == self.SELL:
+            value = 'Sale'
+        elif self.xa_action == self.INTEREST:
+            value = 'Interest'
+        elif self.xa_action == self.REDEEM:
+            value = 'Withdraw'
+        else:
+            value = 'Unknown'
+        return value
 
     def __str__(self):
         return (f'{self.portfolio}:{self.equity}:{self.date}:{self.price} {self.quantity} {self.value} '

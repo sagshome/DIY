@@ -4,12 +4,15 @@ import csv
 import logging
 import json
 
+from dateutil import relativedelta
+
 import plotly.io as pio
 import plotly.graph_objects as go
 
 from pandas import DataFrame
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import QuerySet, Sum, Avg
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
@@ -22,13 +25,11 @@ from django.http import JsonResponse
 from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
 from .forms import *
 from .importers import QuestTrade, Manulife, StockImporter, HEADERS
-from base.utils import DIYImportException
+from base.utils import DIYImportException, normalize_today
 from .tasks import daily_update
 from base.models import Profile, COLORS
 
 logger = logging.getLogger(__name__)
-
-
 
 
 class PortfolioView(LoginRequiredMixin, ListView):
@@ -77,7 +78,12 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
         profile = Profile.objects.get(user=self.request.user)
         can_update = True if profile.av_api_key else False
         p: Portfolio = context['portfolio']
-        return {'portfolio': p,  'can_update': can_update}
+        return {'portfolio': p,
+                'xas': p.transactions.order_by('date', 'xa_action'),
+                'can_update': can_update,
+                'funded': p.transactions.filter(xa_action=Transaction.FUND).aggregate(Sum('value'))['value__sum'],
+                'redeemed': p.transactions.filter(xa_action=Transaction.REDEEM).aggregate(Sum('value'))['value__sum'] * -1,
+                }
 
 
 def portfolio_update(request, pk):
@@ -100,6 +106,7 @@ def diy_update(request):
     """
     :param request:
     :return:
+    :return:
     """
     daily_update()
     return HttpResponseRedirect(reverse('portfolio_list'))
@@ -119,7 +126,26 @@ class PortfolioAdd(LoginRequiredMixin, CreateView):
         return self.initial
 
 
-class PortfolioEdit(UpdateView, DateMixin):
+class TransactionEdit(LoginRequiredMixin, UpdateView):
+    model = Transaction
+    fields = ['date', 'xa_action', 'price', 'quantity', 'value']
+
+    template_name = 'stocks/add_transaction.html'
+    from_class = TransactionAddForm
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
+
+    def get_success_url(self):
+        return reverse('portfolio_details', kwargs={'pk': self.object.portfolio.id})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['view_verb'] = 'Edit'
+        return context
+
+
+class PortfolioEdit(LoginRequiredMixin, UpdateView, DateMixin):
     model = Portfolio
     # fields = ['name', 'currency', 'managed', 'end']
     template_name = 'stocks/add_portfolio.html'
@@ -212,6 +238,31 @@ def upload_file(request):
 
 
 @login_required
+def edit_transaction(request, pk):
+    xa: Transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        form = TransactionAddForm(request.POST, initial={'user': request.user})
+        if form.is_valid():
+            action = form.cleaned_data['xa_action']
+            if action == Transaction.FUND or Transaction.REDEEM:
+                xa.date = form.cleaned_data['date']
+                xa.price = 0
+                xa.quantity = 0
+                xa.value = form.cleaned_data['value']
+                xa.xa_action = form.cleaned_data['xa_action']
+                xa.portfolio = form.cleaned_data['portfolio']
+            else:
+                xa.date = form.cleaned_data['date']
+                xa.price = form.cleaned_data['price']
+                xa.quantity = form.cleaned_data['quantity']
+                xa.value = 0
+                xa.xa_action = form.cleaned_data['xa_action']
+                xa.portfolio = form.cleaned_data['portfolio']
+            xa.save()
+
+
+@login_required
 def add_transaction(request):
     if request.method == 'POST':
         form = TransactionAddForm(request.POST, initial={'user': request.user})
@@ -247,6 +298,10 @@ def add_transaction(request):
         'form': form,
     }
     return render(request, 'stocks/add_transaction.html', context)
+
+
+
+
 
 
 @login_required
@@ -344,9 +399,14 @@ def portfolio_equity_details(request, pk, symbol):
                      share_price, extra_data])
 
     data.reverse()
+    funded = portfolio.transactions.filter(equity=equity, xa_action__in=(Transaction.BUY, Transaction.SELL)).aggregate(Sum('value'))['value__sum']
     return render(request, 'stocks/portfolio_equity_detail.html',
-                  {'context': data, 'portfolio': portfolio, 'equity': equity})
-
+                  {'context': data,
+                   'portfolio': portfolio,
+                   'equity': equity,
+                   'funded': funded,
+                   'dividends': total_dividends
+                   })
 
 
 def add_equity(request):
@@ -378,49 +438,73 @@ def overlay_dates(dataframe: DataFrame, key: str, symbol: str, list_of_dates):
 
 
 @login_required
-def growth_chart(request):
+def compare_equity_chart(request):
 
-
-    portfolio_id = request.GET.get("portfolio_id")
-    equity_id = request.GET.get("equity_id")
-    compare_id = request.GET.get("compare_id")
-
-    portfolio = equity = compare_to = None
     try:
-        portfolio = Portfolio.objects.get(id=portfolio_id, user=request.user)
-        if equity_id:
-            equity = Equity.objects.get(id=equity_id)
-        if compare_id:
-            compare_to = Equity.objects.get(id=compare_id)
-    except:  # Yes,  I know this is too broad but really,  what else could it be
-        JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+        portfolio = Portfolio.objects.get(id=request.GET.get("portfolio_id"), user=request.user)
+        compare_to = Equity.objects.get(id=request.GET.get("compare_id"))
+        equity = Equity.objects.get(id=request.GET.get("equity_id"))
+    except:
+        JsonResponse({'status': 'false', 'message': 'Server Error - Does Not Exist'}, status=404)
+
+    xas = portfolio.transactions.filter(equity=equity) if equity else portfolio.transactions
+    xas = xas.order_by('date')  # just to be safe
+    xa_list = list(xas.values_list('date', flat=True))
+
+    first_date = xas.first().date
+    last_date = normalize_today()
+
+    ct_div_dict = dict(EquityEvent.objects.filter(equity=compare_to, event_type='Dividend', date__gte=first_date).values_list('date', 'value'))
+    e_div_dict = dict(EquityEvent.objects.filter(equity=equity, event_type='Dividend', date__gte=first_date).values_list('date', 'value'))
+    ct_value_dict = dict(EquityValue.objects.filter(equity=compare_to, date__gte=first_date).values_list('date', 'price'))
+    e_value_dict = dict(EquityValue.objects.filter(equity=equity, date__gte=first_date).values_list('date', 'price'))
+
+    months = []
+    month_dict = {}
+    next_date = first_date
+    while next_date <= last_date:
+        months.append(next_date)
+        month_dict[next_date] = len(months) - 1
+        next_date = next_date + relativedelta.relativedelta(months=1)
+
+    cost = ct_shares = e_shares = ct_div = e_div = 0
+    cost_list = []
+    ct_value_list = []
+    ct_div_list = []
+    e_value_list = []
+    e_div_list = []
+
+    for this_date in months:
+        if this_date in xa_list:
+            result = xas.filter(date=this_date).aggregate(Sum('quantity'), Avg('price'))
+            amount = result['quantity__sum']
+            price = result['price__avg']
+            cost += amount * price
+            e_shares += amount
+            ct_shares += (amount * price) / ct_value_dict[this_date]
+        cost_list.append(cost)
+        ct_value_list.append(ct_shares * ct_value_dict[this_date])
+        e_value_list.append(e_shares * e_value_dict[this_date])
+        if this_date in ct_div_dict:
+            ct_div += ct_shares * ct_div_dict[this_date]
+        ct_div_list.append(ct_div)
+        if this_date in e_div_dict:
+            e_div += e_shares * e_div_dict[this_date]
+        e_div_list.append(e_div)
 
     colors = COLORS.copy()
     ci = 0
-    chart_data = {'labels': sorted(portfolio.p_pd['Date'].unique()), 'datasets': []}
-
-    for this_equity in portfolio.e_pd['Equity'].unique():
-        if (equity and this_equity == equity.symbol) or not equity:
-            values = overlay_dates(portfolio.e_pd, 'Value', this_equity, chart_data['labels'])
-            chart_data['datasets'].append({'label': this_equity, 'fill': True, 'data': values, 'backgroundColor': colors[ci]})
-            ci += 1
-
-    if equity:
-        cost = overlay_dates(portfolio.e_pd, 'InflatedCost', equity.symbol, chart_data['labels'])
-    else:
-        cost = portfolio.p_pd['InflatedCost'].tolist()
-    next_color = colors.pop()
-    chart_data['datasets'].append({'label': 'Inflated Cost', 'type': 'line', 'fill': False, 'data': cost, 'borderColor': colors[ci],
-                                   'backgroundColor': colors[ci]})
-    ci += 1
-    if compare_to:
-        if equity:
-            new_df = portfolio.switch(compare_to, equity)
-            compare = overlay_dates(new_df, 'Value', compare_to.symbol, chart_data['labels'])
-        else:
-            new_df = portfolio.switch(compare_to)
-            compare = new_df['InflatedCost'].tolist()
-        chart_data['datasets'].append({'label': compare_to.symbol, 'fill': True, 'data': compare, 'backgroundColor': colors[ci]})
+    chart_data = {'labels': sorted(months), 'datasets': []}
+    chart_data['datasets'].append({'label': 'Cost', 'type': 'line', 'fill': False, 'data': cost_list, 'borderColor': colors[0],
+                                   'backgroundColor': colors[0]})
+    chart_data['datasets'].append({'label': f'{{Equity}} Value', 'type': 'line', 'fill': False, 'data': e_value_list, 'borderColor': colors[1],
+                                   'backgroundColor': colors[1]})
+    chart_data['datasets'].append({'label': f'{{Equity}} Dividends', 'type': 'line', 'fill': False, 'data': e_div_list, 'borderColor': colors[2],
+                                   'backgroundColor': colors[2]})
+    chart_data['datasets'].append({'label': f'{{compare_to}} Value', 'type': 'line', 'fill': False, 'data': ct_value_list, 'borderColor': colors[3],
+                                   'backgroundColor': colors[3]})
+    chart_data['datasets'].append({'label': f'{{compare_to}} Dividends', 'type': 'line', 'fill': False, 'data': ct_div_list, 'borderColor': colors[4],
+                                   'backgroundColor': colors[4]})
 
     return JsonResponse(chart_data)
 
@@ -445,14 +529,14 @@ def cost_value_chart(request):
             if not equity_id:
                 chart_data['datasets'].append({'label': 'Inflation Cost', 'fill': False,
                                                'data': p.p_pd['InflatedCost'].tolist(),
-                                               'borderColor': colors[0], 'backgroundColor': colors[0]})
+                                               'borderColor': colors[0], 'backgroundColor': colors[0], 'tension': 0.1})
                 chart_data['datasets'].append({'label': 'Effective Cost', 'fill': False,
                                                'data': p.p_pd['EffectiveCost'].tolist(),
                                                'borderColor': colors[1], 'backgroundColor': colors[1]})
                 value = p.p_pd['Value'] + p.p_pd['Cash']
                 chart_data['datasets'].append({'label': 'Value', 'fill': False,
                                                'data': value.tolist(),
-                                               'borderColor': colors[3], 'backgroundColor': colors[3]})
+                                               'borderColor': colors[3], 'backgroundColor': colors[3], 'tension': 0.1})
 
             else:
                 try:
