@@ -163,9 +163,9 @@ class Item(models.Model):
     One item will exist for each expense,   any item that does not have a category/subcategory will be process by
     applying templates on entry (import or single item)
     """
-    date = models.DateField(null=False, blank=False, verbose_name="Expense Date")
+    date = models.DateField(null=False, blank=False, verbose_name="Date")
     description: str = models.CharField(max_length=120, null=False, blank=False)
-    amount = models.FloatField(null=False, blank=False)
+    amount: float = models.FloatField(null=False, blank=False)
     source = models.CharField(max_length=40, null=False, blank=False)
     template = models.ForeignKey(Template, blank=True, null=True, on_delete=models.SET_NULL)
     category = models.ForeignKey(Category, blank=True, null=True, on_delete=models.SET_NULL)
@@ -173,6 +173,8 @@ class Item(models.Model):
     details = models.CharField(max_length=80, blank=True, null=True)
     ignore = models.BooleanField(default=False)
     amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='parent')
+    split = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='split_from')
+
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
     notes = models.TextField(blank=True, null=True)
 
@@ -184,8 +186,59 @@ class Item(models.Model):
             return f'{self.date}: {self.description} - {self.amount}'
 
     @property
+    def can_delete(self) -> bool:
+        """
+        Split items
+        """
+        if self.split:
+            siblings = Item.objects.filter(split=self.split).exclude(pk=self.pk)
+            if siblings.count() == 1:
+                if Item.objects.filter(split=siblings[0]).count() != 0:
+                    return False
+        return True
+
+
+    @property
+    def is_split(self) -> bool:
+        return Item.objects.filter(split=self).count() !=0
+
+    @property
     def is_amortized(self) -> bool:
         return Item.objects.filter(amortized=self).count() != 0
+
+    def split_item(self, amount: float, description: str) -> str:
+        if amount > self.amount:
+            error = 'Attempted to split %s with too large of an amount %s' % (self, amount)
+            logger.error(error)
+            return error
+
+        if not description:
+            description = self.description
+
+        # new item
+        Item.objects.create(date=self.date,
+                            description=description,
+                            amount=amount,
+                            category=None,
+                            subcategory=None,
+                            ignore=False,
+                            source='Split',
+                            details=self.details,
+                            user=self.user,
+                            split=self)
+        # remaining item
+        if self.amount - amount != 0:
+            Item.objects.create(date=self.date,
+                                description=self.description,
+                                amount=self.amount - amount,
+                                category=None,
+                                subcategory=None,
+                                ignore=self.ignore,
+                                source='Split',
+                                details=self.details,
+                                user=self.user,
+                                split=self)
+        return ''
 
     def amortize(self, months:int, direction:str = 'forward') -> str:
         if self.amortized:

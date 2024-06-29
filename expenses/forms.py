@@ -127,7 +127,7 @@ class ItemListForm(forms.ModelForm):
         self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
 
-        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:LightBlue'
+        self.fields["description"].widget.attrs['style'] = 'width:700px;background-color:LightBlue'
         self.fields["description"].widget.attrs['readonly'] = True
 
         self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
@@ -168,16 +168,18 @@ class ItemAddForm(forms.ModelForm):
 
 
 class ItemEditForm(forms.ModelForm):
-    ['forward', 'backward', 'around']
     amortize_type = forms.ChoiceField(required=False, choices=(('backward', 'Past - Historic Savings'),
                                                                              ('forward', 'Future budget item'),
                                                                              ('around', 'Split expense around the date')))
     amortize_months = forms.IntegerField(required=False)
+    s_amount = forms.FloatField(required=False)
+    s_description = forms.CharField(required=False)
 
 
     class Meta:
         model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "amortize_months", "amortize_type", "notes")
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore",
+                  "amortize_months", "amortize_type", "s_amount", "s_description", "notes")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -189,6 +191,10 @@ class ItemEditForm(forms.ModelForm):
 
         self.fields["amount"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
         self.fields["amount"].widget.attrs['readonly'] = True
+
+        self.fields["amortize_months"].widget.attrs['style'] = 'width:100px;'
+        self.fields["s_amount"].widget.attrs['style'] = 'width:100px;'
+        self.fields["s_description"].widget.attrs['style'] = 'width:400px;'
 
     def clean(self):
         super().clean()
@@ -208,6 +214,16 @@ class ItemEditForm(forms.ModelForm):
                 self.instance.deamortize()
                 self.cleaned_data["ignore"] = False
 
+        if self.cleaned_data["s_amount"]:
+            if self.instance.is_split:
+                raise forms.ValidationError(
+                    f'Error: this item is already split')
+
+            result = self.instance.split_item(self.cleaned_data["s_amount"], self.cleaned_data["s_description"])
+            if result:
+                raise forms.ValidationError(result)
+            self.cleaned_data["ignore"] = True
+
 
 class ItemForm(forms.ModelForm):
 
@@ -220,7 +236,7 @@ class ItemForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["date"].widget.attrs['style'] = 'width:110px;background-color:Wheat'
+        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
 
         self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:LightBlue'

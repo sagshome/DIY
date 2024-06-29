@@ -22,6 +22,7 @@ urlpatterns = [
     path(r'portfolio/<pk>/update/', views.portfolio_update, name='portfolio_update'),
     path(r'portfolio/<pk>/<symbol>/details/', views.portfolio_equity_details, name='portfolio_equity_details'),
     path(r'portfolio/<pk>/<symbol>/compare/', views.portfolio_compare, name='portfolio_compare'),
+    path(r'portfolio/<pk>/<orig_id>/<compare_id>/compare/', views.portfolio_equity_compare, name='portfolio_equity_compare'),
 
     path(r'portfolio/transaction/add/', views.add_transaction,  name='transaction_add'),
     path(r'portfolio/transaction/<pk>/edit/', views.TransactionEdit.as_view(),  name='transaction_edit'),

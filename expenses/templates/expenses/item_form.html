@@ -36,16 +36,63 @@
             {{ hidden_field }}
         </div>
     {% endfor %}
-    <table>
-        {% if object.amortized %}
-            <tr>
-                <td class="w3-container w3-margin w3-right-align">Parent Item:</td>
-                <td class="w3-container w3-margin">
-                    <a href="{% url 'expense_edit' object.amortized.id %}">{{object.amortized.description}}</a>
-                </td>
-            </tr>
-        {% endif %}
 
+    {% if object.amortized %}
+        <p class="w3-margin=left">This expense was amortized from <a href="{% url 'expense_edit' object.amortized.id %}">{{object.amortized.description}}</a></p>
+    {% endif %}
+
+    {% if object.split %}
+        <p class="w3-margin=left">This expense was split from <a href="{% url 'expense_edit' object.split.id %}">{{object.split.description}}</a></p>
+    {% endif %}
+    <table>
+
+
+        <tr>
+            <td class="w3-container w3-margin w3-right-align">{{ form.date.label_tag }}</td>
+            <td> {{ form.date }}</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>{{ form.date.errors }}</td>
+        </tr>
+        <tr>
+            <td class="w3-container w3-margin w3-right-align">{{ form.amount.label_tag }}</td>
+            <td> {{ form.amount }}</td>
+            <td class="w3-container w3-margin w3-right-align">{{ form.description.label_tag }}</td>
+            <td> {{ form.description }}</td>
+            <td></td>
+            <td></td>
+            <td>{{ form.amount.errors }} {{ form.description.errors }}</td>
+        </tr>
+        <tr>
+            <td class="w3-container w3-margin w3-right-align">{{ form.category.label_tag }}</td>
+            <td> {{ form.category }}</td>
+            <td class="w3-container w3-margin w3-right-align">{{ form.subcategory.label_tag }}</td>
+            <td> {{ form.subcategory }}</td>
+            <td class="w3-container w3-margin w3-right-align">{{ form.ignore.label_tag }}</td>
+            <td> {{ form.ignore }}</td>
+            <td>{{ form.category.errors }} {{ form.subcategory.errors }} {{ form.ignore.errors }}</td>
+        </tr>
+        <tr>
+            <td class="w3-container w3-margin w3-right-align">{{ form.amortize_months.label_tag }}</td>
+            <td> {{ form.amortize_months }}</td>
+            <td class="w3-container w3-margin w3-right-align">{{ form.amortize_type.label_tag }}</td>
+            <td> {{ form.amortize_type }}</td>
+            <td></td>
+            <td></td>
+            <td>{{ form.amortize_months.errors }} {{ form.amortize_type.errors }}</td>
+        </tr>
+        <tr>
+            <td class="w3-container w3-margin w3-right-align">Split Expense Amount:</td>
+            <td> {{ form.s_amount }}</td>
+            <td class="w3-container w3-margin w3-right-align">New Description:</td>
+            <td> {{ form.s_description }}</td>
+            <td></td>
+            <td></td>
+            <td>{{ form.s_amount.errors }} {{ form.description.errors }}</td>
+        </tr>
+        <!--
         {% for field in form.visible_fields %}
             <tr>
                 <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>
@@ -57,11 +104,14 @@
                 {% endif %}
             </tr>
         {% endfor %}
+        -->
     </table>
     <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
     </form>
+
     {% if children %}
          <table class="w3-margin">
+             <caption class="w3-wide w3-padding-16">Amortized Item List</caption>
              <thead>
              <tr>
                  <th>Amortized Date</th>
@@ -74,6 +124,34 @@
              </thead>
             {% for child in children %}
                 <tr>
+                    <td style="width:95px">{{child.date | date:'Y-m-d'}}</td>
+                    <td>${{child.amount | floatformat:2 }}</td>
+                    <td><a href="{% url 'expense_edit' child.id %}">{{child.description}}</a></td>
+                    <td>{{child.category}}</td>
+                    <td>{{child.subcategory}}</td>
+                    <td>{{child.ignore}}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+
+    {% if split_from %}
+         <table class="w3-margin">
+             <caption class="w3-wide w3-padding-16">Split Item List</caption>
+             <thead>
+             <tr>
+                 <th></th>
+                 <th>Date</th>
+                 <th>Amount</th>
+                 <th>Description</th>
+                 <th>Category</th>
+                 <th>Subcategory</th>
+                 <th>Ignored</th>
+             </tr>
+             </thead>
+            {% for child in split_from %}
+                <tr>
+                    <td></td>
                     <td style="width:95px">{{child.date | date:'Y-m-d'}}</td>
                     <td>${{child.amount | floatformat:2 }}</td>
                     <td><a href="{% url 'expense_edit' child.id %}">{{child.description}}</a></td>

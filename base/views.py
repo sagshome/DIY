@@ -1,3 +1,4 @@
+from datetime import datetime
 from django.contrib.auth.models import User
 from django.shortcuts import render, HttpResponseRedirect
 from django.urls import reverse_lazy
@@ -26,11 +27,14 @@ from expenses.models import Item
 @login_required
 def diy_main(request):
     items = Item.objects.filter(user=request.user)
+    today = datetime.now()
+    from_date = today.replace(year=today.year-2)
 
     return render(request, "base/diy_main.html",
                   {'expense_total': items.count(),
-                   'expenses_ignored': items.filter(ignore=True).count(),
-                   'expenses_uncategorized': items.filter(ignore=False, category__isnull=True)})
+                          'expenses_ignored': items.filter(ignore=True).count(),
+                          'expenses_uncategorized': items.filter(ignore=False, category__isnull=True),
+                          'from_date': from_date.strftime('%Y-%m-%d')})
 
 
 class NewAccountView(PasswordResetView):

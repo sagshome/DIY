@@ -352,6 +352,81 @@ def equity_update(request,  key):
 
 
 @login_required
+def portfolio_equity_compare(request, pk, orig_id, compare_id):
+    try:
+        portfolio = Portfolio.objects.get(id=pk, user=request.user)
+        compare_to = Equity.objects.get(id=compare_id)
+        equity = Equity.objects.get(id=orig_id)
+    except:
+        JsonResponse({'status': 'false', 'message': 'Server Error - Does Not Exist'}, status=404)
+
+    xas = portfolio.transactions.filter(equity=equity) if equity else portfolio.transactions
+    xas = xas.order_by('date')  # just to be safe
+    xa_list = list(xas.values_list('date', flat=True))
+
+    first_date = xas.first().date
+    last_date = normalize_today()
+
+    ct_div_dict = compare_to.event_dict()
+    e_div_dict = equity.event_dict()
+
+    ct_value_dict = compare_to.value_dict()
+    e_value_dict = equity.value_dict()
+
+    months = []
+    month_dict = {}
+    next_date = first_date
+    while next_date <= last_date:
+        months.append(next_date)
+        month_dict[next_date] = len(months) - 1
+        next_date = next_date + relativedelta.relativedelta(months=1)
+
+    cost = ct_shares = e_shares = ct_div = e_div = 0
+    cost_list = []
+    ct_value_list = []
+    ct_div_list = []
+    e_value_list = []
+    e_div_list = []
+
+    for this_date in months:
+        if this_date in xa_list:
+            result = xas.filter(date=this_date).aggregate(Sum('quantity'), Avg('price'))
+            amount = result['quantity__sum']
+            price = result['price__avg']
+            cost += amount * price
+            e_shares += amount
+            ct_shares += (amount * price) / ct_value_dict[this_date]
+        cost_list.append(cost)
+        if e_shares:
+            if this_date in ct_value_dict:
+                ct_value_list.append(ct_shares * ct_value_dict[this_date])
+            if this_date in e_value_dict:
+                e_value_list.append(e_shares * e_value_dict[this_date])
+            if this_date in ct_div_dict:
+                ct_div += ct_shares * ct_div_dict[this_date]
+            ct_div_list.append(ct_div)
+            if this_date in e_div_dict:
+                e_div += e_shares * e_div_dict[this_date]
+            e_div_list.append(e_div)
+
+    colors = COLORS.copy()
+    ci = 0
+    chart_data = {'labels': sorted(months), 'datasets': []}
+    chart_data['datasets'].append({'label': 'Cost', 'type': 'line', 'fill': False, 'data': cost_list, 'borderColor': colors[0],
+                                   'backgroundColor': colors[0]})
+    chart_data['datasets'].append({'label': f'{equity.symbol} Value', 'type': 'line', 'fill': False, 'data': e_value_list, 'borderColor': colors[1],
+                                   'backgroundColor': colors[1]})
+    chart_data['datasets'].append({'label': f'{equity.symbol} Dividends', 'type': 'line', 'fill': False, 'data': e_div_list, 'borderColor': colors[2],
+                                   'backgroundColor': colors[2]})
+    chart_data['datasets'].append({'label': f'{compare_to.symbol} Value', 'type': 'line', 'fill': False, 'data': ct_value_list, 'borderColor': colors[3],
+                                   'backgroundColor': colors[3]})
+    chart_data['datasets'].append({'label': f'{compare_to.symbol} Dividends', 'type': 'line', 'fill': False, 'data': ct_div_list, 'borderColor': colors[4],
+                                   'backgroundColor': colors[4]})
+
+    return JsonResponse(chart_data)
+
+
+@login_required
 def portfolio_equity_details(request, pk, symbol):
     """
 
@@ -365,10 +440,15 @@ def portfolio_equity_details(request, pk, symbol):
     """
     portfolio = get_object_or_404(Portfolio, pk=pk, user=request.user)
     equity = get_object_or_404(Equity, symbol=symbol)
+    compare_to = None
+    if request.method == 'POST':
+        form = EquityForm(request.POST)
+        if form.is_valid():
+            compare_to = form.cleaned_data['equity']
 
     dividend_detail = dict(EquityEvent.objects.filter(event_type='Dividend', equity=equity).values_list('date', 'value'))
     value_detail = dict(EquityValue.objects.filter(equity=equity).values_list('date', 'price'))
-
+    form = EquityForm()
     data = []
     #portfolio.pd['Date'] = pd.to_datetime(portfolio.pd['Date'])
     df_sorted = portfolio.e_pd.sort_values(by='Date')
@@ -405,7 +485,9 @@ def portfolio_equity_details(request, pk, symbol):
                    'portfolio': portfolio,
                    'equity': equity,
                    'funded': funded,
-                   'dividends': total_dividends
+                   'dividends': total_dividends,
+                   'form': form,
+                   'compare_to': compare_to
                    })
 
 

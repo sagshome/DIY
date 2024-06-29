@@ -401,6 +401,22 @@ class Equity(models.Model):
 
         self.fill_equity_holes()
 
+    def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
+        queryset = EquityEvent.objects.filter(equity=self)
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if event:
+            queryset = queryset.filter(event_type=event)
+        else:
+            queryset = queryset.filter(event_type='Dividend')
+        return dict(queryset.values_list('date', 'value'))
+
+    def value_dict(self, start_date: datetime.date = None) -> Dict[datetime.date, float]:
+        if not start_date:
+            return dict(EquityValue.objects.filter(equity=self).values_list('date', 'price'))
+        else:
+            return dict(EquityValue.objects.filter(equity=self, date__gte=start_date).values_list('date', 'price'))
+
 
 class EquityAlias(models.Model):
     '''
@@ -507,6 +523,7 @@ class EquityEvent(models.Model):
 
     def __str__(self):
         return f'{self.equity} - {self.date}:{self.event_type} {DataSource(self.source).name}'
+
 
     @classmethod
     def get_or_create(cls, **kwargs):

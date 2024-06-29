@@ -15,7 +15,10 @@
     $(document).ready(function() {
       $.ajax({
         url: '/expenses/ajax/expense-pie',
-        data: {},
+
+        data: {'search_ignore': 'No',
+               'search_start_date': '{{from_date}}'
+                },
         success: function (data) {
           new Chart("myChart", {
             type: "pie",

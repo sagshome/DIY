@@ -64,6 +64,8 @@ class ItemEdit(LoginRequiredMixin, UpdateView):
         if self.object.parent:
             context['children'] = self.object.parent.all()
 
+        if self.object.split_from:
+            context['split_from'] = self.object.split_from.all()
         return context
 
 
@@ -77,8 +79,6 @@ class DeleteTemplateView(LoginRequiredMixin, DeleteView):
     model = Template
     template_name = 'expenses/template_confirm_delete.html'
     success_url = reverse_lazy("expenses_templates")
-
-
 
 
 @login_required

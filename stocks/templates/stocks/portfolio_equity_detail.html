@@ -2,14 +2,17 @@
 {% block title %}Portfolio Equity Details{% endblock %}
 {% block content %}
         <script>
+            var lineChart = ''
             $(document).ready(function() {
+                //var initial_data = {'labels': [], 'datasets': [{}]}
+                //lineChart = new Chart(document.getElementById('lineChart'), {type: "line", data: initial_data, options: {}})
 
               $.ajax({
                 url: "{% url 'cost_value_chart' %}",
                 data: {'portfolio_id': {{ portfolio.id }},
                        'symbol': {{ equity.id}} },
                 success: function (data) {
-                  new Chart("lineChart", {
+                  lineChart = new Chart("lineChart", {
                     type: "line",
                     data: data,
                     options: {
@@ -26,6 +29,48 @@
                             }
                         },
 
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        title: {
+                          display: true,
+                          text: "Return vs Cost"
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'center'
+                        },
+                    }
+                  });
+                }
+              });
+            });
+
+            $(document).on('change', 'select', function() {
+                var url = "{% url 'portfolio_list' %}";
+                var compare_id = $(this).val()
+                console.log('compare to' + $(this).val()); // the selected options’s value
+                lineChart.destroy()
+                $.ajax({
+                url: "{% url 'portfolio_equity_compare' pk=portfolio.id orig_id=equity.id compare_id=0 %}".replace('0', compare_id),
+                data: {},
+                success: function (data) {
+                  lineChart = new Chart("lineChart", {
+                    type: "line",
+                    data: data,
+                    options: {
+                        scales: {
+                            yAxes: [{
+                                ticks: {
+                                    beginAtZero: true
+                                }
+                            }]
+                        },
+                        elements: {
+                            point:{
+                                radius: 2
+                            }
+                        },
                         responsive: true,
                         maintainAspectRatio: false,
                         title: {
@@ -61,6 +106,9 @@
                 </ul>
             </div>
         </div>
+    </div>
+    <div class="w3-margin">
+        Select Equity for comparison chart: {{form.equity}}
     </div>
 
     <div class="w3-container w3-margin-top">

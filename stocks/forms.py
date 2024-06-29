@@ -8,6 +8,12 @@ def popover_html(label, content):
                             data-trigger="hover" data-placement="auto" data-content="' + content + '"> \
                             <span class="glyphicon glyphicon-info-sign"></span></a>'
 
+class EquityForm(forms.Form):
+    choices = [(None, '--------')]
+    for equity in Equity.objects.all().order_by('symbol'):
+        choices.append((equity.id, f'{equity.symbol} - {equity.region} ({equity.name})'))
+    equity = forms.ChoiceField(choices=choices)
+
 
 class AddEquityForm(forms.Form):
 
