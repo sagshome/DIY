@@ -117,9 +117,19 @@ class UploadFileForm(forms.Form):
 
 
 class ItemListForm(forms.ModelForm):
+
+    amortize_type = forms.ChoiceField(required=False, choices=(('backward', 'Past - Historic Savings'),
+                                                                             ('forward', 'Future budget item'),
+                                                               ('around', 'Split expense around the date')))
+
+    amortize_months = forms.IntegerField(required=False)
+    s_amount = forms.FloatField(required=False)
+    s_description = forms.CharField(required=False)
+
     class Meta:
         model = Item
-        fields = ("date", "amount", "description", "category", "subcategory", "ignore")
+        fields = ("date", "amount", "description", "category", "subcategory", "ignore",
+                  "amortize_months", "amortize_type", "s_amount", "s_description", "notes")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

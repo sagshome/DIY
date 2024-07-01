@@ -1,6 +1,22 @@
 {% block script %}
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+
     <script>
+
+        var init_amonth = 0
+        var init_atype = ''
+        var init_samount = 0
+        var init_desc = ''
+
+        function exposeModal(el) {
+            el.nextElementSibling.style.display="block"
+
+        }
+
+        function hideModal(el) {
+            el.parentElement.parentElement.style.display="none"
+        }
+
         $(document).ready(function() {
           var url = $("#itemForm").attr("data-subcategories-url");  // Setup mousedown to fetch valid data for choice
           $('.item-list-subcategory').each(function(index, element) {
@@ -49,34 +65,77 @@
             {% if forloop.first %}
             <thead>
                 <tr>
+                    <th></th>
                     {% for field in form.visible_fields %}
                         <th>{{ field.label|capfirst }}</th>
+                        {% if field.name == 'description' %}
+                            <th></th>
+                            <th></th>
+                        {% endif %}
                     {% endfor %}
                 </tr>
             </thead>
             {% endif %}
             <tr class="{% cycle 'row1' 'row2' %}">
-                {% for field in form.visible_fields %}
-                    <td>
-                        {# Include the hidden fields in the form #}
-                        {% if forloop.first %}
-                            <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
-
-                            {% for hidden in form.hidden_fields %}
-                                {{ hidden }}
-                            {% endfor %}
+                <td>
+                    <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
+                    {% for hidden in form.hidden_fields %}
+                        {{ hidden }}
+                    {% endfor %}
+                </td>
+                <td>{{ form.date }}</td>
+                <td>{{ form.amount}}</td>
+                <td>{{ form.description}}</td>
+                <td onclick="exposeModal(this)"><i class="fa fa-pencil"></i></td>
+                <td class="w3-modal">
+                    <div class="w3-modal-content" style="width:80%">
+                        <span onclick="hideModal(this)" class="w3-button w3-display-topright">&times;</span>
+                        <h2>Editing Expense Item</h2>
+                        {% if form.instance.amortized %}
+                            <p class="w3-margin=left">This expense was amortized from{{form.instance.amortized.description}</p>
                         {% endif %}
 
-
-                        {{ field.errors.as_ul }}
-                        {% if field.name == 'description' %}
-                            <a href="{% url 'expense_edit' form.instance.id %}">{{field}}</a>
-                        {% else %}
-                            {{ field }}
+                        {% if form.instance.split %}
+                            <p class="w3-margin=left">This expense was split from {{form.instance.split.description}}</p>
                         {% endif %}
 
-                    </td>
-                {% endfor %}
+                        <table class="w3-model-content">
+                            <tr>
+                                <td class="w3-container w3-margin w3-right-align">{{ form.date.label_tag }}</td>
+                                <td> {{ form.date }}</td>
+                                <td></td>
+                                <td></td>
+                                <td>{{ form.date.errors }}</td>
+                            </tr>
+                            <tr>
+                                <td class="w3-container w3-margin w3-right-align">{{ form.amount.label_tag }}</td>
+                                <td> {{ form.amount }}</td>
+                                <td class="w3-container w3-margin w3-right-align">{{ form.description.label_tag }}</td>
+                                <td> {{ form.description }}</td>
+                                <td>{{ form.amount.errors }} {{ form.description.errors }}</td>
+                            </tr>
+                            <tr>
+                                <td class="w3-container w3-margin w3-right-align">{{ form.amortize_months.label_tag }}</td>
+                                <td> {{ form.amortize_months }}</td>
+                                <td class="w3-container w3-margin w3-right-align">{{ form.amortize_type.label_tag }}</td>
+                                <td> {{ form.amortize_type }}</td>
+                                <td>{{ form.amortize_months.errors }} {{ form.amortize_type.errors }}</td>
+                            </tr>
+                            <tr>
+                                <td class="w3-container w3-margin w3-right-align">Split Expense Amount:</td>
+                                <td> {{ form.s_amount }}</td>
+                                <td class="w3-container w3-margin w3-right-align">New Description:</td>
+                                <td> {{ form.s_description }}</td>
+                                <td>{{ form.s_amount.errors }} {{ form.description.errors }}</td>
+                            </tr>
+                        </table>
+                        <span onclick="hideModal(this)" class="w3-margin w3-button w3-round-xlarge w3-green">Save</span>
+                        <span onclick="hideModal(this)" class="w3-margin w3-button w3-round-xlarge w3-red w3-display-bottomright">Cancel</span>
+                    </div>
+                </td>
+                <td>{{ form.category }} {{ form.category.errors.as_ul }}</td>
+                <td>{{ form.subcategory }}</td>
+                <td>{{ form.ignore }}</td>
             </tr>
         {% endfor %}
     </table>
