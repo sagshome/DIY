@@ -60,7 +60,7 @@ This is unix based.  I am sure you can figure it out.
 
     docker network create --subnet=172.20.0.0/16 diy_network
 
-    docker run --name diy_db     --restart unless-stopped --network diy_network --ip 172.20.0.10 --env-file diy/diy.env -d mysql
+    docker run --name diy_db     --restart unless-stopped --network diy_network --ip 172.20.0.10 --env-file diy/diy.env -v /shared/database/DIY:/var/lib/mysql -d mysql
 
     docker run --name diy_app    --restart unless-stopped --network diy_network --ip 172.20.0.15 --env-file diy/diy.env -d diy-app
 
