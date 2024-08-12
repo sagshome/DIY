@@ -66,3 +66,7 @@ class NewAccountDoneView(PasswordContextMixin, TemplateView):
 class NewAccountComplete(PasswordResetCompleteView):
     class PasswordResetCompleteView(PasswordContextMixin, TemplateView):
         template_name = "registration/password_reset_complete.html"
+
+def diy_help(request, fakepath):
+    return render(request, "diy/help.html", {})
+

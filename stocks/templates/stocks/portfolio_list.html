@@ -24,6 +24,7 @@
         }
     </script>
 {% endblock local_script %}
+<h2>Portfolio list for {{request.user}}</h2>
     <table class="w3-table w3-striped">
         <tr>
             <th>Portfolio Name</th>
@@ -60,3 +61,34 @@
     </table>
     <a href="{% url 'portfolio_add' %}"><button class="w3-margin w3-button-large w3-round-xlarge w3-green">New Portfolio</button></a>
 {% endblock content %}
+{% block help_content %}
+<p>
+    <b>Welcome to investments</b>.  The purpose of this application is to provide a mechanism to visualize your investments
+    and provide some comparison abilities.     I am based in Canada,  so I focused on the TSX and US markets.  I track
+    changes to the value of our dollars and Canadian Inflation.  This provides the ability for me to see how well I am
+    doing with regard to inflation.  On dividend accounts,  I also factor in withdraws, so I get a better value on my real
+    return.
+</p>
+<p>
+    <b>A few basics before we start</b>.  I have only focused on CANadian and US equity markets.   If you want me to
+    look at something else feel free to work with <a href="D1Yapp.ca@gmail.com">me</a>, it is a hobby, so I don't mind
+    digging in to help others out.<br><br>
+    I have broken things up into portfolios,  you can have as many as you want you can copy them change them a watch
+    you real or virtual investments grow.<br><br>
+    I use <a href="https://www.alphavantage.co/">Alpha Vantages</a> to get daily stock price values.  I only update once
+    a day (since I have the free key).  You can get your own key and plug it into your profile and then do you own updates.
+    if you wish.
+</p>
+<p>This page lists all your portfolios and their current values.   You can work portoflios by hand or you can do an
+import.  The import is quite complex and I only support a few formats right now.</p>
+<ul>
+    <li>Effective Cost - is the funds invested, less the money withdrawn</li>
+    <li>Start/End  - are the dates the portfolio was active from</li>
+    <li>Present Value - is the value as of my last update (usually last evening after market close</li>
+    <li>Growth - is the change in Value based on the Effective cost</li>
+    <li>Total Dividends - Are the dividends earned in this portfolio</li>
+</ul>
+It is important to note that dividends that are not withdrawn do not lower effective cost.  If they remain as cash
+in the account they are just that.   In the same vane,  Total Dividends does not mean the cash is available.  It could
+have been withdrawn or reinvested.
+{% endblock %}

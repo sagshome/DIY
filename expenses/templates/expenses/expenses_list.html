@@ -55,9 +55,15 @@
                 </tr>
             </thead>
             {% endif %}
-            <tr class="{% cycle 'row1' 'row2' %}">
+            <tr>
                 {% for field in form.visible_fields %}
-                    <td>
+
+                    {% if field.name == 'ignore' or field.name == 'split_expense' or field.name == 'is_amortized' %}
+                        <td class="w3-center">
+                            {% else %}
+                            <td>
+                    {% endif %}
+
                         {# Include the hidden fields in the form #}
                         {% if forloop.first %}
                             <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
@@ -80,7 +86,5 @@
             </tr>
         {% endfor %}
     </table>
-    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Save</button>
-
-
+    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Submit</button>
 {% endblock %}
