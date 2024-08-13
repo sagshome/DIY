@@ -47,3 +47,15 @@
 </table>
 
 {% endblock %}
+
+{% block help_content %}
+<p>
+    The <b>Template</b> page lists all the templates you have defined while in the
+    <a href="{% url 'expenses_assign' %}">Assign Expense Categories</a> page.   This is a
+    sortable table,  you can delete a template (which has no effect on expenses already processed using this template.
+    You can select update and then get the list of expenses that were processed with it.  You can then reassign them
+    if need be.
+</p>
+<p>It is best practice to sort by the Used column and delete the templates that only have 1 or 2 usages.   It may
+speed up future imports.</p>
+{% endblock %}

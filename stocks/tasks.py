@@ -17,9 +17,9 @@ def daily_update():
                 total_calls += 1
                 equity.update(key=settings.ALPHAVANTAGEAPI_KEY)
 
-        Inflation.update()
+    Inflation.update()
 
-        ExchangeRate.update()
+    ExchangeRate.update()
 
-        for portfolio in Portfolio.objects.all():
-            portfolio.update_static_values()
+    for portfolio in Portfolio.objects.all():
+        portfolio.update_static_values()

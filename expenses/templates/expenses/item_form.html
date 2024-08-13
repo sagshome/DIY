@@ -163,3 +163,29 @@
         </table>
     {% endif %}
 {% endblock %}
+{% block help_content %}
+<p>
+    <b>Expense Form</b>.  This form is used to Add a new expense or alter an existing one.   The behaviours differ, so
+    I will document both of them for you.
+</p>
+<h4>Add Expense Item</h4>
+When Adding a new expense you must provide the Date,  the Amount,  the Description.  You may assign categories or even
+set it to be ignored.
+<h4>Edit Expense Item</h4>
+When Editing an expense you can not alter the Date,  the Amount,  or the Description.  You may assign categories or
+set it to be ignored/hidden.<br><br>
+<b>Amortize</b> Some expense are so large they skew that charts.   My best example of this is buying a car (with cash),
+this causes that month to go through the roof,  making all other months data impossible to read.   The two obvious
+solutions are <ol><li>Ignore/Hide the record - Fixes the charts, but it would then skew how much I spend on transportation</li>
+<li>Amortize It - Spreed the joy out over a longer period of time</li></ol>The choice is yours.  With amortization, you
+can spread the "payments" over the past months the future months or both.   My personal preference is to spread it out
+over the past months like I had been saving up for it all along.   Actually I was but that's not the point here.
+<br><br>
+<b>Split</b> Sometimes you may want to assign multiple categories to an expense.  This can be done via the split
+action.   Enter the amount you want to split-off and give it a new description.   This will make two new items and
+automatically hide the first.
+<br><br>
+In both cases elect the <button class="w3-button-small w3-round-large w3-green">Submit</button>
+to have the record processed.
+
+{% endblock %}

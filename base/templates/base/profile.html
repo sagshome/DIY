@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}DIY New User{% endblock %}
-
+{% block help_content %}
+<!-- todo:  Is this page even used > -->
+<p>I do not do anything with this info and if I ever do,  I will tell you.</p>
+<p>It is all pretty common information asks,  the only thing out of the ordinary is you can provide your own ALPHA VANTAGE API Key.
+Having your own key will allow you to force a stock price update.   The keys are free but limited to 25 calls a
+day.   Here is the <a href="https://www.alphavantage.co/">Alpha Vantages</a> website</p>
+{% endblock %}
 {% block content %}
   <h2 class="w3-margin-top">Create a new DIY User</h2>
   <form class="w3-margin-bottom" method="post">

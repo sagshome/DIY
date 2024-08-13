@@ -117,19 +117,17 @@ class UploadFileForm(forms.Form):
 
 
 class ItemListForm(forms.ModelForm):
-
-    amortize_type = forms.ChoiceField(required=False, choices=(('backward', 'Past - Historic Savings'),
-                                                                             ('forward', 'Future budget item'),
-                                                               ('around', 'Split expense around the date')))
-
-    amortize_months = forms.IntegerField(required=False)
-    s_amount = forms.FloatField(required=False)
-    s_description = forms.CharField(required=False)
+    is_split = forms.BooleanField(required=False, label='Split')
+    is_amortized = forms.BooleanField(required=False, label='Amortized')
+    # amortized_expense = forms.BooleanField()
 
     class Meta:
         model = Item
-        fields = ("date", "amount", "description", "category", "subcategory", "ignore",
-                  "amortize_months", "amortize_type", "s_amount", "s_description", "notes")
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "is_split", "is_amortized",
+                  "notes")
+        widgets = {
+          'notes': forms.Textarea(attrs={'rows':1, 'cols':15}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -143,12 +141,23 @@ class ItemListForm(forms.ModelForm):
         self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
         self.fields["amount"].widget.attrs['readonly'] = True
 
-
         self.fields["category"].widget.attrs['class'] = 'item-list-category'  # Used in the search javascript
-        #self.fields["category"].widget.attrs['style'] = 'width:125px;'
-
-        #self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
         self.fields["subcategory"].widget.attrs['class'] = 'item-list-subcategory'
+
+        self.fields["ignore"].label = 'Hidden'
+
+        if self.instance.is_split:
+            self.fields['is_split'].initial = True
+        else:
+            self.fields['is_split'].initial = False
+        self.fields["is_split"].widget.attrs['disabled'] = 'disabled'
+
+        if self.instance.is_amortized:
+            self.fields['is_amortized'].initial = True
+        else:
+            self.fields['is_amortized'].initial = False
+        self.fields["is_amortized"].widget.attrs['disabled'] = 'disabled'
+
 
     def clean(self):
         super().clean()

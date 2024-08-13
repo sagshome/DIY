@@ -199,8 +199,12 @@ class Item(models.Model):
 
 
     @property
+    def was_split(self) -> bool:
+        return Item.objects.filter(split=self).count() != 0
+
+    @property
     def is_split(self) -> bool:
-        return Item.objects.filter(split=self).count() !=0
+        return self.split_id is not None
 
     @property
     def is_amortized(self) -> bool:

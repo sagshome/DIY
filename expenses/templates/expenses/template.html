@@ -48,18 +48,17 @@
             </div>
             <div class="w3-row w3-margin-top">
                 <h2>Expense List</h2>
-                <div class="w3-twothird container">
                     {% include 'expenses/expenses_list.html' %}
-                </div>
-                <div class="w3-third container">
-                    <h3>Updating Templates</h3>
-                    Updating a template will only impact future imports.<br><br>
-                    Once an expense is assigned a category/subcategory
-                    or to be ignored it will remain regardless of the template changes.<br><br>
-                    You may choose to manually override
-                    the template values via the <b>Expense Item List</b>.
-                </div>
             </div>
         </form>
     </div>
 {% endblock content %}
+
+{% block help_content %}
+<h3>Updating Templates</h3>
+  Updating a template will only impact future imports.<br><br>
+                    Once an expense is assigned a category/subcategory
+                    or to be ignored it will remain regardless of the template changes.<br><br>
+                    You may choose to manually override
+                    the template values via the <b>Expense Item List</b>.
+{% endblock %}

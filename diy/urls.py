@@ -17,11 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, re_path, path
-from base.views import diy_main, NewAccountConfirmView, NewAccountDoneView
+from base.views import diy_main, NewAccountConfirmView, NewAccountDoneView, diy_help
 
 
 urlpatterns = [
     path("", diy_main, name='home_page'),
+    path("help/<path:fakepath>", diy_help, name='diy_help'),
     path("accounts/login/", auth_views.LoginView.as_view()),
     path("accounts/logout/", auth_views.LogoutView.as_view()),
 

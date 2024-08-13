@@ -45,3 +45,21 @@
         </div>
     {% endif %}
 {% endblock content %}
+
+{% block help_content %}
+<p>
+    Without the ability to <b>Upload</b> content the expense system would be too arduous to use.   This system using CSV
+    (comma seperated values) a standard format most financial institutes use.  The actual columns may vary but what I
+    support so far is selected as <b>Expense Source</b>:<br><br>
+    <b>Generic File</b>: The file has columns with a header labels: 'Date', 'Transaction' and 'Amount' and other column is ignored<br>
+    <b>CIBC VISA Download</b>: The file has NO Headers. Columns starting at 0 are defined as 0 = Date, 1 = Transaction, 2 = Amount, 3 = Credit (return), 4 = Card Detail<br>
+    <b>CIBC Bank Download</b>: The file has NO Headers, Columns starting at 0 are defined as 0 = Date, 1 = Transaction, 2 = Amount, 3 = Credit (return)<br>
+    <em>Scott's Legacy CSV</em>: You don't want to know...<br><br>
+    Select the actual file with the <em>Choose File</em> Dialog<br><br>
+    Use the <button class="w3-button-small w3-round-xlarge w3-green">Import CSV</button>  button to start the process.  It may
+    appear to be "hung",   it really does take a few minutes to make all the records when importing a large file.
+</p>
+<p>You can always modify your CSV file to fit one of these formats or work with <a href="D1Yapp.ca@gmail.com">me</a> to
+    get your format added.
+</p>
+{% endblock %}
