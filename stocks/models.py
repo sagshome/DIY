@@ -1,7 +1,6 @@
 """
-The models here,  are used to build a monthly snapshot of finicial data.   To normalize data,  the last trading
-day of the month is normalized to the first date of the next month.  So,  data as of Feb 1st 2022,  would really
-be the last trading day of January 2022.
+The models here,  are used to build a monthly snapshot of financial data.   To normalize data,  the last trading
+day of the month is normalized to the first date of the month.
 """
 
 # todo:  what should I do when someone trys to buy something via import or manual and they do not have the cash
@@ -34,11 +33,12 @@ logger = logging.getLogger(__name__)
 AV_API_KEY = settings.ALPHAVANTAGEAPI_KEY
 
 class DataSource(Enum):
-    MANUAL = 1
-    ADJUSTED = 2
-    API = 3
-    UPLOAD = 4
-    ESTIMATE = 5
+    ADMIN = 10
+    ADJUSTED = 20
+    API = 30
+    UPLOAD = 40
+    USER = 50
+    ESTIMATE = 60
 
     @classmethod
     def choices(cls):
@@ -52,7 +52,10 @@ CURRENCIES = (
 EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy working
 
 AV_URL = 'https://www.alphavantage.co/query?function='
-BOC_URL = 'https://www.bankofcanada.ca/valet/observations/'
+
+BOC_URL = 'https://www.bankofcanada.ca/valet/observations/'  # To calculate US <-> CAN dollar conversions
+# https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/json?start_date=2015-01-01&order_dir=desc'
+
 
 AV_REGIONS = {'Toronto': {'suffix': 'TRT'},
               'United States': {'suffix': None},
@@ -61,27 +64,25 @@ AV_REGIONS = {'Toronto': {'suffix': 'TRT'},
 Notes:
 Inflation WebSite: https://www150.statcan.gc.ca/t1/tbl1/en/cv.action?pid=1810000401 (download Ontario all)
     Use this to calculate current equivalent dollar value (should be higher) or idle dollar value (the inverse)
-    
-Bank of Canada
-imp
-https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/json?recent_months=96&order_dir=asc
-   - above to calculate inflatin
 '''
 
 # my_currency = 'CAD'  # todo: Should be set via a user profile
 EQUITY_COL = ['Date', 'Equity', 'Shares', 'Dividend', 'Price', 'Value', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 PORTFOLIO_COL = ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost', 'Cash']
+EQUITY_COL2 = ['Date', 'Equity', 'Shares', 'AvgPrice', 'CurrDiv', 'CurrPrice', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 
 
 class ExchangeRate(models.Model):
-    '''
-    The API returns Daily,  too much detail for me.
-    '''
+    """
+        Store both the US to CAN and the CAN to US conversion rates for each month.   Always use the last
+        value for the month.
+    """
     date: date = models.DateField()
     us_to_can: float = models.FloatField()
     can_to_us: float = models.FloatField()
     source: int = models.PositiveIntegerField(choices=DataSource.choices(), default=DataSource.ESTIMATE.value)
 
+    # Class variables - a simple cache
     US_TO_CAN: Dict[datetime.date, float] = {}
     CAN_TO_US: Dict[datetime.date, float] = {}
 
@@ -118,13 +119,12 @@ class ExchangeRate(models.Model):
         cls.US_TO_CAN = {}
 
     @classmethod
-    def get_or_create(cls, **kwargs):
+    def create_or_update(cls, **kwargs):
         """
         update if source is more specific
         :param kwargs:
         :return:
         """
-        created = False
         try:
             obj = cls.objects.get(date=kwargs['date'])
             if 'source' in kwargs and obj.source > kwargs['source']:
@@ -132,10 +132,18 @@ class ExchangeRate(models.Model):
                 obj.can_to_us = kwargs['can_to_us']
                 obj.us_to_can = kwargs['us_to_can']
                 obj.save()
+            else:
+                changed = False
+                if not obj.can_to_us == kwargs['can_to_us']:
+                    obj.can_to_us = kwargs['can_to_us']
+                    changed = True
+                if not obj.us_to_can == kwargs['us_to_can']:
+                    obj.us_to_can = kwargs['us_to_can']
+                    changed = True
+                if changed:
+                    obj.save()
         except cls.DoesNotExist:
-            obj = cls.objects.create(**kwargs)
-            created = True
-        return obj, created
+            cls.objects.create(**kwargs)
 
     @classmethod
     def update(cls):
@@ -143,38 +151,27 @@ class ExchangeRate(models.Model):
         Update Exchange Rates,   since this is daily,  I will take the first rate of the month as the normalized
         value for the last month
         """
-        try:
-            first = EquityValue.objects.all().order_by('date')[0].date
-        except IndexError:  # pragma: no cover
-            first = EPOCH
-        first_str = first.strftime('%Y-%m-%d')
-        url = f'{BOC_URL}FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=asc'
+        first_str = EPOCH.strftime('%Y-%m-%d')
+        url = f'{BOC_URL}FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc'
+
         result = requests.get(url)
         if not result.status_code == 200:  # pragma: no cover
             logger.error('BOC %s failure: %s - %s' % (url, result.status_code, result.reason))
             return
 
         data = result.json()
-        previous_date: date = None
+        months = list()
+
         for record in range(len(data['observations'])):
             this_date = datetime.strptime(data['observations'][record]['d'], '%Y-%m-%d').date()
-            if (not previous_date) or (previous_date.month != this_date.month):  # Only process a month once
+            record_date = datetime(this_date.year, this_date.month, 1).date()
+            if record_date not in months:  # This will be the last day of the month so use it.
                 can_rate = data['observations'][record]['FXCADUSD']['v']
                 us_rate = data['observations'][record]['FXUSDCAD']['v']
+                ExchangeRate.create_or_update(date=record_date, can_to_us=can_rate, us_to_can=us_rate,
+                                              source=DataSource.API.value)
 
-                record_date = datetime(this_date.year, this_date.month, 1).date()  # normalized date
-                ExchangeRate.get_or_create(date=record_date, can_to_us=can_rate, us_to_can=us_rate,
-                                                   source=DataSource.API.value)
-            previous_date = this_date
-
-        # Well since we have been normalizing dates to the end of the month,  but with exchange rates it is to the
-        # start of the month,  we need to add a value for today (which is next month really...)
-        last = data['observations'][len(data['observations']) - 1]
-        ExchangeRate.get_or_create(date=normalize_today(),
-                                    can_to_us=last['FXCADUSD']['v'],
-                                    us_to_can=last['FXUSDCAD']['v'],
-                                    source=DataSource.ESTIMATE.value)
-        ExchangeRate._reset()
+        ExchangeRate._reset()  # Clear any cached values
 
 
 class Inflation(models.Model):
@@ -214,10 +211,7 @@ class Inflation(models.Model):
         """
         Update Inflation values
         """
-        try:
-            first = Transaction.objects.all().order_by('date')[0].date
-        except IndexError:
-            first = EPOCH
+        first = EPOCH
         first_str = first.strftime('%Y-%m-%d')
 
         url = f'{BOC_URL}STATIC_INFLATIONCALC/json?start_date={first_str}'
@@ -281,7 +275,7 @@ class Equity(models.Model):
         return self.symbol  # US does not get a region decorator via AV_URL
 
     def __str__(self):
-        return f'{self.symbol} ({self.region})'
+        return f'{self.symbol} ({self.region}) - {self.name}'
 
     def save(self, *args, **kwargs):
         if 'update' in kwargs:
@@ -319,26 +313,39 @@ class Equity(models.Model):
             self.validated = False
             self.searchable = False
 
-    def fill_equity_holes(self):
+    def fill_equity_value_holes(self):
+        """
+        Look for months without an equity value,  and calculated a value based on direct rate of change.
+        It is possible that values will need to be re-filled as data is populated via new transactions / sources
+        """
+        estimated = DataSource.ESTIMATE.value
+
+        all_dates: Dict[date, float] = dict(EquityValue.objects.filter(equity=self).values_list('date', 'price'))
+        set_dates: Dict[date, float] = dict(EquityValue.objects.filter(equity=self).exclude(source=estimated).values_list('date', 'price'))
+
         last_date: date = None
         last_price: float = 0  # just to stop the warnings,  it can't actually be used before its referenced
-        date_values: dict[date, float] = dict(
-            EquityValue.objects.filter(equity=self).values_list('date', 'price').order_by('date'))
-        for value in date_values:
-            if last_date and not value == next_date(last_date):  # We have a hole
-                months = (value.year - last_date.year) * 12 + value.month - last_date.month
-                change_increment = (date_values[value] - last_price) / months
-                for _ in range(months):
+        for this_date in sorted(set_dates.keys()):
+            if last_date and not this_date == next_date(last_date):  # We have a hole
+                months = (this_date.year - last_date.year) * 12 + this_date.month - last_date.month  # How many
+                change_increment = (set_dates[this_date] - last_price) / months
+                for _ in range(months - 1):  # Fill holes up to this_date
                     next_month = next_date(last_date)
                     last_price = last_price + change_increment
-                    EquityValue.get_or_create(equity=self, date=next_month, price=last_price,
-                                                     source=DataSource.ESTIMATE.value)
+                    if next_month not in all_dates:
+                        EquityValue.objects.create(equity=self, date=next_month, price=last_price, source=estimated)
+                    else:
+                        if all_dates[next_month] != last_price:
+                            e = EquityValue.objects.get(equity=self, date=next_month)
+                            e.price = last_price
+                            e.save()
                     last_date = next_month
 
-            last_date = value
-            last_price = date_values[value]
+            last_date = this_date
+            last_price = set_dates[this_date]
+
         try:
-            last_entry = EquityValue.objects.filter(equity=self).order_by('-date')[0]
+            last_entry = EquityValue.objects.filter(equity=self).exclude(source=estimated).order_by('-date')[0]
             current_date = normalize_today()
             date_value = next_date(last_entry.date)
             if not date_value >= current_date:
@@ -399,7 +406,7 @@ class Equity(models.Model):
             elif self.searchable:
                 self.update_external_equity_data(force)
 
-        self.fill_equity_holes()
+        self.fill_equity_value_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
         queryset = EquityEvent.objects.filter(equity=self)
@@ -476,7 +483,7 @@ class EquityValue(models.Model):
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
     date: date = models.DateField()
     price: float = models.FloatField()
-    source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.MANUAL.value)
+    source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ESTIMATE.value)
 
     def __str__(self):
         output = f'{self.equity} - {self.date}: {self.price} {DataSource(self.source).name}'
@@ -492,8 +499,11 @@ class EquityValue(models.Model):
         created = False
         try:
             obj = cls.objects.get(equity=kwargs['equity'], date=kwargs['date'])
-            if 'source' in kwargs and obj.source > kwargs['source']:
+            if obj.source > kwargs['source']:
                 obj.source = kwargs['source']
+                obj.price = kwargs['price']
+                obj.save()
+            elif obj.source == kwargs['source'] and obj.price != kwargs['price']:
                 obj.price = kwargs['price']
                 obj.save()
         except EquityValue.DoesNotExist:
@@ -519,7 +529,7 @@ class EquityEvent(models.Model):
     date: date = models.DateField()
     value = models.FloatField()
     event_type = models.TextField(max_length=10, choices=EVENT_TYPES)
-    source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.MANUAL.value)
+    source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ADMIN.value)
 
     def __str__(self):
         return f'{self.equity} - {self.date}:{self.event_type} {DataSource(self.source).name}'
@@ -740,7 +750,6 @@ class PortfolioEquitySummary:
 
             inflation += change_cost
 
-
             this_dividend = shares * dividend * cf if not self.managed else 0
             total_dividends += this_dividend
             this_value = value.price * shares * cf
@@ -750,7 +759,6 @@ class PortfolioEquitySummary:
 
             if this_value < 0:
                 this_value = 0
-
 
             df.loc[len(df.index)] = [value.date, search_equity.symbol, shares, this_dividend,
                                                value.price * cf,
@@ -967,7 +975,8 @@ class Transaction(models.Model):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE)
     equity = models.ForeignKey(Equity, null=True, blank=True, on_delete=models.CASCADE)
 
-    date: date = models.DateField()
+    real_date: date = models.DateField(verbose_name='Transaction Date', null=True)
+    date: date = models.DateField(verbose_name='Normalized Date')
     price: float = models.FloatField()
     quantity: float = models.FloatField()
     value: float = models.FloatField(null=True, blank=True)
@@ -1004,8 +1013,14 @@ class Transaction(models.Model):
                 f'{self.TRANSACTION_MAP[self.xa_action]}')  # pragma: no cover
 
     def save(self, *args, **kwargs):
-        self.date = normalize_date(self.date)
-        self.price = 0 if not self.price else self.price
+        self.date = normalize_date(self.real_date)
+        reported_price = 0 if not self.price else self.price
+
+        if self.xa_action == self.DIV:
+            self.price = 0  # On Dividends
+        else:
+            self.price = reported_price
+
         if self.quantity:
             if (self.xa_action == self.SELL and self.quantity > 0) or (self.xa_action == self.BUY and self.quantity < 0):
                 self.quantity *= -1
@@ -1014,4 +1029,18 @@ class Transaction(models.Model):
 
         if not self.value:
             self.value = self.price * self.quantity
+
         super(Transaction, self).save(*args, **kwargs)
+
+        if self.price != 0:
+            try:
+                ev = EquityValue.objects.get(equity=self.equity, date=self.date)
+                if ev.source > DataSource.USER.value:
+                    ev.price = self.price
+                    ev.source = DataSource.USER.value
+                    ev.save()
+            except EquityValue.DoesNotExist:
+                EquityValue.objects.create(source=DataSource.USER.value, equity=self.equity, price=self.price, date=self.date)
+
+            self.equity.update()  # This is a none API update to put in estimated values if appropriate
+

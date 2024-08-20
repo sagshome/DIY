@@ -1,7 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Add Equity{% endblock %}
 {% block content %}
-<h2>Equity entry form</h2>
-<p>Just use the admin tool</p>
+<!--
+    We need a form that respects the users abilty to check the API
+    - We can upload a price file
+    - if we have a AV Key we can check the
+    - Can we search current price via yahoo or morning star
+ -->
+<h2>New Equity / Fund request form</h2>
+    To add a new Equity or Fund we must source an API that can best serve up the data required.   Requests typically
+    take a day or two to fulfill.   A request to add this will be sent via email to our admins when you submit this
+    request.<br><br>
+    The new equity will be usable, however it will not receive any automatic price / dividend updates until validation
+    is complete.
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}
+            <div class="w3-row w3-red">
+                {{ error }}
+            </div>
+        {% endfor %}
+        {% for hidden_field in form.hidden_fields %}
+            <div class="w3-row w3-blue">
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
+            </div>
+        {% endfor %}
+        <table>
+            <tr style="display: block;">
+                <td>{{ form.symbol.label_tag }}</td>
+                <td> {{ form.symbol }}</td>
+                <td>{{ form.symbol.errors }}</td>
+            </tr>
+            <tr style="display: block;">
+                <td>{{ form.description.label_tag }}</td>
+                <td> {{ form.description }}</td>
+                <td> {{ form.description.errors }}</td>
+            </tr>
+            <tr style="display: block;">
+                <td>{{ form.region.label_tag }}</td>
+                <td> {{ form.region }}</td>
+                <td> {{ form.region.errors }}</td>
+            </tr>
+            <tr style="display: block;">
+                <td>{{ form.equity_type.label_tag }}</td>
+                <td> {{ form.equity_type }}</td>
+                <td> {{ form.equity_type.errors }}</td>
+            </tr>
+        </table>
+          <a href="{% url 'portfolio_list' %}"><button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button></a>
+            - or -
+          <input type="submit" class="w3-button-small w3-round-xlarge w3-green" name="submit" value="Submit">
+        </form>
 {% endblock %}
 

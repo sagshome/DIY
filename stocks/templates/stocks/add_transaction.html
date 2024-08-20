@@ -26,7 +26,7 @@
                     hideDiv('priceRow')
                     hideDiv('quantityRow')
                     showDiv('valueRow')
-                } else if (action_value == 2 || action_value == 4) {
+                } else if (action_value == 2 || action_value == 3 || action_value == 4) {
                     showDiv('equityRow')
                     showDiv('priceRow')
                     showDiv('quantityRow')
@@ -73,9 +73,9 @@
                     <td> {{ form.xa_action.errors }}</td>
                 </tr>
                 <tr style="display: block;">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.date.label_tag }}</td>
-                    <td class="w3-container w3-margin"> {{ form.date }}</td>
-                    <td> {{ form.date.errors }}</td>
+                    <td class="w3-container w3-margin w3-right-align">{{ form.real_date.label_tag }}</td>
+                    <td class="w3-container w3-margin"> {{ form.real_date }}</td>
+                    <td> {{ form.real_date.errors }}</td>
                 </tr>
                 <tr style="display: block;" id="equityRow">
                     <td class="w3-container w3-margin w3-right-align">{{ form.equity.label_tag }}</td>

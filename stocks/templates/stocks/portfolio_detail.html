@@ -152,8 +152,16 @@
 
             {% for x in xas %}
             <tr>
-                <td><a href="{% url 'transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
-                <td>{{x.date}}</td>
+
+                <td><a href="{% url 'transaction_delete' x.id %}"><span class="fa fa-trash"></span></a>&nbsp;&nbsp;&nbsp;
+                    <a href="{% url 'transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
+                <td>
+                    {% if x.real_date %}  <!-- Real Date was added after initial data,  until I can clean up fix display -->
+                        {{x.real_date}}
+                    {% else %}
+                        {{ x.date }}
+                    {% endif %}
+                </td>
                 <td>{{x.action_str}}</td>
 
                 <td>

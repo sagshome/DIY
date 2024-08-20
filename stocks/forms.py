@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from .models import Equity, Portfolio, Transaction
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
 
+
 def popover_html(label, content):
     return label + ' <a tabindex="0" role="button" data-toggle="popover" data-html="true" \
                             data-trigger="hover" data-placement="auto" data-content="' + content + '"> \
@@ -13,21 +14,6 @@ class EquityForm(forms.Form):
     for equity in Equity.objects.all().order_by('symbol'):
         choices.append((equity.id, f'{equity.symbol} - {equity.region} ({equity.name})'))
     equity = forms.ChoiceField(choices=choices)
-
-
-class AddEquityForm(forms.Form):
-
-    search = forms.CharField(max_length=30,
-                             widget=forms.TextInput(
-                                                    attrs={'onkeyup':'fillOtherWindow()'}))
-    region = forms.ChoiceField(choices=Equity.REGIONS)
-
-
-class UploadForm(forms.Form):
-    """
-    Multi entry form
-    """
-    pass
 
 
 class PortfolioForm(forms.ModelForm):
@@ -61,14 +47,14 @@ class PortfolioAddForm(forms.ModelForm):
         }
 
 
-class TransactionAddForm(forms.ModelForm):
+class TransactionForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ("user", "portfolio", "xa_action", "equity", "date", "price", "quantity", "value")
+        fields = ("user", "portfolio", "xa_action", "equity", "real_date", "price", "quantity", "value")
         widgets = {
             'user': forms.HiddenInput(),
             'xa_action': forms.Select(),
-            'date': forms.TextInput(
+            'real_date': forms.TextInput(
                 attrs={'type': 'date',
                        'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
         }
@@ -78,6 +64,7 @@ class TransactionAddForm(forms.ModelForm):
         valid_actions = [(None, '------'),
                          (Transaction.FUND, 'Fund'),
                          (Transaction.BUY, 'Buy'),
+                         (Transaction.DIV, 'ReInvested Dividends'),
                          (Transaction.SELL, 'Sell'),
                          (Transaction.REDEEM, 'Redeem')]
         self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.filter(user=self.initial['user']))
@@ -85,6 +72,7 @@ class TransactionAddForm(forms.ModelForm):
         self.fields['price'].required = False
         self.fields['value'].required = False
         self.fields['quantity'].required = False
+        self.fields['equity'].queryset = Equity.objects.all().order_by('symbol')
 
     def clean_equity(self):
         if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['equity']:
@@ -92,7 +80,6 @@ class TransactionAddForm(forms.ModelForm):
         elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL] and self.cleaned_data['equity']:
             raise ValidationError("Fund and Redeem actions DO NOT require an equity value", code="Extra Field")
         return self.cleaned_data['equity']
-
 
     def clean_price(self):
         if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['price']:
@@ -104,7 +91,7 @@ class TransactionAddForm(forms.ModelForm):
         if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['quantity']:
             raise ValidationError("Buy and Sell actions require an quantity", code="Empty Field")
         else:
-            return self.cleaned_data['price']
+            return self.cleaned_data['quantity']
 
     def clean_value(self):
         if self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['value']:
@@ -113,31 +100,17 @@ class TransactionAddForm(forms.ModelForm):
             return self.cleaned_data['value']
 
 
+class AddEquityForm(forms.Form):
 
+    symbol = forms.CharField(required=True, max_length=36)
+    description = forms.CharField(required=False, max_length=128)
+    region = forms.ChoiceField(choices=Equity.REGIONS)
+    equity_type = forms.ChoiceField(choices=Equity.EQUITY_TYPES)
 
-class TransactionForm(forms.Form):
-    """
-    Multi entry form
-    """
-    action = forms.ChoiceField(label='Transaction Type',
-                                 choices=[(None, '------'),
-                                          (Transaction.FUND, 'Fund'),
-                                          (Transaction.BUY, 'Buy'),
-                                          (Transaction.SELL, 'Sell'),
-                                          (Transaction.REDEEM, 'Redeem')])
-
-    equity = forms.ModelChoiceField(label='Equity', required=False, queryset=Equity.objects.all().order_by('symbol'))
-    date = forms.DateField(widget=forms.TextInput(attrs={'type': 'date',
-                                                         'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
-                           label='Date')
-    amount = forms.DecimalField(label='Amount', required=False)
-    price = forms.DecimalField(label='Price', required=False)
-    quantity = forms.DecimalField(label='Quantity', required=False)
-
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        pass
+    def clean(self):
+        cleaned_data = super().clean()
+        if Equity.objects.filter(symbol=cleaned_data['symbol'], region=cleaned_data['region']).exists():
+            self.add_error('symbol', f"symbol {cleaned_data['symbol']} has already been defined for {cleaned_data['region']}")
 
 
 class UploadFileForm(forms.Form):
