@@ -2,6 +2,7 @@
 
 import csv
 import logging
+import os
 import json
 
 from dateutil import relativedelta
@@ -13,10 +14,11 @@ from pandas import DataFrame
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet, Sum, Avg
+from django.core.mail import EmailMultiAlternatives, EmailMessage
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, UpdateView
 from django.views.generic.dates import DateMixin
 from django.http import JsonResponse
@@ -60,6 +62,25 @@ class PortfolioDeleteView(LoginRequiredMixin, DeleteView):
         return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
 
 
+class TransactionDeleteView(LoginRequiredMixin, DeleteView):
+    model = Transaction
+    template_name = 'stocks/delete_transaction_confirm_delete.html'
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
+
+    def get_success_url(self):
+        return reverse_lazy('portfolio_details', kwargs = {'pk': self.object.portfolio.id})
+
+    def post(self, request, *args, **kwargs):
+        if "cancel" in request.POST:
+            this = self.get_object()
+            url = reverse_lazy('portfolio_details', kwargs = {'pk': this.portfolio.id})
+            return HttpResponseRedirect(url)
+        else:
+            return super(TransactionDeleteView, self).post(request, *args, **kwargs)
+
+
 class PortfolioDetailView(LoginRequiredMixin, DetailView):
     model = Portfolio
     template_name = 'stocks/portfolio_detail.html'
@@ -78,11 +99,22 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
         profile = Profile.objects.get(user=self.request.user)
         can_update = True if profile.av_api_key else False
         p: Portfolio = context['portfolio']
+
+        funded = p.transactions.filter(xa_action=Transaction.FUND)
+        redeemed = p.transactions.filter(xa_action=Transaction.REDEEM)
+        if funded.count() == 0:
+            funded = 0
+        else:
+            funded = funded.aggregate(Sum('value'))['value__sum']
+        if redeemed.count() == 0:
+            redeemed = 0
+        else:
+            redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
         return {'portfolio': p,
                 'xas': p.transactions.order_by('date', 'xa_action'),
                 'can_update': can_update,
-                'funded': p.transactions.filter(xa_action=Transaction.FUND).aggregate(Sum('value'))['value__sum'],
-                'redeemed': p.transactions.filter(xa_action=Transaction.REDEEM).aggregate(Sum('value'))['value__sum'] * -1,
+                'funded': funded,
+                'redeemed': redeemed,
                 }
 
 
@@ -128,10 +160,9 @@ class PortfolioAdd(LoginRequiredMixin, CreateView):
 
 class TransactionEdit(LoginRequiredMixin, UpdateView):
     model = Transaction
-    fields = ['date', 'xa_action', 'price', 'quantity', 'value']
-
+    #fields = ['real_date', 'xa_action', 'price', 'quantity', 'value']
     template_name = 'stocks/add_transaction.html'
-    from_class = TransactionAddForm
+    form_class = TransactionForm
 
     def get_object(self, queryset=None):
         return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
@@ -242,7 +273,7 @@ def edit_transaction(request, pk):
     xa: Transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
 
     if request.method == 'POST':
-        form = TransactionAddForm(request.POST, initial={'user': request.user})
+        form = TransactionForm(request.POST, initial={'user': request.user})
         if form.is_valid():
             action = form.cleaned_data['xa_action']
             if action == Transaction.FUND or Transaction.REDEEM:
@@ -265,43 +296,58 @@ def edit_transaction(request, pk):
 @login_required
 def add_transaction(request):
     if request.method == 'POST':
-        form = TransactionAddForm(request.POST, initial={'user': request.user})
+        form = TransactionForm(request.POST, initial={'user': request.user})
         if form.is_valid():
             action = form.cleaned_data['xa_action']
-            if action == Transaction.FUND or Transaction.SELL:
+            if action == Transaction.FUND or action == Transaction.REDEEM:
+                value = form.cleaned_data['value']
+                if (action == Transaction.FUND and value < 0) or (action == Transaction.REDEEM and value > 0):
+                    value = value * -1
                 new = Transaction.objects.create(user=request.user,
-                                                 date=form.cleaned_data['date'],
+                                                 real_date=form.cleaned_data['real_date'],
                                                  price=0,
                                                  quantity=0,
-                                                 value=form.cleaned_data['value'],
+                                                 value=value,
                                                  xa_action=form.cleaned_data['xa_action'],
                                                  portfolio=form.cleaned_data['portfolio'])
-            else:
+
+            elif (action == Transaction.FUND) or (action == Transaction.REDEEM):
+                quantity = form.cleaned_data['quantity']
+                if (action == Transaction.BUY and quantity < 0) or (action == Transaction.SELL and quantity > 0):
+                    quantity = quantity * -1
+
                 new = Transaction.objects.create(user=request.user,
                                                  equity=form.cleaned_data['equity'],
-                                                 date=form.cleaned_data['date'],
+                                                 real_date=form.cleaned_data['real_date'],
                                                  price=form.cleaned_data['price'],
-                                                 quantity=form.cleaned_data['quantity'],
-                                                 xa_action=form.cleaned_data['xa_action'])
+                                                 quantity=quantity,
+                                                 xa_action=form.cleaned_data['xa_action'],
+                                                 portfolio=form.cleaned_data['portfolio'])
+            elif (action == Transaction.DIV):
+                quantity = form.cleaned_data['quantity']
+
+                new = Transaction.objects.create(user=request.user,
+                                                 equity=form.cleaned_data['equity'],
+                                                 real_date=form.cleaned_data['real_date'],
+                                                 price=0,
+                                                 quantity=quantity,
+                                                 xa_action=form.cleaned_data['xa_action'],
+                                                 portfolio=form.cleaned_data['portfolio'])
 
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
-                form = TransactionAddForm(initial={'user': request.user,
+                form = TransactionForm(initial={'user': request.user,
                                                 'portfolio': new.portfolio,
                                                 'equity': new.equity,
-                                                'date': new.date})
+                                                'real_date': new.real_date})
             else:
                 return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': new.portfolio.id}))
     else:  # Initial get
-        form = TransactionAddForm(initial={'user': request.user})
+        form = TransactionForm(initial={'user': request.user})
 
     context = {
         'form': form,
     }
     return render(request, 'stocks/add_transaction.html', context)
-
-
-
-
 
 
 @login_required
@@ -492,18 +538,30 @@ def portfolio_equity_details(request, pk, symbol):
 
 
 def add_equity(request):
-    symbol_list = {}
+
     if request.method == 'POST':
         form = AddEquityForm(request.POST)
         if form.is_valid():
-            equity = Equity.objects.create(name=form.cleaned_data['key'])
+            subject = f"New Equity Request {form.cleaned_data['symbol']}"
+            body = 'Requestor:%s\nSymbol:%s\nDescription:%s\nRegion:%s\nType:%s' % (
+                request.user,
+                form.cleaned_data['symbol'], form.cleaned_data['description'],
+                form.cleaned_data['region'], form.cleaned_data['equity_type'])
+
+            email_message = EmailMessage(subject, body, request.user.email, [os.environ['DIY_EMAIL_USER']])
+            email_message.send()
+
+            Equity.objects.create(symbol=form.cleaned_data['symbol'], region=form.cleaned_data['region'],
+                                  name=form.cleaned_data['description'], equity_type=form.cleaned_data['equity_type'],
+                                  searchable=False, validated=True)
+
             return HttpResponseRedirect(reverse('portfolio_list'))
+
     else:  # Initial get
         form = AddEquityForm()
 
     context = {
         'form': form,
-        'symbol_list': symbol_list
     }
     return render(request, 'stocks/add_equity.html', context)
 

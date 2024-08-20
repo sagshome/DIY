@@ -26,6 +26,6 @@ urlpatterns = [
 
     path(r'portfolio/transaction/add/', views.add_transaction,  name='transaction_add'),
     path(r'portfolio/transaction/<pk>/edit/', views.TransactionEdit.as_view(),  name='transaction_edit'),
-    # path(r'portfolio/transaction/<pk>/delete/', views.delete_transaction, name='transaction_delete'),
+    path(r'portfolio/transaction/<pk>/delete/', views.TransactionDeleteView.as_view(), name='transaction_delete'),
 
 ]

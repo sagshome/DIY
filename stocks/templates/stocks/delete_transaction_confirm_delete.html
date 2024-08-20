@@ -1,0 +1,21 @@
+
+{% extends "base.html" %}
+{% block title %}Portfolio {{view_verb}}{% endblock %}
+{% block content %}
+
+  <div class="w3-container w3-margin">
+    <h2>Delete Transaction:{{object}}</h2>
+        This transaction will be deleted and can not be retrieved.   However,  you can add it back yourself via a fresh
+      import of a manual transaction add.
+  </div>
+    <div class="w3-container w3-margin">
+        <form method="post">{% csrf_token %}
+            <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
+            <a href="{% url 'portfolio_home' %}">
+                <button class="w3-button-small w3-round-xlarge w3-light-blue" type="submit" name="cancel">Cancel</button>
+            </a>
+            &nbsp;-&nbsp;or&nbsp;-&nbsp;
+            <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
+        </form>
+    </div>
+{% endblock %}
