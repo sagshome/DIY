@@ -15,7 +15,7 @@ from base.utils import normalize_date, DIYImportException
 FUND = Transaction.FUND
 BUY = Transaction.BUY
 SELL = Transaction.SELL
-DIV = Transaction.DIV
+DIV = Transaction.REDIV
 INT = Transaction.INTEREST
 REDEEM = Transaction.REDEEM
 JUNK = 7

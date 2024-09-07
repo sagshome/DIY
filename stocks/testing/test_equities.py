@@ -6,7 +6,7 @@ from unittest.mock import patch, Mock
 
 from django.test import TestCase
 
-from stocks.models import Equity, EquityEvent, EquityValue
+from stocks.models import Equity, EquityEvent, EquityValue, DataSource
 from stocks.testing.setup import DEFAULT_LOOKUP, DEFAULT_QUERY
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class BasicSetup(TestCase):
             datetime(2022, 12, 1).date(): 7.0
         }
         for item in self.original:
-            EquityValue.objects.create(equity=self.equity, date=item, price=self.original[item])
+            EquityValue.objects.create(equity=self.equity, date=item, price=self.original[item], source=DataSource.API.value)
 
     def test_defaults(self):
         self.assertEqual(self.equity.symbol, 'E', 'Test Forced UpperCase symbol')
@@ -39,7 +39,7 @@ class BasicSetup(TestCase):
         original = dict(EquityValue.objects.filter(equity=self.equity).values_list('date', 'price'))
 
         self.assertDictEqual(original, self.original, 'Test PRE holes')
-        self.equity.fill_equity_holes()
+        self.equity.fill_equity_value_holes()
         updated = {
             datetime(2022,3,1).date(): 10.0,
             datetime(2022, 4, 1).date(): 11.0,
@@ -56,6 +56,7 @@ class BasicSetup(TestCase):
                                                  date__lte=datetime(2022, 12, 1).date()).
                       values_list('date', 'price'))
         self.assertDictEqual(update, updated, 'Test Filled holes')
+
 
 class TestSave(TestCase):
     def setUp(self):

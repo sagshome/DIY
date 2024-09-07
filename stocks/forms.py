@@ -12,7 +12,7 @@ def popover_html(label, content):
 class EquityForm(forms.Form):
     choices = [(None, '--------')]
     for equity in Equity.objects.all().order_by('symbol'):
-        choices.append((equity.id, f'{equity.symbol} - {equity.region} ({equity.name})'))
+       choices.append((equity.id, f'{equity.symbol} - {equity.region} ({equity.name})'))
     equity = forms.ChoiceField(choices=choices)
 
 
@@ -64,9 +64,10 @@ class TransactionForm(forms.ModelForm):
         valid_actions = [(None, '------'),
                          (Transaction.FUND, 'Fund'),
                          (Transaction.BUY, 'Buy'),
-                         (Transaction.DIV, 'ReInvested Dividends'),
+                         (Transaction.REDIV, 'ReInvested Dividends'),
                          (Transaction.SELL, 'Sell'),
-                         (Transaction.REDEEM, 'Redeem')]
+                         (Transaction.REDEEM, 'Redeem'),
+                         (Transaction.FEES, 'Sell for FEES')]
         self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.filter(user=self.initial['user']))
         self.fields['xa_action'].choices = valid_actions
         self.fields['price'].required = False
@@ -75,9 +76,9 @@ class TransactionForm(forms.ModelForm):
         self.fields['equity'].queryset = Equity.objects.all().order_by('symbol')
 
     def clean_equity(self):
-        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['equity']:
-            raise ValidationError("Buy and Sell actions require an equity value", code="Empty Field")
-        elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL] and self.cleaned_data['equity']:
+        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['equity']:
+            raise ValidationError("Buy, Sell, and ReInvest Dividend actions require an equity value", code="Empty Field")
+        elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and self.cleaned_data['equity']:
             raise ValidationError("Fund and Redeem actions DO NOT require an equity value", code="Extra Field")
         return self.cleaned_data['equity']
 
@@ -88,13 +89,13 @@ class TransactionForm(forms.ModelForm):
             return self.cleaned_data['price']
 
     def clean_quantity(self):
-        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['quantity']:
-            raise ValidationError("Buy and Sell actions require an quantity", code="Empty Field")
+        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['quantity']:
+            raise ValidationError("This action require an quantity", code="Empty Field")
         else:
             return self.cleaned_data['quantity']
 
     def clean_value(self):
-        if self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['value']:
+        if self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['value']:
             raise ValidationError("Fund and Redeem actions require an value", code="Empty Field")
         else:
             return self.cleaned_data['value']

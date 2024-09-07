@@ -2,53 +2,87 @@
 {% block title %}Tranaction Add{% endblock %}
 
 {% block content %}
-        <script>
-            function hideDiv(divId) {
-               var div = document.getElementById(divId);
-               if (div === null) {
-               }
-               else {
-                div.style.display = "none";
-                }
+    <script>
+        function hideDiv(divId) {
+           var div = document.getElementById(divId);
+           if (div === null) {
+           }
+           else {
+            div.style.display = "none";
             }
-            function showDiv(divId) {
-                var div = document.getElementById(divId);
-                if (div === null) {
-                }
-                else {
-                div.style.display = "block";
-                }
+        }
+
+        function showDiv(divId) {
+            var div = document.getElementById(divId);
+            if (div === null) {
             }
-            function show_hide() {
-                var action_value = $("#id_xa_action").val();
-                if (action_value == 1 || action_value == 5) {
-                    hideDiv('equityRow')
-                    hideDiv('priceRow')
-                    hideDiv('quantityRow')
-                    showDiv('valueRow')
-                } else if (action_value == 2 || action_value == 3 || action_value == 4) {
-                    showDiv('equityRow')
-                    showDiv('priceRow')
-                    showDiv('quantityRow')
-                    hideDiv('valueRow')
-                } else {
-                    hideDiv('equityRow')
-                    hideDiv('priceRow')
-                    hideDiv('quantityRow')
-                    hideDiv('valueRow')
-                }
+            else {
+            div.style.display = "";
             }
-        </script>
-        <script>
-            $(document).ready(function() {
-              var action_id = document.getElementById("id_xa_action");
-              action_id.addEventListener("mouseup", show_hide);
-              show_hide();
-            });
-</script>
+        }
+
+        function show_hide() {
+            var action_value = $("#id_xa_action").val();
+            if (action_value == 1 || action_value == 5) {
+                hideDiv('equityRow')
+                hideDiv('priceRow')
+                hideDiv('quantityRow')
+                showDiv('valueRow')
+            } else if (action_value == 2 || action_value == 3 || action_value == 4 || action_value == 7) {
+                showDiv('equityRow')
+                showDiv('priceRow')
+                showDiv('quantityRow')
+                hideDiv('valueRow')
+            } else {
+                hideDiv('equityRow')
+                hideDiv('priceRow')
+                hideDiv('quantityRow')
+                hideDiv('valueRow')
+            }
+        }
+        function update_equity() {
+
+            var portfolio_value = $("#id_portfolio").val();
+            var action_value = $("#id_xa_action").val();
+            var date_value = $("#id_real_date").val();
+            var url = $("#XAForm").attr("equity-url");
+            hideDiv('equityRow')
+
+
+            $.ajax({                       // initialize an AJAX request
+                url: url,
+                async: false,  // make sure we wait for the update
+                data: {
+                    'action': action_value,
+                    'portfolio_id': portfolio_value,
+                    'date': date_value,
+            },
+            success: function (data) {   // `data` is the return of the `load_cities` view function
+              $("#id_equity").html(data);  // replace the contents of the city input with the data that came from the server
+            }
+          });
+          showDiv('equityRow')
+
+        }
+    </script>
+    <script>
+        $(document).ready(function() {
+          var action_id = document.getElementById("id_xa_action");
+          action_id.addEventListener("mouseup", show_hide);
+          show_hide();
+          update_equity();
+
+          document.getElementById("id_portfolio").addEventListener("change", update_equity);
+          // document.getElementById("id_real_date").addEventListener("change", update_equity);
+          document.getElementById("id_xa_action").addEventListener("change", update_equity);
+        });
+
+
+    </script>
 
     <h2>Portfolio Transactions</h2>
-        <form method="post" id="XAForm" novalidate>
+
+        <form method="post" id="XAForm" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
             {% for error in form.non_field_errors %}
                 <div class="w3-row w3-red">
@@ -61,47 +95,57 @@
                     {{ hidden_field }}
                 </div>
             {% endfor %}
-            <table>
-                <tr class=w3-container" style="display: block;">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.portfolio.label_tag }}</td>
-                    <td> {{ form.portfolio }}</td>
-                    <td>{{ form.portfolio.errors }}</td>
-                </tr>
-                <tr class=w3-container" style="display: block;">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.xa_action.label_tag }}</td>
-                    <td> {{ form.xa_action }}</td>
-                    <td> {{ form.xa_action.errors }}</td>
-                </tr>
-                <tr style="display: block;">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.real_date.label_tag }}</td>
-                    <td class="w3-container w3-margin"> {{ form.real_date }}</td>
-                    <td> {{ form.real_date.errors }}</td>
-                </tr>
-                <tr style="display: block;" id="equityRow">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.equity.label_tag }}</td>
-                    <td class="w3-container w3-margin"> {{ form.equity }}</td>
-                    <td> {{ form.equity.errors }}</td>
-                </tr>
-                <tr style="display: block;" id="priceRow">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.price.label_tag }}</td>
-                    <td class="w3-container w3-margin">{{ form.price }}</td>
-                    <td>{{ form.price.errors }}</td>
-                </tr>
-                <tr style="display: block;" id="quantityRow">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.quantity.label_tag }}</td>
-                    <td class="w3-container w3-margin">{{ form.quantity}}</td>
-                    <td>{{ form.quantity.errors }}</td>
-                </tr>
-                <tr style="display: block;" id="valueRow">
-                    <td class="w3-container w3-margin w3-right-align">{{ form.value.label_tag }}</td>
-                    <td class="w3-container w3-margin"> {{ form.value }}</td>
-                    <td> {{ form.value.errors }}</td>
-                </tr>
-            </table>
-            <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Submit">
-            {% if view_verb != 'Edit' %}
-                <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Add Another">
-            {% endif %}
+
+            <div class="w3-row w3-margin-bottom">
+                <div class="w3-col w3-container l1">{{ form.portfolio.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.portfolio }}</div>
+                <div class="w3-col w3-container>">{{ form.portfolio.errors }}</div>
+            </div>
+
+            <div class="w3-row w3-margin-bottom">
+                <div class="w3-col w3-container l1">Date:</div>
+                <div class="w3-col w3-container m2">{{ form.real_date }}</div>
+                <div class="w3-col w3-container m2">{{ form.real_date.errors }}</div>
+            </div>
+
+            <div class="diyrow w3-row w3-margin-bottom ">
+                <div class="w3-col w3-container l1">{{ form.xa_action.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.xa_action }}</div>
+                <div class="w3-col w3-container">{{ form.xa_action.errors }}</div>
+            </div>
+
+            <div class="w3-row w3-margin-bottom diyrow" id="equityRow">
+                <div class="w3-col w3-container l1">{{ form.equity.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.equity }}</div>
+                <div class="w3-col w3-container m2">{{ form.equity.errors }}</div>
+            </div>
+            <div class="w3-row w3-margin-bottom diyrow" id="priceRow">
+                <div class="w3-col w3-container l1">{{ form.price.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.price }}</div>
+                <div class="w3-col w3-container m2">{{ form.price.errors }}</div>
+            </div>
+            <div class="w3-row w3-margin-bottom diyrow" id="quantityRow">
+                <div class="w3-col w3-container l1">{{ form.quantity.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.quantity }}</div>
+                <div class="w3-col w3-container m2">{{ form.quantity.errors }}</div>
+            </div>
+            <div class="w3-row w3-margin-bottom diyrow" id="valueRow">
+                <div class="w3-col w3-container l1">{{ form.value.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.value }}</div>
+                <div class="w3-col w3-container m2">{{ form.value.errors }}</div>
+            </div>
+
+            <div class="w3-row">
+                <div class="w3-col w3-container m2">
+                    <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Submit">
+                </div>
+                <div class="w3-col w3-container m2">
+
+                    {% if view_verb != 'Edit' %}
+                        <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Add Another">
+                    {% endif %}
+                </div>
+            </div>
         </form>
 
         <div id="documentation" class="pad-md">

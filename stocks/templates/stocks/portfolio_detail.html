@@ -83,17 +83,14 @@
 -->
 
 <div class="w3-bar w3-hide-small">
-    <div class="w3-bar-item w3-margin-top">
-        <b>Comparison charts</b>:
-    </div>
     <div class="w3-bar-item">
         <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">S&P 500(ish)</button>
+            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">Table View</button>
         </a>
     </div>
     <div class="w3-bar-item">
         <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">TSX Dividend</button>
+            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">Equity View</button>
         </a><br>
     </div>
     <div class="w3-bar-item">
@@ -173,9 +170,13 @@
                 <td>
                     {% if x.equity %}
                         {% if x.price == 0 %}
-                            <td>{{x.quantity|floatformat:'0g'}} shares from a stock split (no cost)</td>
+                            {% if x.xa_action == 4 %}
+                                {{x.quantity|floatformat:'1g'}} shares SOLD for funding
+                            {% else %}
+                                {{x.quantity|floatformat:'1g'}} shares split/reinvest (no cost)
+                            {% endif %}
                         {% else %}
-                            <td>{{x.quantity|floatformat:'0g'}} shares at ${{x.price|floatformat:'2g'}}</td>
+                            {{x.quantity|floatformat:'1g'}} shares at ${{x.price|floatformat:'2g'}}
                         {% endif %}
                     {% endif %}
                 </td>

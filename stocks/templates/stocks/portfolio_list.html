@@ -27,25 +27,30 @@
 <h2>Portfolio list for {{request.user}}</h2>
     <table class="w3-table w3-striped">
         <tr>
-            <th>Portfolio Name</th>
-            <th class="w3-hide-small">Start</th>
-            <th class="w3-hide-small">End</th>
+            <th class="w3-container"> Portfolio Name</th>
+            <th class="w3-container w3-center">Views</th>
+            <th class="w3-container w3-center w3-hide-small">Start</th>
+            <th class="w3-container w3-center w3-hide-small">End</th>
             <th class="w3-hide-small">Effective Cost</th>
             <th>Present Value</th>
             <th>Growth</th>
             <th>Total Dividends</th>
-            <th class="w3-centered">Actions</th>
+            <th class="w3-container w3-center">Actions</th>
         </tr>
         {% for portfolio in portfolio_list %}
             <tr>
-                <td class="w3-container"><a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></td>
+                <td class="w3-container">{{portfolio.name}}</a></td>
+                <td class="w3-container w3-center">
+                    <a href="{% url 'portfolio_details' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart </button></a>
+                    <a class="w3-hide-small" href="{% url 'portfolio_edit' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table </button></a>
+                </td>
                 <td class="w3-container w3-center w3-hide-small">{% month_year portfolio 'start' %}</td>
                 <td class="w3-container w3-center w3-hide-small">{% month_year portfolio 'end' %}</td>
                 <td class="w3-container w3-hide-small">${{portfolio.cost|floatformat:'0g'}}</td>
                 <td class="w3-container">${{portfolio.value|floatformat:'0g'}}</td>
                 <td class="w3-container">${{portfolio.growth|floatformat:'0g'}}</td>
                 <td class="w3-container">${{portfolio.dividends|floatformat:'0g'}}</td>
-                <td class="w3-container">
+                <td class="w3-container w3-center">
                     <a class="w3-hide-small" href="{% url 'portfolio_edit' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-green"> Edit </button></a>
                     <a class="w3-hide-small" href="{% url 'portfolio_copy' portfolio.id %}"><button class="w3-margin-left w3-button-medium w3-round-large w3-green">Copy</button></a>
                     <button {% if can_update == False %}

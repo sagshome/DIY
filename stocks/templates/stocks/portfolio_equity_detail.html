@@ -90,7 +90,7 @@
         </script>
 
 
-    <h2 class="w3-margin">{{equity.symbol}} - Details for <a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></h2>
+    <h2 class="w3-margin">{{equity.symbol}} - {{equity.name}} - Details for <a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a></h2>
     <p class="w3-margin">The total cost of {{equity.symbol}} is ${{funded|floatformat:'0g'}} and the total dividends has been ${{dividends|floatformat:'0g'}}</p>
     <div  class="w3-row">
         <div style="height:350px;" class="w3-threequarter w3-container">
@@ -147,7 +147,9 @@
                             ${{data.6|floatformat:'2g'}}
                         {% endif %}
                     </td>
-                    <td>${{data.7|floatformat:'2g'}}</td>
+                    <td>
+                        ${{data.7|floatformat:'2g'}}
+                    </td>
                     <td>{{data.8}}</td>
                 </tr>
            {% endfor %}

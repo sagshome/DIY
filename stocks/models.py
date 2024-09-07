@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 AV_API_KEY = settings.ALPHAVANTAGEAPI_KEY
 
+
 class DataSource(Enum):
     ADMIN = 10
     ADJUSTED = 20
@@ -43,6 +44,7 @@ class DataSource(Enum):
     @classmethod
     def choices(cls):
         return tuple((i.value, i.name) for i in cls)
+
 
 CURRENCIES = (
     ('CAD', 'Canadian Dollar'),
@@ -77,6 +79,7 @@ class ExchangeRate(models.Model):
         Store both the US to CAN and the CAN to US conversion rates for each month.   Always use the last
         value for the month.
     """
+
     date: date = models.DateField()
     us_to_can: float = models.FloatField()
     can_to_us: float = models.FloatField()
@@ -178,6 +181,7 @@ class Inflation(models.Model):
     """
     Class to capture a months worth of inflation
     """
+
     date = models.DateField()
     cost = models.FloatField()
     inflation = models.FloatField()
@@ -229,8 +233,7 @@ class Inflation(models.Model):
                 if last_cost:
                     this_inflation = ((this_cost - last_cost) * 100) / last_cost
 
-                Inflation.get_or_create(date=this_date, cost=this_cost, inflation=this_inflation,
-                                                source=DataSource.API.value)
+                Inflation.get_or_create(date=this_date, cost=this_cost, inflation=this_inflation, source=DataSource.API.value)
                 last_cost = this_cost
 
 
@@ -262,6 +265,7 @@ class Equity(models.Model):
     equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES)
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
     last_updated: date = models.DateField(blank=True, null=True)
+    deactived_date: date = models.DateField(blank=True, null=True)
     searchable: bool = models.BooleanField(default=False)  # Set to False, when this is data that was forced into being
     validated: bool = models.BooleanField(default=False)  # Set to True was validation is done
 
@@ -293,7 +297,7 @@ class Equity(models.Model):
         if self.searchable and do_update:
             self.update_external_equity_data(False)
 
-    def set_equity_data(self) -> bool:
+    def set_equity_data(self):
         search = AV_URL + 'SYMBOL_SEARCH&keywords=' + self.key + '&apikey=' + AV_API_KEY
         logger.debug(search)
         request = requests.get(search)
@@ -351,8 +355,7 @@ class Equity(models.Model):
             if not date_value >= current_date:
                 price_value = last_entry.price
                 while date_value <= current_date:
-                    EquityValue.get_or_create(equity=self, date=date_value, price=price_value,
-                                               source=DataSource.ESTIMATE.value)
+                    EquityValue.get_or_create(equity=self, date=date_value, price=price_value, source=DataSource.ESTIMATE.value)
                     date_value = next_date(date_value)
         except IndexError:
             logger.error('No EquityValue data for:%s' % self)
@@ -435,6 +438,8 @@ class EquityAlias(models.Model):
     when I first find XLU in a manulife import,  I will make an alias record using the name we import as'
     I can later match the dividend (and create an alias) for that two.
     '''
+
+    objects = None
     symbol: str = models.CharField(max_length=32, verbose_name='Trading symbol')  # Symbol
     region: str = models.CharField(max_length=10, null=False, blank=False, default='Canada')
     name = models.TextField()
@@ -521,6 +526,7 @@ class EquityEvent(models.Model):
     Track an equities dividends
     """
 
+    objects = None
     EVENT_TYPES = (('Dividend', 'Dividend'),  # Automatically created as part of 'Update' action
                    ('SplitAD', 'Stock Split with Adjusted Dividends'),  # Historic dividends adjusted
                    ('Split', 'Stock Split'))
@@ -633,7 +639,11 @@ class PortfolioSummary:
                     
                     xa_costs = self.xas.filter(xa_action__in=[Transaction.BUY, Transaction.SELL],
                                                date=this_date, equity=e).aggregate(Sum('value'))['value__sum']
-                    converted_cost = xa_costs * cf
+                    try:
+                        converted_cost = xa_costs * cf
+                    except TypeError:
+                        logger.debug('Failed to convert xa_cost: %s cf %s' % (xa_costs, cf))
+                        converted_cost = xa_costs
                     if xa_costs:  # for debug else next line
                         cash -= xa_costs * cf  # for debug else next line
                     # cash -= xa_costs * cf if xa_costs else 0
@@ -646,7 +656,7 @@ class PortfolioSummary:
 
                     cash += interest * cf if interest else 0
 
-                    reinvest = self.xas.filter(xa_action__in=[Transaction.DIV], equity=e, date=this_date). \
+                    reinvest = self.xas.filter(xa_action__in=[Transaction.REDIV], equity=e, date=this_date). \
                         aggregate(Sum('value'))['value__sum']
     
                     if reinvest:
@@ -710,7 +720,7 @@ class PortfolioEquitySummary:
     def process_equity(self, eq: Equity, df: DataFrame) -> DataFrame:
         dividends: Dict[date, float]
         value: EquityValue
-        trades = self.xas.filter(equity=eq, xa_action__in=[Transaction.BUY, Transaction.DIV, Transaction.SELL])
+        trades = self.xas.filter(equity=eq, xa_action__in=[Transaction.BUY, Transaction.REDIV, Transaction.SELL])
         if len(trades) == 0:  # pragma: no cover
             logger.error('Transaction set %s:  No Trades in transaction data' % eq)
             return df
@@ -859,7 +869,6 @@ class Portfolio(models.Model):
                                       real_equity=original).pd
 
 
-
     @property
     def equities(self) -> QuerySet[Equity]:
         return Equity.objects.filter(symbol__in=Transaction.objects.filter(portfolio=self).values('equity__symbol')).order_by('symbol')
@@ -946,12 +955,14 @@ class Transaction(models.Model):
     """
     Track changes made to an equity on a portfolio
     """
+
     FUND = 1
     BUY = 2
-    DIV = 3
+    REDIV = 3
     SELL = 4
     REDEEM = 5
     INTEREST = 6
+    FEES = 7
 
     def get_choices(self):
         choices = list()
@@ -965,10 +976,11 @@ class Transaction(models.Model):
 
     TRANSACTION_TYPE = ((FUND, 'Fund'),
                         (BUY, 'Buy'),
-                        (DIV, 'Reinvested Dividend'),
+                        (REDIV, 'Reinvested Dividend'),
                         (SELL, 'Sell'),
                         (INTEREST, 'Interest'),
                         (REDEEM, 'Redeem'),
+                        (FEES, 'Sold for Fees')
                         )
     TRANSACTION_MAP = dict(TRANSACTION_TYPE)
 
@@ -996,7 +1008,7 @@ class Transaction(models.Model):
             value = 'Funding'
         elif self.xa_action == self.BUY:
             value = 'Purchase'
-        elif self.xa_action == self.DIV:
+        elif self.xa_action == self.REDIV:
             value = 'Dividend'
         elif self.xa_action == self.SELL:
             value = 'Sale'
@@ -1004,6 +1016,8 @@ class Transaction(models.Model):
             value = 'Interest'
         elif self.xa_action == self.REDEEM:
             value = 'Withdraw'
+        elif self.xa_action == self.FEES:
+            value = 'Sold for Fees'
         else:
             value = 'Unknown'
         return value
@@ -1016,7 +1030,7 @@ class Transaction(models.Model):
         self.date = normalize_date(self.real_date)
         reported_price = 0 if not self.price else self.price
 
-        if self.xa_action == self.DIV:
+        if self.xa_action == self.REDIV:
             self.price = 0  # On Dividends
         else:
             self.price = reported_price

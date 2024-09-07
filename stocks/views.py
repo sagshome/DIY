@@ -5,6 +5,7 @@ import logging
 import os
 import json
 
+from datetime import datetime, date
 from dateutil import relativedelta
 
 import plotly.io as pio
@@ -13,7 +14,7 @@ import plotly.graph_objects as go
 from pandas import DataFrame
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import QuerySet, Sum, Avg
+from django.db.models import QuerySet, Sum, Avg, Q
 from django.core.mail import EmailMultiAlternatives, EmailMessage
 
 from django.http import HttpResponse, HttpResponseRedirect
@@ -27,7 +28,7 @@ from django.http import JsonResponse
 from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
 from .forms import *
 from .importers import QuestTrade, Manulife, StockImporter, HEADERS
-from base.utils import DIYImportException, normalize_today
+from base.utils import DIYImportException, normalize_today, normalize_date
 from .tasks import daily_update
 from base.models import Profile, COLORS
 
@@ -81,6 +82,52 @@ class TransactionDeleteView(LoginRequiredMixin, DeleteView):
             return super(TransactionDeleteView, self).post(request, *args, **kwargs)
 
 
+class PortfolioTableView(LoginRequiredMixin, DetailView):
+    model = Portfolio
+    template_name = 'stocks/portfolio_table.html'
+
+    def get_object(self):
+        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        """
+        Add a list of all the equities in this portfolio
+        :param kwargs:
+        :return:
+        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
+        """
+        context = super().get_context_data(**kwargs)
+        p: Portfolio = context['portfolio']
+        data = list()
+        elist = p.equities.order_by('symbol')
+
+        # Build the table data as [date, (shares, value), (shares, value)... total_value
+        for this_date in p.e_pd.Date.unique():
+            total_value = 0
+            this_record = [this_date, 0]
+            for equity in elist:
+                try:
+                    df = p.e_pd[(p.e_pd['Date'] == this_date) & (p.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
+                    if df.empty:
+                        this_record.append((None, None))
+                    else:
+                        shares = df['Shares'].tolist()[0]
+                        value = df['Value'].tolist()[0]
+                        this_record.append((shares, value))
+                        total_value += value
+
+                except KeyError:
+                    this_record.append((None, None))
+            this_record[1] = total_value
+            data.append(this_record)
+        data.sort(reverse=True)
+        return {'portfolio': p,
+                'data': data,
+                'equities': elist,
+                'equity_count': elist.count()
+                }
+
+
 class PortfolioDetailView(LoginRequiredMixin, DetailView):
     model = Portfolio
     template_name = 'stocks/portfolio_detail.html'
@@ -111,7 +158,7 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
         else:
             redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
         return {'portfolio': p,
-                'xas': p.transactions.order_by('date', 'xa_action'),
+                'xas': p.transactions.order_by('-real_date', 'xa_action'),
                 'can_update': can_update,
                 'funded': funded,
                 'redeemed': redeemed,
@@ -311,7 +358,7 @@ def add_transaction(request):
                                                  xa_action=form.cleaned_data['xa_action'],
                                                  portfolio=form.cleaned_data['portfolio'])
 
-            elif (action == Transaction.FUND) or (action == Transaction.REDEEM):
+            elif (action == Transaction.BUY) or (action == Transaction.SELL):
                 quantity = form.cleaned_data['quantity']
                 if (action == Transaction.BUY and quantity < 0) or (action == Transaction.SELL and quantity > 0):
                     quantity = quantity * -1
@@ -323,7 +370,7 @@ def add_transaction(request):
                                                  quantity=quantity,
                                                  xa_action=form.cleaned_data['xa_action'],
                                                  portfolio=form.cleaned_data['portfolio'])
-            elif (action == Transaction.DIV):
+            elif (action == Transaction.REDIV):
                 quantity = form.cleaned_data['quantity']
 
                 new = Transaction.objects.create(user=request.user,
@@ -333,12 +380,23 @@ def add_transaction(request):
                                                  quantity=quantity,
                                                  xa_action=form.cleaned_data['xa_action'],
                                                  portfolio=form.cleaned_data['portfolio'])
+            elif (action == Transaction.FEES):
+                quantity = form.cleaned_data['quantity']
+
+                new = Transaction.objects.create(user=request.user,
+                                                 equity=form.cleaned_data['equity'],
+                                                 real_date=form.cleaned_data['real_date'],
+                                                 price=0,
+                                                 quantity=quantity,
+                                                 xa_action=Transaction.SELL,
+                                                 portfolio=form.cleaned_data['portfolio'])
 
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
                 form = TransactionForm(initial={'user': request.user,
                                                 'portfolio': new.portfolio,
-                                                'equity': new.equity,
-                                                'real_date': new.real_date})
+                                                'equity': new.equity.id,
+                                                'real_date': new.real_date,
+                                                'xa_action': new.xa_action})
             else:
                 return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': new.portfolio.id}))
     else:  # Initial get
@@ -575,6 +633,48 @@ def overlay_dates(dataframe: DataFrame, key: str, symbol: str, list_of_dates):
         else:
             result.append(value.item())
     return result
+
+
+@login_required
+def get_equity_list(request):
+    """
+    API to get the proper set of equities base on the action, profile and date.
+    For instance,  A Sell/Reinvest action can only affect the equities you hold on a specific date
+    """
+    this_date = datetime.now()
+    action = None
+
+    if request.GET.get("date"):
+        try:
+            this_date = datetime.strptime(request.GET.get("date"), '%Y-%m-%d')
+        except ValueError:
+            logger.error("Received a ill formed date %s" % request.GET.get("date"))
+
+    if request.GET.get("action"):
+        try:
+            action = int(request.GET.get('action'))
+        except ValueError:
+            logger.error("Received a non-numeric action %s" % request.GET.get("action"))
+
+    values = Equity.objects.exclude(deactived_date__gt=this_date)
+
+    if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES]:
+        try:
+            portfolio = Portfolio.objects.get(id=request.GET.get("portfolio_id"), user=request.user)
+            this_date = normalize_date(this_date)
+            subset = portfolio.e_pd.loc[portfolio.e_pd['Date'] == this_date]['Equity']
+            values = values.filter(symbol__in=subset.values)
+        except Portfolio.DoesNotExist:
+            logger.error('Someone %s is poking around, looking for %s' * (request.user, request.GET.get("portfolio_id")))
+            pass
+        except ValueError:
+            pass  # No value supplied
+
+    value_dictionary = dict()
+    for e in values.order_by('symbol'):
+        value_dictionary[e.id] = e
+
+    return render(request, "generic_selection.html", {"values": value_dictionary})
 
 
 @login_required

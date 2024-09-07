@@ -13,7 +13,7 @@ def display_source(obj):
 
 class EquityAdmin(admin.ModelAdmin):
     list_display = ("symbol", "validated", "searchable", "region", "last_updated", "name")
-    fields = ["symbol", "name", "equity_type", "region", "currency", "last_updated", "searchable", "validated"]
+    fields = ["symbol", "name", "equity_type", "region", "currency", "last_updated", "searchable", "validated", "deactived_date"]
 
 
 class EquityAliasAdmin(admin.ModelAdmin):

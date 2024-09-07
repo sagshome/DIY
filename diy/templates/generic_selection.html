@@ -1,0 +1,5 @@
+<!-- supplied with a dictionary, build a set of selection values -->
+<option value="">---------</option>
+{% for key, value in values.items %}
+    <option value="{{ key }}">{{value}}</option>
+{% endfor %}
