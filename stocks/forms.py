@@ -101,6 +101,31 @@ class TransactionForm(forms.ModelForm):
             return self.cleaned_data['value']
 
 
+class ManualUpdateEquityForm(forms.Form):
+
+    portfolio = forms.IntegerField(widget=forms.HiddenInput(), required=True)
+    equity = forms.IntegerField(widget=forms.HiddenInput(), required=True)
+    report_date = forms.DateField()
+    shares = forms.FloatField()
+    value = forms.FloatField()
+
+    class Meta:
+        widgets = {
+            'real_date': forms.TextInput(
+                attrs={'type': 'date',
+                       'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['report_date'].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["report_date"].widget.attrs['readonly'] = True
+
+    def clean(self):
+        cleaned_data = super().clean()
+        return cleaned_data
+
 class AddEquityForm(forms.Form):
 
     symbol = forms.CharField(required=True, max_length=36)

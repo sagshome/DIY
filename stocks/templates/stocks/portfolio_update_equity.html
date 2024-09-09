@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Manual Portfolio Update{% endblock %}
+{% block content %}
+<!--
+    We need a form that respects the users abilty to check the API
+    - We can upload a price file
+    - if we have a AV Key we can check the
+    - Can we search current price via yahoo or morning star
+ -->
+<h2>Manual Portfolio Update</h2>
+    <p>Force an update to the number of shares and the value of your position.   This is usually based on a statement from your provider.</p>
+    <form method="post" id="FixForm" novalidate>
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}
+            <div class="w3-row w3-red">
+                {{ error }}
+            </div>
+        {% endfor %}
+        {% for hidden_field in form.hidden_fields %}
+            hidden
+            <div class="w3-row w3-blue">
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
+            </div>
+        {% endfor %}
+         <div class="w3-row w3-margin-bottom">
+                <div class="w3-col w3-container l1">Portfolio:</div>
+                <div class="w3-col w3-container m4">{{portfolio.name}}</div>
+         </div>
+
+        <div class="w3-row w3-margin-bottom">
+            <div class="w3-col w3-container l1">Equity:</div>
+            <div class="w3-col w3-container m4">{{equity}}</div>
+        </div>
+
+        <div class="w3-row w3-margin-bottom">
+            <div class="w3-col w3-container l1">Report Date:</div>
+            <div class="w3-col w3-container m2">{{ form.report_date }}</div>
+            <div class="w3-col w3-container m2">{{ form.report_date.errors }}</div>
+        </div>
+
+        <div class="diyrow w3-row w3-margin-bottom ">
+            <div class="w3-col w3-container l1">{{ form.shares.label_tag }}</div>
+            <div class="w3-col w3-container m2">{{ form.shares }}</div>
+            <div class="w3-col w3-container">{{ form.shares.errors }}</div>
+        </div>
+
+        <div class="diyrow w3-row w3-margin-bottom ">
+            <div class="w3-col w3-container l1">{{ form.value.label_tag }}</div>
+            <div class="w3-col w3-container m2">{{ form.value }}</div>
+            <div class="w3-col w3-container">{{ form.value.errors }}</div>
+        </div>
+
+        <div class="w3-row">
+            <div class="w3-col w3-container m2">
+                <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit" value="Submit">
+            </div>
+            <div class="w3-col w3-container m2">
+                <a href="{% url 'portfolio_table' portfolio.id %}">
+                    <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-light-blue" type="button">Cancel</button>
+                </a>
+            </div>
+        </div>
+    </form>
+
+{% endblock %}

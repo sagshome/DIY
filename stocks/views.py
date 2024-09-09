@@ -46,11 +46,14 @@ class PortfolioView(LoginRequiredMixin, ListView):
         :return:
         ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
         """
-
-        profile = Profile.objects.get(user=self.request.user)
         context = super().get_context_data(**kwargs)
+
+        try:
+            profile = Profile.objects.get(user=self.request.user)
+            context['can_update'] = True if profile.av_api_key else False
+        except Profile.DoesNotExist:
+            context['can_update'] =  False
         context['portfolio_list'] = Portfolio.objects.filter(user=self.request.user)
-        context['can_update'] = True if profile.av_api_key else False
         return context
 
 
@@ -109,11 +112,11 @@ class PortfolioTableView(LoginRequiredMixin, DetailView):
                 try:
                     df = p.e_pd[(p.e_pd['Date'] == this_date) & (p.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
                     if df.empty:
-                        this_record.append((None, None))
+                        this_record.append((None, None, None))
                     else:
                         shares = df['Shares'].tolist()[0]
                         value = df['Value'].tolist()[0]
-                        this_record.append((shares, value))
+                        this_record.append((equity.id, shares, value))
                         total_value += value
 
                 except KeyError:
@@ -406,6 +409,37 @@ def add_transaction(request):
         'form': form,
     }
     return render(request, 'stocks/add_transaction.html', context)
+
+
+@login_required
+def portfolio_equity_date_update(request, p_pk, e_pk, date_str):
+    """
+
+    """
+    portfolio = get_object_or_404(Portfolio, pk=p_pk, user=request.user)
+    equity = get_object_or_404(Equity, pk=e_pk)
+    this_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+    if request.method == 'POST':
+        form = ManualUpdateEquityForm(request.POST)
+        if form.is_valid():
+            price = form.cleaned_data['shares'] / form.cleaned_data['value'] if form.cleaned_data['value'] else 0
+
+            return HttpResponseRedirect(reverse('portfolio_table', kwargs={'pk': portfolio.id}))
+        else:
+            pass
+    else:
+        shares = 0
+        value = 0
+        df = portfolio.e_pd[(portfolio.e_pd['Date'] == this_date) & (portfolio.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
+        if not df.empty:
+            shares = df['Shares'].tolist()[0]
+            value = df['Value'].tolist()[0]
+        form = ManualUpdateEquityForm(initial={'portfolio': portfolio.id, 'equity': equity.id, 'report_date': this_date, 'shares': shares, 'value': value})
+    return render(request, 'stocks/portfolio_update_equity.html', context={'form': form, 'portfolio': portfolio, 'equity': equity})
+
+
+
 
 
 @login_required

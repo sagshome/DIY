@@ -84,19 +84,7 @@
 
 <div class="w3-bar w3-hide-small">
     <div class="w3-bar-item">
-        <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">Table View</button>
-        </a>
-    </div>
-    <div class="w3-bar-item">
-        <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">Equity View</button>
-        </a><br>
-    </div>
-    <div class="w3-bar-item">
-        <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">BMO Global</button>
-        </a>
+        <a href="{% url 'portfolio_table' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View </button></a>
     </div>
 </div>
 

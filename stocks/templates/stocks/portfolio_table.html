@@ -56,30 +56,23 @@
 
 <div class="w3-bar w3-hide-small">
     <div class="w3-bar-item">
-        <a href="{% url 'portfolio_compare' portfolio.id 'VFV.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">Table View</button>
-        </a>
+        <a href="{% url 'portfolio_list' %}"><button class="w3-button-medium w3-round-large w3-orange"> Home </button></a>
     </div>
+
     <div class="w3-bar-item">
-        <a href="{% url 'portfolio_compare' portfolio.id 'XEI.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">Equity View</button>
-        </a><br>
+        <a href="{% url 'portfolio_details' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
     </div>
-    <div class="w3-bar-item">
-        <a href="{% url 'portfolio_compare' portfolio.id 'ZGQ.TRT'%}">
-            <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-orange">BMO Global</button>
-        </a>
-    </div>
+
 </div>
 
 <div class="w3-row">
     <div class="w3-container" style="overflow-y:auto;height:700">
         <table class="w3-table w3-border tableFixHead">
             <thead style="position: sticky; top: 0; z-index: 1;background:#eee;">
-                <th class="w3-left-align">Date</th>
+                <th class="w3-left-align" style="width:100px">Date</th>
                 <th class="w3-left-align">Total Value</th>
                 {% for equity in equities %}
-                    <th>{{equity.symbol}}<br><br>{{equity.name}}<br><br>Shares - Value</th>
+                    <th><a href="{% url 'portfolio_equity_details' portfolio.id equity.symbol %}">{{equity.symbol}}</a><br><br>{{equity.name}}<br><br>Shares - Value</th>
                 {% endfor %}
             </thead>
             <tbody>
@@ -87,13 +80,14 @@
             <tr>
                 {% for item in element %}
                     {% if forloop.first %}
-                        <td>{{item}}</td>
+                        <td>{{item|date:"Y-M"}}</td>
                     {% elif forloop.counter == 2 %}
                         <td>${{item | floatformat:'0g'}}</td>
                     {% else %}
                         <td>
                             {% if item.0 %}
-                                {{item.0 | floatformat:'2g'}} - {{item.1 | floatformat:'0g' }}
+                                <a href="{% url 'update_by_date' portfolio.id item.0 element.0 %}">
+                                {{item.1 | floatformat:'2g'}} - {{item.2 | floatformat:'0g' }}</a>
                             {% endif %}
                         </td>
                     {% endif %}

@@ -337,10 +337,12 @@ class Equity(models.Model):
                     next_month = next_date(last_date)
                     last_price = last_price + change_increment
                     if next_month not in all_dates:
-                        EquityValue.objects.create(equity=self, date=next_month, price=last_price, source=estimated)
+                        EquityValue.objects.create(equity=self, real_date=next_month, price=last_price, source=estimated)
                     else:
                         if all_dates[next_month] != last_price:
                             e = EquityValue.objects.get(equity=self, date=next_month)
+                            if not e.real_date:
+                                e.real_date = next_month
                             e.price = last_price
                             e.save()
                     last_date = next_month
@@ -350,12 +352,12 @@ class Equity(models.Model):
 
         try:
             last_entry = EquityValue.objects.filter(equity=self).exclude(source=estimated).order_by('-date')[0]
-            current_date = normalize_today()
+            current_date = datetime.today().replace(day=1).date()
             date_value = next_date(last_entry.date)
             if not date_value >= current_date:
                 price_value = last_entry.price
                 while date_value <= current_date:
-                    EquityValue.get_or_create(equity=self, date=date_value, price=price_value, source=DataSource.ESTIMATE.value)
+                    EquityValue.get_or_create(equity=self, real_date=date_value, price=price_value, source=DataSource.ESTIMATE.value)
                     date_value = next_date(date_value)
         except IndexError:
             logger.error('No EquityValue data for:%s' % self)
@@ -368,7 +370,6 @@ class Equity(models.Model):
             else:
                 url = f'{AV_URL}TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={AV_API_KEY}'
                 data_key = 'Monthly Adjusted Time Series'
-                this_day = normalize_date(datetime.now())
                 logger.debug(url)
                 result = requests.get(url)
                 if not result.status_code == 200:
@@ -379,18 +380,18 @@ class Equity(models.Model):
                 if data_key in data:
                     for entry in data[data_key]:
                         try:
-                            date_value = normalize_date(datetime.strptime(entry, '%Y-%m-%d'))
+                            date_value = datetime.strptime(entry, '%Y-%m-%d').date()
                         except ValueError:
                             logger.error('Invalid date format in: %s' % entry)
                             return
 
                         if date_value >= EPOCH:
-                            EquityValue.get_or_create(equity=self, source=DataSource.API.value, date=date_value,
+                            EquityValue.get_or_create(equity=self, source=DataSource.API.value, real_date=date_value,
                                                       price=float(data[data_key][entry]['4. close']))
 
                             dividend = float(data[data_key][entry]['7. dividend amount'])
                             if dividend != 0:
-                                EquityEvent.get_or_create(equity=self, event_type='Dividend', date=date_value,
+                                EquityEvent.get_or_create(equity=self, event_type='Dividend', real_date=date_value,
                                                           value=dividend, source=DataSource.API.value)
 
             self.last_updated = now
@@ -408,7 +409,6 @@ class Equity(models.Model):
                 self.save()
             elif self.searchable:
                 self.update_external_equity_data(force)
-
         self.fill_equity_value_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
@@ -486,7 +486,9 @@ class EquityValue(models.Model):
     """
 
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
-    date: date = models.DateField()
+    real_date: date = models.DateField(verbose_name='Recorded Date', null=True)
+    date: date = models.DateField(verbose_name='Normalized Date')
+
     price: float = models.FloatField()
     source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ESTIMATE.value)
 
@@ -502,22 +504,31 @@ class EquityValue(models.Model):
         :return:
         """
         created = False
+        real_date = kwargs['real_date']
+        norm_date = real_date.replace(day=1)
         try:
-            obj = cls.objects.get(equity=kwargs['equity'], date=kwargs['date'])
+            obj = cls.objects.get(equity=kwargs['equity'], date=norm_date)
             if obj.source > kwargs['source']:
                 obj.source = kwargs['source']
                 obj.price = kwargs['price']
+                obj.real_date = real_date
                 obj.save()
-            elif obj.source == kwargs['source'] and obj.price != kwargs['price']:
+            elif obj.source == kwargs['source'] and (not obj.real_date or obj.real_date < real_date):
+                obj.price = kwargs['price']
+                obj.real_date = real_date
+                obj.save()
+            elif obj.source == kwargs['source'] and obj.real_date == real_date:
                 obj.price = kwargs['price']
                 obj.save()
+
         except EquityValue.DoesNotExist:
+            kwargs['date'] = norm_date
             obj = cls.objects.create(**kwargs)
             created = True
         return obj, created
 
     def save(self, *args, **kwargs):
-        self.date = normalize_date(self.date)
+        self.date = self.real_date.replace(day=1)   # Be sure
         super(EquityValue, self).save(*args, **kwargs)
 
 
@@ -532,7 +543,9 @@ class EquityEvent(models.Model):
                    ('Split', 'Stock Split'))
 
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
-    date: date = models.DateField()
+    real_date: date = models.DateField(verbose_name='Recorded Date', null=True)
+    date: date = models.DateField(verbose_name='Normalized Date')
+
     value = models.FloatField()
     event_type = models.TextField(max_length=10, choices=EVENT_TYPES)
     source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ADMIN.value)
@@ -552,21 +565,25 @@ class EquityEvent(models.Model):
         obj = None
         equity = kwargs['equity']
         source = kwargs['source'] if 'source' in kwargs else DataSource.ESTIMATE.value
+        real_date = kwargs['real_date']
+        norm_date = real_date.replace(day=1)
 
         if not equity.searchable or source <= DataSource.API.value:
             try:
-                obj = cls.objects.get(equity=kwargs['equity'], date=kwargs['date'], event_type=kwargs['event_type'])
+                obj = cls.objects.get(equity=kwargs['equity'], date=norm_date, event_type=kwargs['event_type'])
                 if 'source' in kwargs and obj.source > kwargs['source']:
                     obj.source = kwargs['source']
                     obj.value = kwargs['value']
+                    obj.real_date = real_date
                     obj.save()
             except cls.DoesNotExist:
+                kwargs['date'] = norm_date
                 obj = cls.objects.create(**kwargs)
                 created = True
         return obj, created
 
     def save(self, *args, **kwargs):
-        self.date = normalize_date(self.date)
+        self.date = self.real_date.replace(day=1)
         super(EquityEvent, self).save(*args, **kwargs)
         if self.event_type == 'SplitAD':
             logger.info('Adjusting Dividends for %s' % self.equity)
@@ -578,7 +595,7 @@ class EquityEvent(models.Model):
             for transaction in Transaction.objects.filter(equity=self.equity, date__lt=self.date):
                 Transaction.objects.create(portfolio=transaction.portfolio,
                                            equity=self.equity, price=0,
-                                           quantity=transaction.quantity, xa_action=Transaction.BUY, date=self.date)
+                                           quantity=transaction.quantity, xa_action=Transaction.BUY, real_date=self.real_date)
 
 
 class PortfolioSummary:
@@ -994,6 +1011,7 @@ class Transaction(models.Model):
     value: float = models.FloatField(null=True, blank=True)
     xa_action: int = models.IntegerField(help_text="Select a Portfolio", choices=TRANSACTION_TYPE)
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+    estimated = models.BooleanField(default=False)
 
     @classmethod
     def transaction_value(cls, xa_string: str) -> int:
@@ -1027,7 +1045,7 @@ class Transaction(models.Model):
                 f'{self.TRANSACTION_MAP[self.xa_action]}')  # pragma: no cover
 
     def save(self, *args, **kwargs):
-        self.date = normalize_date(self.real_date)
+        self.date = self.real_date.replace(day=1) if self.real_date else None
         reported_price = 0 if not self.price else self.price
 
         if self.xa_action == self.REDIV:
@@ -1051,10 +1069,11 @@ class Transaction(models.Model):
                 ev = EquityValue.objects.get(equity=self.equity, date=self.date)
                 if ev.source > DataSource.USER.value:
                     ev.price = self.price
+                    ev.real_date = self.real_date
                     ev.source = DataSource.USER.value
                     ev.save()
             except EquityValue.DoesNotExist:
-                EquityValue.objects.create(source=DataSource.USER.value, equity=self.equity, price=self.price, date=self.date)
+                EquityValue.objects.create(source=DataSource.USER.value, equity=self.equity, price=self.price, real_date=self.real_date, date=self.date)
 
             self.equity.update()  # This is a none API update to put in estimated values if appropriate
 

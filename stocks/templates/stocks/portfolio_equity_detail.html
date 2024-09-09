@@ -109,12 +109,15 @@
     </div>
     <div class="w3-margin">
         Select Equity for comparison chart: {{form.equity}}
+        <a href="{% url 'portfolio_details' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View</button></a>
+        <a href="{% url 'portfolio_table' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View</button></a>
+
     </div>
 
-    <div class="w3-container w3-margin-top">
+    <div class="w3-container w3-margin-top" style="overflow-y:auto;height:400">
         <table class="w3-table w3-stripped">
-            <tr class="w3-margin-bottom">
-                <th>Date</th>
+            <thead class="w3-margin-bottom" style="position: sticky; top: 0; z-index: 1;background:#eee;">
+                <th style="width:100px">Date</th>
                 <th class="w3-hide-small">Shares Owned</th>
                 <th class="w3-hide-small">Cost</th>
                 <th class="w3-hide-small">Value</th>
@@ -123,11 +126,11 @@
                 <th>Dividend Amount</th>
                 <th>Share Price</th>
                 <th>Activities</th>
-            </tr>
+            </thead>
             {% for data in context %}
 
                 <tr>
-                    <td>{{ data.0 | date:'Y-m' }}</td>
+                    <td>{{ data.0 | date:'Y-M' }}</td>
                     <td class="w3-hide-small">{{data.1|floatformat:'0g'}}</td>
                     <td class="w3-hide-small">${{data.3|floatformat:'2g'}}</td>
                     <td class="w3-hide-small">${{data.2|floatformat:'2g'}}</td>

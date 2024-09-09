@@ -89,7 +89,7 @@ class StockImporter:
         for _, prow in self.pd.iterrows():
             do_process: bool = True
             this_date: date = self.pd_date(prow)
-            norm_date = normalize_date(this_date)
+            norm_date = this_date.replace(day=1)
             symbol: str = self.pd_symbol(prow)
             name: str = self.pd_description(prow)
             xa_action: int = self.pd_xa_type(prow)
@@ -112,7 +112,7 @@ class StockImporter:
 
             if xa_action in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN] and do_process:
                 this_action = FUND if xa_action in [FUND, TRANSFER_IN] else REDEEM
-                Transaction.objects.create(date=this_date, portfolio=portfolio, user=self.user,
+                Transaction.objects.create(real_date=this_date, portfolio=portfolio, user=self.user,
                                            value=amount, xa_action=this_action,
                                            quantity=0, price=0)
 
@@ -129,9 +129,9 @@ class StockImporter:
 
                 if do_process:
                     logger.debug('%s:%sTrading %s shares %s' % (this_date, norm_date, equity, quantity))
-                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=norm_date, user=self.user,
+                    Transaction.objects.create(portfolio=portfolio, equity=equity, real_date=this_date, user=self.user,
                                                xa_action=this_action, price=buy_price, quantity=quantity)
-                    EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
+                    EquityValue.get_or_create(equity=equity, real_date=this_date, price=price,
                                                       source=DataSource.UPLOAD.value)
 
             elif xa_action == INT:  # pragma: no cover
@@ -142,10 +142,10 @@ class StockImporter:
                 equity = self.equity_lookup(symbol, self.pd_description(prow), region)
                 value = amount / equity_totals[portfolio.explicit_name][equity.key]
                 if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
-                    EquityEvent.get_or_create(equity=equity, date=norm_date, value=value,
+                    EquityEvent.get_or_create(equity=equity, real_date=this_date, value=value,
                                               event_type='Dividend', source=DataSource.UPLOAD.value)
                 if price != 0:
-                    EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
+                    EquityValue.get_or_create(equity=equity, real_date=this_date, price=price,
                                               source=DataSource.UPLOAD.value)
 
             else:
@@ -361,7 +361,7 @@ class StockImporter:
         :return:
         """
         for equity in Equity.objects.all():
-            equity.fill_equity_holes()
+            equity.fill_equity_value_holes()
 
 
 class Manulife(StockImporter):
@@ -372,7 +372,8 @@ class Manulife(StockImporter):
     """
 
     ManulifeKeys = {
-        'Account': 'Account',
+        'AccountKey': 'Account Number',
+        'AccountName': 'Account',
         'Description': 'Investment Name',
         'Symbol': 'Symbol',
         'XAType': 'Transaction Type',
@@ -383,7 +384,7 @@ class Manulife(StockImporter):
         'Date': 'Process Date',
     }
 
-    def __init__(self, file_name: csv.reader, name_stub: str, user: User):
+    def __init__(self, file_name: csv.reader, user: User, name_stub: str):
         super().__init__(file_name, user, self.ManulifeKeys, stub=name_stub, managed=True)
 
     def csv_xa_type(self, row) -> int:

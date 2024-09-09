@@ -64,7 +64,7 @@ def month_delta(first_date: date, second_date: date) -> int:
 
 
 def normalize_today() -> datetime.date:
-    return normalize_date(datetime.today().date())
+    return datetime.today().replace(day=1).date()
 
 
 def tempdir() -> Path:
