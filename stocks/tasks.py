@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from stocks.models import Equity, Inflation, ExchangeRate, Portfolio
+from stocks.models import Equity, Inflation, ExchangeRate, Account
 
 logger = logging.getLogger(__name__)
 
@@ -22,5 +22,5 @@ def daily_update():
     Inflation.update()
     ExchangeRate.update()
 
-    for portfolio in Portfolio.objects.all():
-        portfolio.update_static_values()
+    for account in Account.objects.all():
+        account.update_static_values()

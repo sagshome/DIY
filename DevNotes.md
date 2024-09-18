@@ -55,3 +55,15 @@ EPD 393 rows
 
 PPD 63 Rows
  Date  EffectiveCost      Value  TotalDividends   InflatedCost           Cash
+
+
+Funding vs Growth vs Value vs Gain
+
+Funding is money from my bank to buy funds
+when I close out an account.   How can I tell what was Funded vs Gain,  when I transfer into a new account,  how do I 
+track what was funded vs what was gain.
+
+Transfer OUT / Transfer IN are special functions - they do not require a sale,  (although one is reported) but Funding should be transfer in
+
+So if I transfer out 100K,  but I funded 75K,   Should I need to tell it where I am transfering in to and move the funding records over and a CASH record?
+

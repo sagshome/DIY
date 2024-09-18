@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Portfolio Details{% endblock %}
+{% block title %}Account Details{% endblock %}
 {% load stocks_tags %}
     <style>
         .tcright {
@@ -15,7 +15,7 @@
 
       $.ajax({
         url: "{% url 'cost_value_chart' %}",
-        data: {'portfolio_id': {{ portfolio.id }}},
+        data: {'account_id': {{ account.id }}},
         success: function (data) {
           new Chart("lineChart", {
             type: "line",
@@ -51,7 +51,7 @@
     });
 </script>
 
-<h2 class="w3-margin">Portfolio Table for {{portfolio.name}}</h2>
+<h2 class="w3-margin">Account Table for {{account.name}}</h2>
 
 
 <div class="w3-bar w3-hide-small">
@@ -60,7 +60,7 @@
     </div>
 
     <div class="w3-bar-item">
-        <a href="{% url 'portfolio_details' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
+        <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
     </div>
 
 </div>
@@ -72,7 +72,7 @@
                 <th class="w3-left-align" style="width:100px">Date</th>
                 <th class="w3-left-align">Total Value</th>
                 {% for equity in equities %}
-                    <th><a href="{% url 'portfolio_equity_details' portfolio.id equity.symbol %}">{{equity.symbol}}</a><br><br>{{equity.name}}<br><br>Shares - Value</th>
+                    <th><a href="{% url 'account_equity_details' account.id equity.symbol %}">{{equity.symbol}}</a><br><br>{{equity.name}}<br><br>Shares - Value</th>
                 {% endfor %}
             </thead>
             <tbody>
@@ -86,7 +86,7 @@
                     {% else %}
                         <td>
                             {% if item.0 %}
-                                <a href="{% url 'update_by_date' portfolio.id item.0 element.0 %}">
+                                <a href="{% url 'update_by_date' account.id item.0 element.0 %}">
                                 {{item.1 | floatformat:'2g'}} - {{item.2 | floatformat:'0g' }}</a>
                             {% endif %}
                         </td>
@@ -102,7 +102,7 @@
 
 {% block help_content %}
 <p>
-    <b>Portfolio Details</b>.  This somewhat busy page is likely the most important.   The main summary is the first line,
+    <b>Account Details</b>.  This somewhat busy page is likely the most important.   The main summary is the first line,
     it has the total funding and the total funds redeemed.  That is what I refer to as the Effective Cost.
 </p>
 <h4>Return vs Cost</h4>
@@ -112,8 +112,8 @@
     of inflation.  It should be higher than the value, or you are really loosing money.   Lastly <b>Value</b> is the
     actual value,  again regardless of inflation.
 <h4>Equity Summary</h4>
-This table is any equity you ever had in this portfolio.   It has the current share
-<h4>Portfolio Transaction</h4>
+This table is any equity you ever had in this account.   It has the current share
+<h4>Account Transaction</h4>
 This is the pertinent activities.  I don't include dividends, but you can see them as well as historic prices by selecting
 the equity in the equity summary table.
 {% endblock %}

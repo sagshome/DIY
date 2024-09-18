@@ -2,6 +2,7 @@ import platform
 import tempfile
 
 from datetime import datetime, date, timedelta
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
 
@@ -15,18 +16,7 @@ def normalize_date(this_date) -> datetime.date:
     :param this_date:  The date to normalize
     :return:  The 1st of the next month (and year if December)
     """
-
-    if this_date.day == 1:
-        return datetime(this_date.year, this_date.month, 1).date()
-
-    if this_date.month == 12:
-        year = this_date.year + 1
-        month = 1
-    else:
-        year = this_date.year
-        month = this_date.month + 1
-
-    return datetime(year, month, 1).date()
+    return datetime(this_date.year, this_date.month, 1).date()
 
 
 def next_date(input_date: date) -> date:
@@ -35,9 +25,8 @@ def next_date(input_date: date) -> date:
     :param input_date:
     :return:
     """
-    new = input_date + timedelta(days=32)
-    new = new.replace(day=1)
-    return new
+
+    return input_date + relativedelta(months=1)
 
 
 def last_date(input_date: date) -> date:
@@ -46,9 +35,7 @@ def last_date(input_date: date) -> date:
     :param input_date:
     :return:
     """
-    new = input_date - timedelta(days=1)
-    new = new.replace(day=1)
-    return new
+    return input_date - relativedelta(months=1)
 
 
 def month_delta(first_date: date, second_date: date) -> int:

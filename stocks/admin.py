@@ -2,7 +2,7 @@ from django.contrib import admin
 
 # Register your models here.
 
-from .models import Equity, Portfolio, Transaction, EquityValue, EquityEvent, Inflation, EquityAlias, ExchangeRate, \
+from .models import Equity, Account, Transaction, EquityValue, EquityEvent, Inflation, EquityAlias, ExchangeRate, \
     DataSource
 
 
@@ -20,16 +20,16 @@ class EquityAliasAdmin(admin.ModelAdmin):
     list_display = ('symbol', 'equity', 'name')
 
 
-class PortfolioAdmin(admin.ModelAdmin):
+class AccountAdmin(admin.ModelAdmin):
     list_display = ("name",)
 
 
 class TransactionAdmin(admin.ModelAdmin):
     model = Transaction
-    list_display = ('portfolio', 'equity', 'real_date', 'price', 'quantity', 'value', 'xa_action', 'estimated')
+    list_display = ('account', 'equity', 'real_date', 'price', 'quantity', 'value', 'xa_action', 'estimated')
 
     fieldsets = [
-        (None, {'fields': ['portfolio', 'equity']}),
+        (None, {'fields': ['account', 'equity']}),
         ('Purchase', {'fields': ['real_date', 'date', 'xa_action', 'value', 'price', 'quantity', 'estimated']}),
     ]
 
@@ -57,7 +57,7 @@ admin.site.register(EquityAlias, EquityAliasAdmin)
 admin.site.register(EquityEvent, EquityEventAdmin)
 admin.site.register(EquityValue, EquityValueAdmin)
 admin.site.register(Equity, EquityAdmin)
-admin.site.register(Portfolio, PortfolioAdmin)
+admin.site.register(Account, AccountAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(Inflation, InflationAdmin)
 admin.site.register(ExchangeRate, ExchangeRateAdmin)

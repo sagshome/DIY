@@ -1,6 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from .models import Equity, Portfolio, Transaction
+from .models import Equity, Account, Transaction, Portfolio
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
 
 
@@ -9,6 +9,7 @@ def popover_html(label, content):
                             data-trigger="hover" data-placement="auto" data-content="' + content + '"> \
                             <span class="glyphicon glyphicon-info-sign"></span></a>'
 
+
 class EquityForm(forms.Form):
     choices = [(None, '--------')]
     for equity in Equity.objects.all().order_by('symbol'):
@@ -16,32 +17,81 @@ class EquityForm(forms.Form):
     equity = forms.ChoiceField(choices=choices)
 
 
-class PortfolioForm(forms.ModelForm):
+class AccountForm(forms.ModelForm):
     class Meta:
-        model = Portfolio
-        fields = ('name', 'currency', 'managed', 'user', 'end')
+        model = Account
+        fields = ('account_name', 'name', 'portfolio', 'currency', 'managed', 'user')
         widgets = {
             'end': forms.TextInput(attrs={'type': 'date'}),
             'user': forms.HiddenInput(),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.initial['user']:
+            self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.filter(user=self.initial['user']))
+        else:
+            self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.none())
+        self.fields['portfolio'].required = False
+        self.fields["account_name"].widget.attrs['readonly'] = True
+        self.fields["account_name"].widget.attrs['style'] = 'background-color:Wheat'
 
-class PortfolioCopyForm(forms.ModelForm):
+
+class AccountCloseForm(forms.ModelForm):
+
+    accounts = forms.ModelChoiceField(queryset=Account.objects.none(), label='Account to transfer into')
+
+    class Meta:
+        model = Account
+        fields = ('account_name', 'name', 'accounts', '_end', 'user')
+        widgets = {
+            '_end': forms.TextInput(attrs={'type': 'date'}),
+            'user': forms.HiddenInput(),
+
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["account_name"].widget.attrs['readonly'] = True
+        self.fields["account_name"].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["name"].widget.attrs['readonly'] = True
+        self.fields["name"].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields['accounts'].required = False
+        self.fields["accounts"].queryset = self.initial['accounts']
+        self.fields["_end"].queryset = self.initial['_end']
+
+    def clean__end(self):
+        this = self.cleaned_data["_end"]
+        if self.instance.transactions.latest('real_date').real_date > this:
+            raise forms.ValidationError(f"Close date is before all transaction are completed {self.instance.transactions.latest('real_date').real_date}")
+        return this
+
+
+
+class PortfolioForm(forms.ModelForm):
     class Meta:
         model = Portfolio
-        fields = ('name', 'currency', 'managed', 'user', 'end')
+        fields = ('name', 'currency', 'user')
         widgets = {
-            'end': forms.HiddenInput(),
+            'user': forms.HiddenInput(),
+        }
+
+
+class AccountCopyForm(forms.ModelForm):
+    class Meta:
+        model = Account
+        fields = ('name', 'currency', 'managed', 'user')
+        widgets = {
             'user': forms.HiddenInput(),
             'currency': forms.HiddenInput(),
             'managed': forms.HiddenInput(),
         }
 
 
-class PortfolioAddForm(forms.ModelForm):
+class AccountAddForm(forms.ModelForm):
     class Meta:
-        model = Portfolio
-        fields = ('name', 'currency', 'managed', 'user')
+        model = Account
+        fields = ('account_name', 'name', 'currency', 'managed', 'user')
         widgets = {
             'user': forms.HiddenInput(),
         }
@@ -50,7 +100,7 @@ class PortfolioAddForm(forms.ModelForm):
 class TransactionForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ("user", "portfolio", "xa_action", "equity", "real_date", "price", "quantity", "value")
+        fields = ("user", "account", "xa_action", "equity", "real_date", "price", "quantity", "value")
         widgets = {
             'user': forms.HiddenInput(),
             'xa_action': forms.Select(),
@@ -67,9 +117,10 @@ class TransactionForm(forms.ModelForm):
                          (Transaction.REDIV, 'ReInvested Dividends'),
                          (Transaction.SELL, 'Sell'),
                          (Transaction.REDEEM, 'Redeem'),
+                         (Transaction.INTEREST, 'Cash/Deposit'),
                          (Transaction.FEES, 'Sell for FEES')]
-        self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.filter(user=self.initial['user']))
-        self.fields['xa_action'].choices = valid_actions
+        self.fields['account'] = forms.ModelChoiceField(queryset=Account.objects.filter(user=self.initial['user']))
+        self.fields['xa_action'].choices = Transaction.TRANSACTION_TYPE
         self.fields['price'].required = False
         self.fields['value'].required = False
         self.fields['quantity'].required = False
@@ -103,7 +154,7 @@ class TransactionForm(forms.ModelForm):
 
 class ManualUpdateEquityForm(forms.Form):
 
-    portfolio = forms.IntegerField(widget=forms.HiddenInput(), required=True)
+    account = forms.IntegerField(widget=forms.HiddenInput(), required=True)
     equity = forms.IntegerField(widget=forms.HiddenInput(), required=True)
     report_date = forms.DateField()
     shares = forms.FloatField()
@@ -126,6 +177,7 @@ class ManualUpdateEquityForm(forms.Form):
         cleaned_data = super().clean()
         return cleaned_data
 
+
 class AddEquityForm(forms.Form):
 
     symbol = forms.CharField(required=True, max_length=36)
@@ -140,24 +192,17 @@ class AddEquityForm(forms.Form):
 
 
 class UploadFileForm(forms.Form):
-    stub = forms.CharField(label="Portfolio Prefix", required=False, max_length=16,
-                           help_text='Optional field that is used to decorate any portfolio in the uploaded csv file')
-    #csv_type = forms.CharField(choices=choices, default='QuestTrade')
     csv_type = forms.ChoiceField(label='Upload Type',
                                  choices=[('', '----',),
                                           ('Default', 'Default'),
                                           ('QuestTrade', 'QuestTrade'),
-                                          ('Manulife', 'Manulife')])
-    #csv_type3 = forms.ChoiceField(choices=choices)
+                                          ('Manulife', 'Manulife Original'),
+                                          ('Wealth', 'Manulife Wealth')])
     csv_file = forms.FileField()
 
     def clean(self):
         cleaned_data = super().clean()
         csv_type = cleaned_data.get("csv_type")
 
-        if csv_type not in ('QuestTrade', 'Manulife'):
-            self.add_error('csv_type', f"CSV Type {csv_type} is not currently valid")
-        csv_type = cleaned_data.get("csv_type")
-
-        if csv_type not in ('QuestTrade', 'Manulife'):
+        if csv_type not in ('QuestTrade', 'Manulife', 'Wealth'):
             self.add_error('csv_type', f"CSV Type {csv_type} is not currently valid")

@@ -23,7 +23,7 @@
 
         function show_hide() {
             var action_value = $("#id_xa_action").val();
-            if (action_value == 1 || action_value == 5) {
+            if (action_value == 1 || action_value == 5 || action_value == 8 || action_value == 9 || action_value == 6) {
                 hideDiv('equityRow')
                 hideDiv('priceRow')
                 hideDiv('quantityRow')
@@ -80,7 +80,7 @@
 
     </script>
 
-    <h2>Portfolio Transactions</h2>
+    <h2>Account Transactions</h2>
 
         <form method="post" id="XAForm" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
@@ -97,9 +97,9 @@
             {% endfor %}
 
             <div class="w3-row w3-margin-bottom">
-                <div class="w3-col w3-container l1">{{ form.portfolio.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.portfolio }}</div>
-                <div class="w3-col w3-container>">{{ form.portfolio.errors }}</div>
+                <div class="w3-col w3-container l1">{{ form.account.label_tag }}</div>
+                <div class="w3-col w3-container m2">{{ form.account }}</div>
+                <div class="w3-col w3-container>">{{ form.account.errors }}</div>
             </div>
 
             <div class="w3-row w3-margin-bottom">
@@ -149,6 +149,6 @@
         </form>
 
         <div id="documentation" class="pad-md">
-            Add a Fund, Buy, Sell or Redeem transaction for {{portfolio.name}}
+            Add a Fund, Buy, Sell or Redeem transaction for {{account.name}}
         </div>
 {% endblock content %}
