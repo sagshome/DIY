@@ -25,3 +25,26 @@ body {
     margin-left: 5px;
     margin-right: 5px;
 }
+
+td.right {
+  display: inline-block;
+  width: 155px;
+  text-align: right;
+  padding: 5px;
+}
+
+.diyrow {
+  height: 100px;
+}
+
+
+tr.show {
+  display: inline-block
+  }
+
+tr.hide {
+  display: none
+  }
+
+.tableFixHead          { overflow: auto; height: 200px; }
+.tableFixHead thead th { position: sticky; top: 0; z-index: 1; }

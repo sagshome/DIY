@@ -26,10 +26,13 @@ def month_year(obj, field):
 
 @register.simple_tag
 def equity_value(obj, equity_key, *args):
-    this_day = datetime.now().replace(day=1).date()
+    """
+    pd.loc[(pd['Date'] == this_day) & (pd['Equity'] == equity_key)].groupby('Equity')[args[0]].agg(['sum']).iloc[0]['sum']
+    """
+    this_day = normalize_today()
     pd = getattr(obj, 'e_pd')
     try:
-        value = pd.loc[(pd['Date'] == this_day) & (pd['Equity'] == equity_key)][args[0]].iloc[0]
+        value = pd.loc[(pd['Date'] == this_day) & (pd['Equity'] == equity_key)].groupby('Equity')[args[0]].agg(['sum']).iloc[0]['sum']
     except KeyError:
         logger.error('%s %s Error searching on %s' % (obj, equity_key, args[0]))
         value = 0

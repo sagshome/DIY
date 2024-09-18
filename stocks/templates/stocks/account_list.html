@@ -1,0 +1,29 @@
+{% load stocks_tags %}
+
+{% for account in account_list %}
+    <tr>
+        <td class="w3-container">{{account.name}}</a></td>
+        <td class="w3-container w3-center">
+            <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart </button></a>
+            <a href="{% url 'account_table' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table </button></a>
+
+        </td>
+        <td class="w3-container w3-center w3-hide-small">{% month_year account 'start' %}</td>
+        <td class="w3-container w3-center w3-hide-small">
+            {% if account.end %}
+                {% month_year account 'end' %}
+            {% endif %}
+        </td>
+
+        <td class="w3-container w3-hide-small">${{account.cost|floatformat:'0g'}}</td>
+        <td class="w3-container">${{account.value|floatformat:'0g'}}</td>
+        <td class="w3-container">${{account.growth|floatformat:'0g'}}</td>
+        <td class="w3-container">${{account.dividends|floatformat:'0g'}}</td>
+        <td class="w3-container w3-center">
+            <a class="w3-hide-small" href="{% url 'account_edit' account.id %}"><button class="w3-button-medium w3-round-large w3-green"> Edit </button></a>
+            {% if not account.end %}
+                <a class="w3-hide-small" href="{% url 'account_close' account.id %}"><button class="w3-margin-left w3-button-medium w3-round-large w3-button-medium w3-round-large w3-red">Close</button></a>
+            {% endif %}
+        </td>
+    </tr>
+{% endfor %}

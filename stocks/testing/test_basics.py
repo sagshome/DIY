@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from stocks.models import ExchangeRate, Inflation, Equity, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
+from stocks.models import ExchangeRate, Inflation, Equity, EquityEvent, EquityValue, Account, Transaction, DataSource
 from base.utils import normalize_date, next_date, last_date, normalize_today
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class BasicSetup(TestCase):
                                                    region='TRT', currency='CAD', searchable=False, validated=True))
         self.equities.append(Equity.objects.create(symbol='USEQ', name='Eq US_EQUITY', equity_type='Equity',
                                                    region='', currency='USD', searchable=False, validated=True))
-        self.portfolio = Portfolio.objects.create(name='Test', explicit_name='001', managed=False, currency='CAD')
+        self.account = Account.objects.create(name='Test', explicit_name='001', managed=False, currency='CAD')
 
 
 class DataFrameTest(BasicSetup):
@@ -45,8 +45,8 @@ class DataFrameTest(BasicSetup):
         EquityValue.objects.create(equity=self.equities[0], date=self.months[4], price=10)
         EquityValue.objects.create(equity=self.equities[0], date=self.months[5], price=10)
 
-        Transaction.objects.create(portfolio=self.portfolio, date=self.months[0], value=1000, xa_action=Transaction.FUND)
-        Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.months[1],
+        Transaction.objects.create(account=self.account, date=self.months[0], value=1000, xa_action=Transaction.FUND)
+        Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.months[1],
                                    price=10, quantity=50, xa_action=Transaction.BUY)
 
     @freeze_time("2022-02-02")
@@ -56,7 +56,7 @@ class DataFrameTest(BasicSetup):
         default inflation = 0,  exchange rate = 1
         :return:
         """
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['EffectiveCost'].item(), 1000, 'PD EffectiveCost')
         self.assertEqual(today_pd_series['Value'].item(), 500, 'PD Value')
         self.assertEqual(today_pd_series['TotalDividends'].item(), 0, 'PD Total Dividends')
@@ -64,7 +64,7 @@ class DataFrameTest(BasicSetup):
         self.assertEqual(today_pd_series['Cash'].item(), 500, 'PD Cash')
         # EquityColumns = ['Date', 'Equity', 'Shares', 'Dividend', 'Price', 'Value', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Equity'].item(), self.equities[0].symbol, 'EPD Symbol')
         self.assertEqual(today_ed_series['Shares'].item(), 50, 'EPD Shares')
         self.assertEqual(today_ed_series['Dividend'].item(), 0, 'EPD Dividend')
@@ -80,10 +80,10 @@ class DataFrameTest(BasicSetup):
         On the trade day we bought 50@10,  then sold 10@11
         :return:
         """
-        Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.months[1],
+        Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.months[1],
                                    price=11, quantity=10, xa_action=Transaction.SELL)
 
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['EffectiveCost'].item(), 1000, 'PD EffectiveCost')
         self.assertEqual(today_pd_series['Value'].item(), 400, 'PD Value')
         self.assertEqual(today_pd_series['TotalDividends'].item(), 0, 'PD Total Dividends')
@@ -91,7 +91,7 @@ class DataFrameTest(BasicSetup):
         self.assertEqual(today_pd_series['Cash'].item(), 610, 'PD Cash')
         # EquityColumns = ['Date', 'Equity', 'Shares', 'Dividend', 'Price', 'Value', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Equity'].item(), self.equities[0].symbol, 'EPD Symbol')
         self.assertEqual(today_ed_series['Shares'].item(), 40, 'EPD Shares')
         self.assertEqual(today_ed_series['Dividend'].item(), 0, 'EPD Dividend')
@@ -107,10 +107,10 @@ class DataFrameTest(BasicSetup):
         On the trade day we bought 50@10,  then sold 10@11
         :return:
         """
-        Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.months[1],
+        Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.months[1],
                                    price=11, quantity=50, xa_action=Transaction.SELL)
 
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['EffectiveCost'].item(), 1000, 'PD EffectiveCost')
         self.assertEqual(today_pd_series['Value'].item(), 0, 'PD Value')
         self.assertEqual(today_pd_series['TotalDividends'].item(), 0, 'PD Total Dividends')
@@ -118,7 +118,7 @@ class DataFrameTest(BasicSetup):
         self.assertEqual(today_pd_series['Cash'].item(), 1050, 'PD Cash')
         # EquityColumns = ['Date', 'Equity', 'Shares', 'Dividend', 'Price', 'Value', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Shares'].item(), 0, 'EPD Shares')
         self.assertEqual(today_ed_series['Dividend'].item(), 0, 'EPD Dividend')
         self.assertEqual(today_ed_series['Price'].item(), 10, 'EPD Price')
@@ -135,7 +135,7 @@ class DataFrameTest(BasicSetup):
         :return:
         """
         Inflation.objects.create(date=self.months[0], cost=0, inflation=0.1, source=DataSource.API.value)
-        p = Portfolio.objects.get(id=self.portfolio.id)
+        p = Account.objects.get(id=self.account.id)
         self.assertEqual(p.p_pd.loc[p.p_pd['Date'] == self.months[0]]['InflatedCost'].item(), 1000)
         self.assertEqual(p.p_pd.loc[p.p_pd['Date'] == self.months[1]]['InflatedCost'].item(), 1001)
         self.assertEqual(p.p_pd.loc[p.p_pd['Date'] == self.months[2]]['InflatedCost'].item(), 1001)
@@ -145,7 +145,7 @@ class DataFrameTest(BasicSetup):
         self.assertEqual(p.e_pd.loc[p.e_pd['Date'] == self.months[2]]['InflatedCost'].item(), 500)
 
         Inflation.objects.create(date=self.months[1], cost=0, inflation=0.2, source=DataSource.API.value)
-        p = Portfolio.objects.get(id=self.portfolio.id)
+        p = Account.objects.get(id=self.account.id)
 
         self.assertEqual(p.p_pd.loc[p.p_pd['Date'] == self.months[0]]['InflatedCost'].item(), 1000)
         self.assertEqual(p.p_pd.loc[p.p_pd['Date'] == self.months[1]]['InflatedCost'].item(), 1001)
@@ -163,7 +163,7 @@ class DataFrameTest(BasicSetup):
         :return:
         """
         EquityEvent.objects.create(equity=self.equities[0], date=self.months[1], value=0.10, event_type='Dividend')
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['EffectiveCost'].item(), 1000, 'PD EffectiveCost')
         self.assertEqual(today_pd_series['Value'].item(), 500, 'PD Value')
         self.assertEqual(today_pd_series['TotalDividends'].item(), 5.0, 'PD Total Dividends')
@@ -171,7 +171,7 @@ class DataFrameTest(BasicSetup):
         self.assertEqual(today_pd_series['Cash'].item(), 505, 'PD Cash')
         # EquityColumns = ['Date', 'Equity', 'Shares', 'Dividend', 'Price', 'Value', 'TotalDividends', 'EffectiveCost', 'InflatedCost']
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Equity'].item(), self.equities[0].symbol, 'EPD Symbol')
         self.assertEqual(today_ed_series['Shares'].item(), 50, 'EPD Shares')
         self.assertEqual(today_ed_series['Dividend'].item(), 0, 'EPD Dividend')
@@ -190,14 +190,14 @@ class DataFrameTest(BasicSetup):
         """
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[2]).update(price=11)
 
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['EffectiveCost'].item(), 1000)
         self.assertEqual(today_pd_series['Value'].item(), 550)
         self.assertEqual(today_pd_series['TotalDividends'].item(), 0)
         self.assertEqual(today_pd_series['InflatedCost'].item(), 1000)
         self.assertEqual(today_pd_series['Cash'].item(), 500)
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Equity'].item(), self.equities[0].symbol)
         self.assertEqual(today_ed_series['Shares'].item(), 50)
         self.assertEqual(today_ed_series['Dividend'].item(), 0, 'EPD Dividend')
@@ -216,17 +216,17 @@ class DataFrameTest(BasicSetup):
         """
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[2]).update(price=11)
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[3]).update(price=11)
-        Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.months[3],
+        Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.months[3],
                                    price=11, quantity=10, xa_action=Transaction.SELL)
 
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['EffectiveCost'].item(), 1000)
         self.assertEqual(today_pd_series['Value'].item(), 440)
         self.assertEqual(today_pd_series['TotalDividends'].item(), 0)
         self.assertEqual(today_pd_series['InflatedCost'].item(), 1000)
         self.assertEqual(today_pd_series['Cash'].item(), 610)
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Equity'].item(), self.equities[0].symbol)
         self.assertEqual(today_ed_series['Shares'].item(), 40)
         self.assertEqual(today_ed_series['Dividend'].item(), 0, 'EPD Dividend')
@@ -245,14 +245,14 @@ class DataFrameTest(BasicSetup):
         """
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[2]).update(price=11)
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[3]).update(price=11)
-        Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.months[3],
+        Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.months[3],
                                    price=9, quantity=10, xa_action=Transaction.SELL)
 
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['Value'].item(), 440)
         self.assertEqual(today_pd_series['Cash'].item(), 590)
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Price'].item(), 11, 'EPD Price')
         self.assertEqual(today_ed_series['Value'].item(), 440, 'EPD Value')
         self.assertEqual(today_ed_series['EffectiveCost'].item(), 410, 'EPD Effective Cost')
@@ -267,14 +267,14 @@ class DataFrameTest(BasicSetup):
         """
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[2]).update(price=10)
         EquityValue.objects.filter(equity=self.equities[0], date=self.months[3]).update(price=10)
-        Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.months[3],
+        Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.months[3],
                                    price=9, quantity=10, xa_action=Transaction.SELL)
 
-        today_pd_series = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == normalize_today()]
+        today_pd_series = self.account.p_pd.loc[self.account.p_pd['Date'] == normalize_today()]
         self.assertEqual(today_pd_series['Value'].item(), 400)
         self.assertEqual(today_pd_series['Cash'].item(), 590)
 
-        today_ed_series = self.portfolio.e_pd.loc[self.portfolio.e_pd['Date'] == normalize_today()]
+        today_ed_series = self.account.e_pd.loc[self.account.e_pd['Date'] == normalize_today()]
         self.assertEqual(today_ed_series['Price'].item(), 10, 'EPD Price')
         self.assertEqual(today_ed_series['Value'].item(), 400, 'EPD Value')
         self.assertEqual(today_ed_series['EffectiveCost'].item(), 410, 'EPD Effective Cost')
@@ -324,14 +324,14 @@ class StaticValueTest(BasicSetup):
     @patch('stocks.utils.normalize_today')
     def test_gen_static(self, this_day):
         this_day.return_value = self.today
-        Transaction.objects.create(portfolio=self.portfolio, date=last_date(self.start), value=1000,
+        Transaction.objects.create(account=self.account, date=last_date(self.start), value=1000,
                                    price=0, quantity=0, xa_action=Transaction.FUND)
 
-        self.portfolio.update_static_values()
-        self.assertEqual(self.portfolio.cost, 1000)
-        self.assertEqual(self.portfolio.value, 1000)
-        self.assertEqual(self.portfolio.start, last_date(self.start))
-        self.assertEqual(self.portfolio.dividends, 0)
+        self.account.update_static_values()
+        self.assertEqual(self.account.cost, 1000)
+        self.assertEqual(self.account.value, 1000)
+        self.assertEqual(self.account.start, last_date(self.start))
+        self.assertEqual(self.account.dividends, 0)
 
     @patch('stocks.utils.normalize_today')
     def test_start_dfs(self, this_day):
@@ -346,12 +346,12 @@ class StaticValueTest(BasicSetup):
         this_day.return_value = self.today
 
         cost = inflated_cost = 1000
-        Transaction.objects.create(portfolio=self.portfolio, date=self.start, value=cost,
+        Transaction.objects.create(account=self.account, date=self.start, value=cost,
                                    price=0, quantity=0, xa_action=Transaction.FUND)
 
         this_date = self.start
         while this_date <= self.today:
-            row = self.portfolio.p_pd.loc[self.portfolio.p_pd['Date'] == this_date]
+            row = self.account.p_pd.loc[self.account.p_pd['Date'] == this_date]
             self.assertEqual(row['EffectiveCost'].item(), cost, f'{this_date} EffectiveCost {cost}')
             self.assertEqual(row['Value'].item(), 0, f'{this_date} Value 0')
             self.assertEqual(row['TotalDividends'].item(), 0, f'{this_date} TotalDividends 0')
@@ -361,10 +361,10 @@ class StaticValueTest(BasicSetup):
             this_date = next_date(this_date)
 
     def test_xa_buy_save(self):
-        Transaction.objects.create(portfolio=self.portfolio, date=self.start, value=100,
+        Transaction.objects.create(account=self.account, date=self.start, value=100,
                                    price=0, quantity=0, xa_action=Transaction.FUND)
 
-        t = Transaction.objects.create(portfolio=self.portfolio, equity=self.equities[0], date=self.start,
+        t = Transaction.objects.create(account=self.account, equity=self.equities[0], date=self.start,
                                        xa_action=Transaction.BUY, price=1.1, quantity=10)
         self.assertEqual(t.value, 11, 'Unexpected value got %s expected 11' % t.value)  # 10 * 1.1
 

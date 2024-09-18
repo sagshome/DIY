@@ -8,7 +8,7 @@ from unittest.mock import patch, Mock
 
 from django.test import TestCase
 from stocks.importers import QuestTrade, FUND, BUY, SELL, DIV, REDEEM, JUNK, SPLIT
-from stocks.models import Equity, EquityAlias, EquityEvent, EquityValue, Portfolio, Transaction, DataSource
+from stocks.models import Equity, EquityAlias, EquityEvent, EquityValue, Account, Transaction, DataSource
 from stocks.testing.setup import DEFAULT_QUERY, DEFAULT_LOOKUP
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class BasicSetup(TestCase):
         self.assertEqual(my_obj.pd.iloc[0]['Amount'], 1000.0, 'Funding amount parsed')
         my_obj.process()
 
-        p = Portfolio.objects.get(name='test_Type')
+        p = Account.objects.get(name='test_Type')
         self.assertEqual(len(p.p_pd), 6)
 
         this = p.p_pd.loc[p.p_pd['Date'] == datetime(2020,9,1).date()]
@@ -58,13 +58,13 @@ class BasicSetup(TestCase):
         self.assertEqual(p.last_import, datetime(2020,3,3).date(), 'Import Date test')
         self.assertEqual(Transaction.objects.all().count(), 1)
         this_xa: Transaction = Transaction.objects.all()[0]
-        this_xa.portfolio = p
+        this_xa.account = p
         self.assertEqual(this_xa.xa_action, Transaction.FUND)
         self.assertEqual(this_xa.value, 1000)
 
         my_obj = QuestTrade(csv.reader(data_text), 'other_stub')
 
-        self.assertEqual(Portfolio.objects.all().count(), 1, 'New Stub is ignored')
+        self.assertEqual(Account.objects.all().count(), 1, 'New Stub is ignored')
         self.assertEqual(this['EffectiveCost'].item(), 1000, 'ReImport does not process old records')
         self.assertEqual(p.last_import, datetime(2020,3,3).date(), 'ImportDate Not updated')
 
@@ -73,9 +73,9 @@ class BasicSetup(TestCase):
 
         my_obj = QuestTrade(csv.reader(data_text), 'other_stub').process()
 
-        self.assertEqual(Portfolio.objects.all().count(), 1, 'New Stub is ignored')
+        self.assertEqual(Account.objects.all().count(), 1, 'New Stub is ignored')
 
-        p = Portfolio.objects.get(name='test_Type')
+        p = Account.objects.get(name='test_Type')
         this = p.p_pd.loc[p.p_pd['Date'] == datetime(2020,9,1).date()]
 
         self.assertEqual(this['EffectiveCost'].item(), 2000, 'ReImport finds new records')
@@ -97,7 +97,7 @@ class BasicSetup(TestCase):
         self.assertEqual(my_obj.pd.iloc[1]['Amount'], 1000.0, 'Funding amount parsed')
         my_obj.process()
 
-        p = Portfolio.objects.get(name='test_Type')
+        p = Account.objects.get(name='test_Type')
         this = p.p_pd.loc[p.p_pd['Date'] == datetime(2020,9,1).date()]
         self.assertEqual(this['EffectiveCost'].item(), 2000)
         self.assertEqual(Transaction.objects.all().count(), 2)
@@ -173,8 +173,8 @@ class BasicSetup(TestCase):
         self.assertEqual(Transaction.objects.count(), 2)
         self.assertEqual(Equity.objects.count(), 1)
         e = Equity.objects.all()[0]
-        p = Portfolio.objects.get(name='test_Type')
-        t = Transaction.objects.get(portfolio=p, xa_action=Transaction.BUY)
+        p = Account.objects.get(name='test_Type')
+        t = Transaction.objects.get(account=p, xa_action=Transaction.BUY)
         self.assertEqual(t.value, 505.0, 'Total value inluceds commission')
         self.assertEqual(t.price, 10.1, "Include commission in price")
 
@@ -239,9 +239,9 @@ class BasicSetup(TestCase):
         get.side_effect = [self.mock_empty]
         my_obj = QuestTrade(csv.reader(data), None)
         my_obj.process()
-        self.assertEqual(Portfolio.objects.count(), 1,
-                         'Only one portfolio created')
-        p = Portfolio.objects.all()[0]
+        self.assertEqual(Account.objects.count(), 1,
+                         'Only one account created')
+        p = Account.objects.all()[0]
         self.assertEqual(p.name, 'k', 'No STUB value expected')
 
     @freeze_time('2020-12-01')
@@ -330,8 +330,8 @@ class BasicSetup(TestCase):
         my_obj.process()
 
         self.assertEqual(Transaction.objects.count(), 3)
-        p = Portfolio.objects.get(name='test_Type')
-        t = Transaction.objects.get(portfolio=p, xa_action=Transaction.SELL)
+        p = Account.objects.get(name='test_Type')
+        t = Transaction.objects.get(account=p, xa_action=Transaction.SELL)
         self.assertEqual(t.value, -195, 'Total value inluceds commission')
         self.assertEqual(t.price, 19.5, "Include commission in price")
         e = EquityValue.objects.get(date=datetime(2020,4,1).date())
@@ -367,7 +367,7 @@ class BasicSetup(TestCase):
         e = Equity.objects.all()[0]
         self.assertTrue(e.validated)
         self.assertTrue(e.searchable)
-        p = Portfolio.objects.get(name='test_Type')
+        p = Account.objects.get(name='test_Type')
         self.assertFalse(EquityEvent.objects.filter(date=datetime(2020,6,1).date()).exists())
         self.assertTrue(EquityEvent.objects.filter(date=datetime(2020,7,1).date()).exists())
         ev = EquityEvent.objects.get(date=datetime(2020,7,1).date())
@@ -414,7 +414,7 @@ class BasicSetup(TestCase):
         e = Equity.objects.all()[0]
         self.assertTrue(e.validated)
         self.assertFalse(e.searchable)
-        p = Portfolio.objects.get(name='test_Type')
+        p = Account.objects.get(name='test_Type')
         self.assertEqual(ev.equity, e)
         self.assertEqual(ev.value, 0.1)
         self.assertEqual(ev.event_type, 'Dividend')

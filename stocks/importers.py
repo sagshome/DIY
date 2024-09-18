@@ -8,21 +8,23 @@ from typing import List, Dict
 
 from django.contrib.auth.models import User
 
-from .models import Equity, EquityAlias, Portfolio, EquityValue, EquityEvent, Transaction, DataSource
+from .models import Equity, EquityAlias, Account, EquityValue, EquityEvent, Transaction, DataSource, AV_API_KEY
 from base.utils import normalize_date, DIYImportException
 
 
 FUND = Transaction.FUND
 BUY = Transaction.BUY
 SELL = Transaction.SELL
-DIV = Transaction.DIV
 INT = Transaction.INTEREST
 REDEEM = Transaction.REDEEM
-JUNK = 7
-REINVESTED = 8
-TRANSFER_IN = 9
-TRANSFER_OUT = 10
+FEES = Transaction.FEES
+REINVESTED = Transaction.REDIV
 SPLIT = 11
+TFSA_TRANSFER = 12
+JUNK = 13
+DIV = 14
+TRANSFER_IN = 15
+TRANSFER_OUT = 16
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +47,9 @@ class StockImporter:
     default_pd_columns = ['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency',
                           'Quantity', 'Price', 'Amount']
 
-    def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], stub: str = None, managed: bool = False):
+    def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], managed: bool = False):
         self.warnings = []
         self.user = user
-        self.stub = stub if stub else None
         self.managed = managed
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
         self._columns = copy.deepcopy(self.default_pd_columns)
@@ -56,7 +57,7 @@ class StockImporter:
         for new_column in self.added_columns:
             self._columns.append(new_column)
         self.pd = pd.DataFrame(columns=self._columns)
-        self.portfolios: Dict[str, Portfolio] = {}
+        self.accounts: Dict[str, Account] = {}
         self.equities: Dict[str, Equity] = {}
 
         self.mappings = self.get_headers(reader)
@@ -101,64 +102,87 @@ class StockImporter:
             equity: Equity
 
             #
-            portfolio: Portfolio = self.get_or_create_portfolio(
-                self.stub, self.user, self.pd_account_name(prow), self.pd_account_key(prow), False)
-            if portfolio.explicit_name not in equity_totals:
-                equity_totals[portfolio.explicit_name] = {}
-            if portfolio.last_import and (this_date <= portfolio.last_import):
-                do_process = False
+            account: Account = self.get_or_create_portfolio(self.user, self.pd_account_name(prow), self.pd_account_key(prow), False)
+            if account.account_name not in equity_totals:
+                equity_totals[account.account_name] = {}
+            if not account.last_import or (this_date > account.last_import):
 
-            last_import = this_date  # This has been pre-ordered by date
+                last_import = this_date  # This has been pre-ordered by date
 
-            if xa_action in [FUND, REDEEM, TRANSFER_OUT, TRANSFER_IN] and do_process:
-                this_action = FUND if xa_action in [FUND, TRANSFER_IN] else REDEEM
-                Transaction.objects.create(date=this_date, portfolio=portfolio, user=self.user,
-                                           value=amount, xa_action=this_action,
-                                           quantity=0, price=0)
+                if xa_action == FUND:
+                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND, quantity=0, price=0)
+                elif xa_action == REDEEM:
+                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=REDEEM, quantity=0, price=0)
+                elif xa_action == JUNK:
+                    pass
+                elif xa_action == INT:
+                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=INT, quantity=quantity, price=price)
+                elif xa_action == FEES:
+                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FEES, quantity=quantity, price=price)
 
-            if xa_action in [BUY, SELL, REINVESTED, TRANSFER_IN, TRANSFER_OUT, SPLIT]:
-                equity = self.get_or_create_equity(symbol, name, currency, region, False)
-                if equity.key not in equity_totals[portfolio.explicit_name]:
-                    equity_totals[portfolio.explicit_name][equity.key] = 0  # First purchase
-                equity_totals[portfolio.explicit_name][equity.key] += quantity
-                buy_price = price if xa_action not in [REINVESTED, SPLIT] else 0
-                this_action = BUY if xa_action in [BUY, REINVESTED, TRANSFER_IN, SPLIT] else SELL
+                elif xa_action == DIV:
+                    equity = self.equity_lookup(symbol, self.pd_description(prow), region)
+                    if not equity.searchable:
+                        value = amount / equity_totals[account.account_name][equity.key]
+                        if value != 0:  # CIBC stock split.  Best to handled it manually because dividends are screwy
+                            EquityEvent.get_or_create(equity=equity, real_date=this_date, value=value, event_type='Dividend', source=DataSource.UPLOAD.value)
+                        if price != 0:
+                            EquityValue.get_or_create(equity=equity, real_date=this_date, price=price, source=DataSource.UPLOAD.value)
+                else:  # Things that deal with equities
+                    if symbol:
+                        equity = self.get_or_create_equity(symbol, name, currency, region, False)
+                        if equity.key not in equity_totals[account.account_name]:
+                            equity_totals[account.account_name][equity.key] = 0  # First purchase
+                        equity_totals[account.account_name][equity.key] += quantity
 
-                if xa_action == SPLIT:  # todo actually notify admin - liar liar
-                    self.warnings.append(f'{this_date}:{equity.symbol} - {SPLIT_MESSAGE}')
+                        if xa_action in [BUY, REINVESTED, TRANSFER_IN, SPLIT]:
+                            if not xa_action == SPLIT:
+                                if amount and quantity:
+                                    price = amount / quantity  # Sometimes amount includes fees!
+                                else:
+                                    price = price if price else EquityValue.lookup_price(equity, this_date)
+                            else:
+                                price = 0
+                            action = Transaction.BUY if xa_action != REINVESTED else Transaction.REDIV
+                            price = price if xa_action != SPLIT else 0
+                            amount = amount if amount else price * quantity
+                            Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=action, quantity=quantity, price=price)
 
-                if do_process:
-                    logger.debug('%s:%sTrading %s shares %s' % (this_date, norm_date, equity, quantity))
-                    Transaction.objects.create(portfolio=portfolio, equity=equity, date=norm_date, user=self.user,
-                                               xa_action=this_action, price=buy_price, quantity=quantity)
-                    EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
-                                                      source=DataSource.UPLOAD.value)
+                        elif xa_action in [SELL, TRANSFER_OUT]:
+                            if amount and quantity:
+                                price = amount / quantity * -1  # Sometimes amount includes fees!,  quantity will be negative
+                            else:
+                                price = price if price else EquityValue.lookup_price(equity, this_date)
 
-            elif xa_action == INT:  # pragma: no cover
-                logger.info('Skipping INT action - I will come out as profit when redeeming')
-            elif xa_action in [JUNK, FUND, REDEEM]:  # pragma: no cover
-                pass
-            elif xa_action == DIV and do_process:
-                equity = self.equity_lookup(symbol, self.pd_description(prow), region)
-                value = amount / equity_totals[portfolio.explicit_name][equity.key]
-                if value != 0:   # CIBC stock split.  Best to handled it manually because dividends are screwy
-                    EquityEvent.get_or_create(equity=equity, date=norm_date, value=value,
-                                              event_type='Dividend', source=DataSource.UPLOAD.value)
-                if price != 0:
-                    EquityValue.get_or_create(equity=equity, date=norm_date, price=price,
-                                              source=DataSource.UPLOAD.value)
+                            amount = amount if amount else price * quantity
+                            amount = amount if amount < 0 else amount * -1
+                            Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=SELL, quantity=quantity, price=price)
+                        elif xa_action == TFSA_TRANSFER:
+                            price = EquityValue.lookup_price(equity, normalize_date(this_date))
+                            amount = amount if amount else price * quantity
+                            if quantity < 0:
+                                Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=SELL,
+                                                           quantity=quantity, price=price)
+                                Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=REDEEM)
+                            elif quantity > 0:
+                                Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=BUY,
+                                                           quantity=quantity, price=price)
+                                Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND)
+                        else:
+                            raise DIYImportException(f'Unexpected Activity type {xa_action}')
 
-            else:
-                raise DIYImportException(f'Unexpected Activity type {xa_action}')
-
-        for p in self.portfolios:
-            if (not self.portfolios[p].last_import) or (last_import and (self.portfolios[p].last_import < last_import)):
-                self.portfolios[p].last_import = last_import
-                self.portfolios[p].save()  # We must have imported something
-            for e in self.portfolios[p].equities:
-                e.update(force=False)
-            self.portfolios[p].update_static_values()
-        self.fill_value_holes()
+        # Finally update everything possible
+        for account in self.accounts:
+            if (not self.accounts[account].last_import) or (last_import and (self.accounts[account].last_import < last_import)):
+                self.accounts[account].last_import = last_import
+                self.accounts[account].save()  # Will update last import if anything was done,  if not then not harm.
+            for equity in self.accounts[account].equities:
+                if self.user.is_superuser or self.user.profile.av_api_key:
+                    key = self.user.profile.av_api_key if self.user.profile.av_api_key else AV_API_KEY
+                    equity.update(force=False, key=key)
+                else:
+                    equity.fill_equity_value_holes()
+            self.accounts[account].update_static_values()
 
     def get_headers(self, csv_reader):
         if set(self._columns) - set(self.headers.keys()):
@@ -166,12 +190,29 @@ class StockImporter:
             raise DIYImportException('CSV, required column(s) are missing (%s)' % missing)
 
         header = next(csv_reader)
+        fixed_header = []
+        for h in header:
+            fixed_header.append(h.encode(encoding="ascii",errors="ignore").decode('ascii'))
+
         return_dict = {}
         for column in self.headers:
-            return_dict[column] = header.index(self.headers[column])
+            return_dict[column] = fixed_header.index(self.headers[column])
         return return_dict
 
     # These setters are used so that subclassed importers can override the default value
+
+    @staticmethod
+    def strip_value(value) -> str:
+        """
+        numbers may come in as nnn, -nnn, $nnn, -$nnn
+        """
+        negative = False
+        if value and value[0] == '-':
+            negative = True
+            value = value[1:]
+        value = value if value and not value[0] == '$' else value[1:]
+        value = '-' + value if value and negative else value
+        return value.replace(',','')
 
     def csv_symbol(self, row) -> str:
         return row[self.mappings['Symbol']]
@@ -189,12 +230,12 @@ class StockImporter:
         return None
 
     def csv_price(self, row) -> float:
-        value = row[self.mappings['Price']]
+        value = self.strip_value(row[self.mappings['Price']])
         if value:
             try:
                 value = float(value)
             except ValueError:
-                logger.error('Failed to convert Price:%s to a floating point number' % value)
+                logger.error('Failed to convert Price:%s to a floating point number' % row)
                 value = 0
         else:
             value = 0
@@ -206,19 +247,19 @@ class StockImporter:
             try:
                 value = float(value)
             except ValueError:
-                logger.error('Failed to convert Quantity:%s to a floating point number' % value)
+                logger.error('Failed to convert Quantity:(%s) to a floating point number' % row)
                 value = 0
         else:
             value = 0
         return value
 
     def csv_amount(self, row) -> float:
-        value = row[self.mappings['Amount']]
+        value = self.strip_value(row[self.mappings['Amount']])
         if value:
             try:
                 value = float(value)
             except ValueError:
-                logger.error(f'Failed to convert Amount:%s to a floating point number' % value)
+                logger.error(f'Failed to convert Amount:%s to a floating point number' % row)
                 value = 0
         else:
             value = 0
@@ -331,26 +372,25 @@ class StockImporter:
         self.equities[lookup] = equity
         return self.equities[lookup]
 
-    def get_or_create_portfolio(self, stub, user, name, explicit_name, managed):
+    def get_or_create_portfolio(self, user, name, account_id, managed):
         """
 
         :param stub: A prefix to the action name
-        :param name: The explict name we import as
-        :param explicit_name:  The name we are going to use as a none changable key
+        :param name: The account name we import as
+        :param account_name:  The account id we are going to use as a none changable key
         :param managed: True if We are not pulling dividends out of.
         :return:
         """
-        if explicit_name not in self.portfolios:
-            p: Portfolio
+        if account_id not in self.accounts:
+            account: Account
             try:
-                p = Portfolio.objects.get(explicit_name=explicit_name, user=user)
-            except Portfolio.DoesNotExist:
-                name = name if not stub else f'{stub}_{name}'
-                p = Portfolio(name=name, user=user, explicit_name=explicit_name, managed=managed)
-                p.save()
-                p = Portfolio.objects.get(explicit_name=explicit_name, user=user)  # Refresh
-            self.portfolios[explicit_name] = p
-        return self.portfolios[explicit_name]
+                account = Account.objects.get(account_name=account_id, user=user)
+            except Account.DoesNotExist:
+                account = Account(name=name, user=user, account_name=account_id, managed=managed)
+                account.save()
+                account = Account.objects.get(account_name=account_id, user=user)  # Refresh
+            self.accounts[account_id] = account
+        return self.accounts[account_id]
 
     @staticmethod
     def fill_value_holes():
@@ -361,7 +401,7 @@ class StockImporter:
         :return:
         """
         for equity in Equity.objects.all():
-            equity.fill_equity_holes()
+            equity.fill_equity_value_holes()
 
 
 class Manulife(StockImporter):
@@ -372,7 +412,8 @@ class Manulife(StockImporter):
     """
 
     ManulifeKeys = {
-        'Account': 'Account',
+        'AccountKey': 'Account Number',
+        'AccountName': 'Account',
         'Description': 'Investment Name',
         'Symbol': 'Symbol',
         'XAType': 'Transaction Type',
@@ -383,25 +424,23 @@ class Manulife(StockImporter):
         'Date': 'Process Date',
     }
 
-    def __init__(self, file_name: csv.reader, name_stub: str, user: User):
-        super().__init__(file_name, user, self.ManulifeKeys, stub=name_stub, managed=True)
+    def __init__(self, file_name: csv.reader, user: User):
+        super().__init__(file_name, user, self.ManulifeKeys, managed=True)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
-        if csv_value in ['Fee Rebate',]:
-            return FUND
         if csv_value in ['Purchase', 'Switch In', 'Transfer In - External']:
             return BUY
         if csv_value == 'Transfer Out - External':
             return REDEEM
         if csv_value in ['Redemption', 'Switch Out']:
             return SELL
+        if csv_value == 'Deposit':
+            return FUND
         elif csv_value == 'Reinvested Dividend/Interest':
             return REINVESTED
-        elif csv_value == 'Cash Dividend/Interest':
+        elif csv_value in ['Fee Rebate', 'Cash Dividend/Interest']:
             return INT
-        elif csv_value in ['Fee Rebate', ]:
-            return JUNK
         else:
             logger.error('Unexpected XA Type:%s' %  csv_value)
             return JUNK
@@ -420,6 +459,69 @@ class Manulife(StockImporter):
 
     def csv_account_key(self, row) -> str:
         return 'Manulife_' + super().csv_account_key(row)
+
+
+class ManulifeWealth(StockImporter):
+    """
+    Downloaded my transactions from manulife Wealthand looking to import them
+    :param file_name:
+    :return:
+    """
+
+    ManulifeKeys = {
+        'AccountKey': 'Account Number',
+        'AccountName': 'Account Type',
+        'Description': 'Description',
+        'Symbol': 'Symbol',
+        'XAType': 'Transaction Type',
+        'Currency': 'Account Currency',
+        'Quantity': 'Quantity',
+        'Price': 'Price (Trade Currency)',
+        'Amount': 'Total Value (Account Currency)',
+        'Date': 'Date',
+    }
+
+    def __init__(self, file_name: csv.reader, user: User):
+        super().__init__(file_name, user, self.ManulifeKeys, managed=True)
+
+    def csv_xa_type(self, row) -> int:
+        csv_value = row[self.mappings['XAType']]
+        if csv_value in ['Conversion',]:
+            if row[self.mappings['Quantity']] == 0:
+                return INT
+            return TRANSFER_IN
+        if csv_value in ['Buy', ]:
+            return BUY
+        if csv_value == 'Transfer Out - External':  # Do not know,  we have not ever withdrawn funds
+            return REDEEM
+        if csv_value in ['Sell',]:
+            return SELL
+        elif csv_value in ['Div Re-inv','Mut Fd Reinv Mgmt Fee Reb', 'Reinv Div', 'Trust Inc & Prtnr DRIP']:
+            return REINVESTED
+        elif csv_value == 'Dividend':
+            return INT
+        elif csv_value in ['Conversion Buy', 'Conversion Entry']:
+            return JUNK
+        elif csv_value == 'Tfsa Contribution':
+            return TFSA_TRANSFER
+        else:
+            logger.error('Unexpected XA Type:%s' %  csv_value)
+            return JUNK
+
+    def csv_date(self, row) -> date:
+        try:
+            data = row[self.mappings['Date']]
+            if data:
+                try:
+                    return datetime.strptime(row[self.mappings['Date']], '%m/%d/%Y')
+                except ValueError:
+                    logger.debug('Invalid date %s on row %s' % (data, row))
+        except IndexError:
+            logger.debug('No Date on row %s' % row)
+        return None
+
+    def csv_account_key(self, row) -> str:
+        return 'ManulifeWealth_' + super().csv_account_key(row)
 
 
 class QuestTrade(StockImporter):
@@ -463,7 +565,15 @@ class QuestTrade(StockImporter):
             return DIV
         elif csv_value == 'Interest':  # pragma: no cover
             return INT
-        elif csv_value in ['Fees and rebates', 'Transfers', 'Other', 'Deposits', 'Withdrawals']:
+        elif csv_value in ['Fees and rebates', 'Transfers', 'Other']:
+            amount = self.csv_amount(row)
+            if amount > 0:
+                return INT
+            elif amount < 0:
+                return FEES
+            else:
+                return JUNK
+        elif csv_value in ['Deposits', 'Withdrawals']:
             amount = self.csv_amount(row)
             if amount >= 0:
                 return FUND

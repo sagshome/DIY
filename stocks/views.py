@@ -5,17 +5,20 @@ import logging
 import os
 import json
 
+from datetime import datetime, date
 from dateutil import relativedelta
 
 import plotly.io as pio
 import plotly.graph_objects as go
 
 from pandas import DataFrame
+
+from django.conf import settings
+
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import QuerySet, Sum, Avg
+from django.db.models import QuerySet, Sum, Avg, Q
 from django.core.mail import EmailMultiAlternatives, EmailMessage
-
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -24,80 +27,187 @@ from django.views.generic.dates import DateMixin
 from django.http import JsonResponse
 
 
-from .models import Equity, Portfolio, Transaction, EquityEvent, EquityValue
-from .forms import *
-from .importers import QuestTrade, Manulife, StockImporter, HEADERS
-from base.utils import DIYImportException, normalize_today
+from .models import Equity, Account, Transaction, EquityEvent, EquityValue, Portfolio
+from .forms import AccountAddForm, AccountForm, TransactionForm, AccountCopyForm, UploadFileForm, ManualUpdateEquityForm, EquityForm, AddEquityForm, PortfolioForm, AccountCloseForm
+from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
+from base.utils import DIYImportException, normalize_today, normalize_date
 from .tasks import daily_update
 from base.models import Profile, COLORS
 
 logger = logging.getLogger(__name__)
 
 
-class PortfolioView(LoginRequiredMixin, ListView):
-    model = Portfolio
+class AccountView(LoginRequiredMixin, ListView):
+    model = Account
     template_name = 'stocks/portfolio_list.html'
 
     def get_context_data(self, **kwargs):
         """
-        Add a list of all the equities in this portfolio
+        Add a list of all the equities in this account
         :param kwargs:
         :return:
         ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
         """
-
-        profile = Profile.objects.get(user=self.request.user)
         context = super().get_context_data(**kwargs)
+
+        try:
+            profile = Profile.objects.get(user=self.request.user)
+            context['can_update'] = True if profile.av_api_key else False
+        except Profile.DoesNotExist:
+            context['can_update'] = False
         context['portfolio_list'] = Portfolio.objects.filter(user=self.request.user)
-        context['can_update'] = True if profile.av_api_key else False
+        context['account_list'] = Account.objects.filter(user=self.request.user, portfolio__isnull=True)
         return context
 
 
-class PortfolioDeleteView(LoginRequiredMixin, DeleteView):
-    model = Portfolio
-    template_name = 'stocks/delete_portfolio_confirm_delete.html'
-    success_url = '/stocks/portfolio/'
+class AccountDeleteView(LoginRequiredMixin, DeleteView):
+    model = Account
+    template_name = 'stocks/basic_confirm_delete.html'
+    success_url = '/stocks/account/'
 
     def get_object(self, queryset=None):
-        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Account'
+        context['extra_text'] = 'Deleting an account is permanent - All transaction will be removed..'
+        context['cancel_url'] = reverse('portfolio_list', kwargs={})
+        return context
 
 
 class TransactionDeleteView(LoginRequiredMixin, DeleteView):
     model = Transaction
-    template_name = 'stocks/delete_transaction_confirm_delete.html'
+    template_name = 'stocks/basic_confirm_delete.html'
 
     def get_object(self, queryset=None):
         return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
 
     def get_success_url(self):
-        return reverse_lazy('portfolio_details', kwargs = {'pk': self.object.portfolio.id})
+        return reverse_lazy('account_details', kwargs = {'pk': self.object.account.id})
 
-    def post(self, request, *args, **kwargs):
-        if "cancel" in request.POST:
-            this = self.get_object()
-            url = reverse_lazy('portfolio_details', kwargs = {'pk': this.portfolio.id})
-            return HttpResponseRedirect(url)
-        else:
-            return super(TransactionDeleteView, self).post(request, *args, **kwargs)
+    def get_context_data(self, **kwargs):
+        this = self.get_object()
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Transaction'
+        context['extra_text'] = 'Deleting a Transaction is permanent'
+        context['cancel_url'] = reverse_lazy('account_details', kwargs = {'pk': this.account.id})
+        return context
 
 
-class PortfolioDetailView(LoginRequiredMixin, DetailView):
-    model = Portfolio
-    template_name = 'stocks/portfolio_detail.html'
+class AccountTableView(LoginRequiredMixin, DetailView):
+    model = Account
+    template_name = 'stocks/account_table.html'
+
+    def get_object(self):
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        """
+        Add a list of all the equities in this account
+        :param kwargs:
+        :return:
+        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
+        """
+        context = super().get_context_data(**kwargs)
+        a: Account = context['account']
+        data = list()
+        elist = a.equities.order_by('symbol')
+
+        # Build the table data as [date, (shares, value), (shares, value)... total_value
+        for this_date in a.e_pd.Date.unique():
+            total_value = 0
+            this_record = [this_date, 0]
+            for equity in elist:
+                try:
+                    df = a.e_pd[(a.e_pd['Date'] == this_date) & (a.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
+                    if df.empty:
+                        this_record.append((None, None, None))
+                    else:
+                        shares = df['Shares'].tolist()[0]
+                        value = df['Value'].tolist()[0]
+                        if shares == 0 or value == 0:
+                            this_record.append((None, None, None))
+                        else:
+                            this_record.append((equity.id, shares, value))
+                            total_value += value
+                except KeyError:
+                    this_record.append((None, None))
+            if not total_value == 0:
+                this_record[1] = total_value
+                data.append(this_record)
+        data.sort(reverse=True)
+        return {'account': a,
+                'data': data,
+                'equities': elist,
+                'equity_count': elist.count()
+                }
+
+
+class PortfolioTableView(LoginRequiredMixin, DetailView):
+    model = Account
+    template_name = 'stocks/account_table.html'
 
     def get_object(self):
         return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
 
     def get_context_data(self, **kwargs):
         """
-        Add a list of all the equities in this portfolio
+        Add a list of all the equities in this account
         :param kwargs:
         :return:
         ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
         """
         context = super().get_context_data(**kwargs)
-        profile = Profile.objects.get(user=self.request.user)
-        can_update = True if profile.av_api_key else False
+        p: Portfolio = context['portfolio']
+        data = list()
+        elist = p.equities.order_by('symbol')
+
+        # Build the table data as [date, (shares, value), (shares, value)... total_value
+        for this_date in p.e_pd.Date.unique():
+            total_value = 0
+            this_record = [this_date, 0]
+            for equity in elist:
+                try:
+                    df = p.e_pd[(p.e_pd['Date'] == this_date) & (p.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
+                    if df.empty:
+                        this_record.append((None, None, None))
+                    else:
+                        shares = df['Shares'].tolist()[0]
+                        value = df['Value'].tolist()[0]
+                        if shares == 0 or value == 0:
+                            this_record.append((None, None, None))
+                        else:
+                            this_record.append((equity.id, shares, value))
+                            total_value += value
+                except KeyError:
+                    this_record.append((None, None))
+            if not total_value == 0:
+                this_record[1] = total_value
+                data.append(this_record)
+        data.sort(reverse=True)
+        return {'account': p,
+                'data': data,
+                'equities': elist,
+                'equity_count': elist.count()
+                }
+
+
+class PortfolioDetailView(LoginRequiredMixin, DetailView):
+    model = Portfolio
+    template_name = 'stocks/account_detail.html'
+
+    def get_object(self):
+        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        """
+        Add a list of all the equities in this account
+        :param kwargs:
+        :return:
+        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
+        """
+        context = super().get_context_data(**kwargs)
         p: Portfolio = context['portfolio']
 
         funded = p.transactions.filter(xa_action=Transaction.FUND)
@@ -110,15 +220,55 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
             redeemed = 0
         else:
             redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
-        return {'portfolio': p,
-                'xas': p.transactions.order_by('date', 'xa_action'),
+        return {'object': p,
+                'object_type': 'Portfolio',
+                'account_list': p.account_set.all(),
+                'xas': p.transactions.order_by('-real_date', 'xa_action'),
+                'funded': funded,
+                'redeemed': redeemed,
+                }
+
+
+class AccountDetailView(LoginRequiredMixin, DetailView):
+    model = Account
+    template_name = 'stocks/account_detail.html'
+
+    def get_object(self):
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        """
+        Add a list of all the equities in this account
+        :param kwargs:
+        :return:
+        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
+        """
+        context = super().get_context_data(**kwargs)
+        profile = Profile.objects.get(user=self.request.user)
+        can_update = True if profile.av_api_key else False
+        p: Account = context['account']
+
+        funded = p.transactions.filter(xa_action=Transaction.FUND)
+        redeemed = p.transactions.filter(xa_action=Transaction.REDEEM)
+        if funded.count() == 0:
+            funded = 0
+        else:
+            funded = funded.aggregate(Sum('value'))['value__sum']
+        if redeemed.count() == 0:
+            redeemed = 0
+        else:
+            redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
+        return {'object': p,
+                'object_type': 'Account',
+                'children': None,
+                'xas': p.transactions.order_by('-real_date', 'xa_action'),
                 'can_update': can_update,
                 'funded': funded,
                 'redeemed': redeemed,
                 }
 
 
-def portfolio_update(request, pk):
+def account_update(request, pk):
     """
     :param request:
     :param pk:
@@ -129,8 +279,8 @@ def portfolio_update(request, pk):
     if not profile.av_api_key:
         return HttpResponse(status=404)
 
-    portfolio = get_object_or_404(Portfolio, pk=pk, user=request.user)
-    portfolio.update()
+    account = get_object_or_404(Account, pk=pk, user=request.user)
+    account.update()
     return HttpResponse(status=200)
 
 
@@ -144,13 +294,84 @@ def diy_update(request):
     return HttpResponseRedirect(reverse('portfolio_list'))
 
 
-class PortfolioAdd(LoginRequiredMixin, CreateView):
+class PortfolioView(LoginRequiredMixin):
     model = Portfolio
-    template_name = 'stocks/add_portfolio.html'
-    form_class = PortfolioAddForm
+    template_name = 'stocks/portfolio.html'
+    form_class = PortfolioForm
 
     def get_success_url(self):
-        return reverse('portfolio_details', kwargs={'pk': self.object.id})
+        return reverse('portfolio_list', kwargs={})
+
+    def get_initial(self):
+        super().get_initial()
+        self.initial['user'] = self.request.user.id
+        return self.initial
+
+
+class PortfolioAdd(PortfolioView, CreateView):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['view_verb'] = 'Create'
+        return context
+
+
+class AccountCloseView(LoginRequiredMixin, UpdateView):
+    model = Account
+    template_name = 'stocks/account_close.html'
+    form_class = AccountCloseForm
+
+    def get_success_url(self):
+        return reverse('portfolio_list', kwargs={})
+
+    def get_initial(self):
+        super().get_initial()
+        accounts = Account.objects.filter(user=self.request.user, end__isnull=True).exclude(id=self.object.id)
+        if self.object.portfolio:
+            accounts = accounts.filter(portfolio=self.portfolio)
+        self.initial['accounts'] = accounts
+        self.initial['user'] = self.request.user.id
+        self.initial['end'] = datetime.today().date()
+        return self.initial
+
+    def form_valid(self, form):
+        # Access the updated form instance
+        updated_data = form.cleaned_data
+        if updated_data['accounts']:
+            funded = self.object.get_attr('Fund', self.object.end)
+
+        return super().form_valid(form)
+
+
+class PortfolioEdit(PortfolioView, UpdateView):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['view_verb'] = 'Edit'
+        return context
+
+
+class PortfolioDeleteView(LoginRequiredMixin, DeleteView):
+    model = Portfolio
+    template_name = 'stocks/basic_confirm_delete.html'
+    success_url = '/stocks/account/'
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Portfolio'
+        context['extra_text'] = 'Deleting a portfolio will NOT delete the accounts it contains,  you will need to delete them separately.'
+        context['cancel_url'] = reverse('portfolio_list', kwargs={})
+        return context
+
+
+class AccountAdd(LoginRequiredMixin, CreateView):
+    model = Account
+    template_name = 'stocks/add_account.html'
+    form_class = AccountAddForm
+
+    def get_success_url(self):
+        return reverse('account_details', kwargs={'pk': self.object.id})
 
     def get_initial(self):
         super().get_initial()
@@ -168,7 +389,7 @@ class TransactionEdit(LoginRequiredMixin, UpdateView):
         return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
 
     def get_success_url(self):
-        return reverse('portfolio_details', kwargs={'pk': self.object.portfolio.id})
+        return reverse('account_details', kwargs={'pk': self.object.account.id})
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -176,21 +397,21 @@ class TransactionEdit(LoginRequiredMixin, UpdateView):
         return context
 
 
-class PortfolioEdit(LoginRequiredMixin, UpdateView, DateMixin):
-    model = Portfolio
+class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
+    model = Account
     # fields = ['name', 'currency', 'managed', 'end']
-    template_name = 'stocks/add_portfolio.html'
+    template_name = 'stocks/add_account.html'
     date_filed = 'end'
-    form_class = PortfolioForm
+    form_class = AccountForm
 
     def get_object(self, queryset=None):
-        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
 
     def get_success_url(self):
         return reverse('portfolio_list')
 
     def get_initial(self):
-        original = Portfolio.objects.get(pk=self.kwargs['pk'])
+        original = Account.objects.get(pk=self.kwargs['pk'])
         return {'name': original.name,
                 'currency': original.currency,
                 'managed': original.managed,
@@ -202,17 +423,17 @@ class PortfolioEdit(LoginRequiredMixin, UpdateView, DateMixin):
         return context
 
 
-class PortfolioCopy(CreateView):
-    model = Portfolio
-    template_name = 'stocks/add_portfolio.html'
-    form_class = PortfolioCopyForm
+class AccountCopy(CreateView):
+    model = Account
+    template_name = 'stocks/add_account.html'
+    form_class = AccountCopyForm
 
     def get_object(self, queryset=None):
-        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
 
 
     def get_initial(self):
-        original = Portfolio.objects.get(pk=self.kwargs['pk'])
+        original = Account.objects.get(pk=self.kwargs['pk'])
         return {'name': f'{original.name}_copy',
                 'user': original.user,
                 'managed': original.managed,
@@ -226,9 +447,9 @@ class PortfolioCopy(CreateView):
         :return:
         """
         result = super().form_valid(form)
-        original = Portfolio.objects.get(pk=self.kwargs['pk'])
-        for t in Transaction.objects.filter(portfolio=original):
-            Transaction.objects.create(portfolio=self.object, equity=t.equity, date=t.date,
+        original = Account.objects.get(pk=self.kwargs['pk'])
+        for t in Transaction.objects.filter(account=original):
+            Transaction.objects.create(account=self.object, equity=t.equity, date=t.date,
                                        price=t.price, value=t.value,
                                        quantity=t.quantity, xa_action=t.xa_action)
 
@@ -236,7 +457,7 @@ class PortfolioCopy(CreateView):
         return result
 
     def get_success_url(self):
-        return reverse('portfolio_details', kwargs={'pk': self.object.id})
+        return reverse('account_details', kwargs={'pk': self.object.id})
 
 
 @login_required
@@ -247,14 +468,15 @@ def upload_file(request):
             bin_file = form.cleaned_data['csv_file'].read()
             text_file = bin_file.decode('utf-8')
             reader = csv.reader(text_file.splitlines())
-            stub = form.cleaned_data['stub'] if form.cleaned_data['stub'] else None
             try:
                 if form.cleaned_data["csv_type"] == 'QuestTrade':
-                    importer = QuestTrade(reader, request.user, stub)
+                    importer = QuestTrade(reader, request.user)
                 elif form.cleaned_data["csv_type"] == 'Manulife':
-                    importer = Manulife(reader, request.user, stub)
+                    importer = Manulife(reader, request.user)
+                elif form.cleaned_data["csv_type"] == 'Wealth':
+                    importer = ManulifeWealth(reader, request.user)
                 else:
-                    importer = StockImporter(reader, request.user, HEADERS, stub=stub, managed=False)
+                    importer = StockImporter(reader, request.user, HEADERS, managed=False)
                 importer.process()
                 if len(importer.warnings) != 0:
                     return render(request, "stocks/uploadfile.html",
@@ -282,14 +504,14 @@ def edit_transaction(request, pk):
                 xa.quantity = 0
                 xa.value = form.cleaned_data['value']
                 xa.xa_action = form.cleaned_data['xa_action']
-                xa.portfolio = form.cleaned_data['portfolio']
+                xa.account = form.cleaned_data['account']
             else:
                 xa.date = form.cleaned_data['date']
                 xa.price = form.cleaned_data['price']
                 xa.quantity = form.cleaned_data['quantity']
                 xa.value = 0
                 xa.xa_action = form.cleaned_data['xa_action']
-                xa.portfolio = form.cleaned_data['portfolio']
+                xa.account = form.cleaned_data['account']
             xa.save()
 
 
@@ -299,9 +521,9 @@ def add_transaction(request):
         form = TransactionForm(request.POST, initial={'user': request.user})
         if form.is_valid():
             action = form.cleaned_data['xa_action']
-            if action == Transaction.FUND or action == Transaction.REDEEM:
+            if action in [Transaction.FUND, Transaction.REDEEM, Transaction.TRANS_IN, Transaction.TRANS_OUT]:
                 value = form.cleaned_data['value']
-                if (action == Transaction.FUND and value < 0) or (action == Transaction.REDEEM and value > 0):
+                if (action in [Transaction.FUND, Transaction.TRANS_IN] and value < 0) or (action in [Transaction.REDEEM, Transaction.TRANS_OUT] and value > 0):
                     value = value * -1
                 new = Transaction.objects.create(user=request.user,
                                                  real_date=form.cleaned_data['real_date'],
@@ -309,9 +531,9 @@ def add_transaction(request):
                                                  quantity=0,
                                                  value=value,
                                                  xa_action=form.cleaned_data['xa_action'],
-                                                 portfolio=form.cleaned_data['portfolio'])
+                                                 account=form.cleaned_data['account'])
 
-            elif (action == Transaction.FUND) or (action == Transaction.REDEEM):
+            elif (action == Transaction.BUY) or (action == Transaction.SELL):
                 quantity = form.cleaned_data['quantity']
                 if (action == Transaction.BUY and quantity < 0) or (action == Transaction.SELL and quantity > 0):
                     quantity = quantity * -1
@@ -322,8 +544,8 @@ def add_transaction(request):
                                                  price=form.cleaned_data['price'],
                                                  quantity=quantity,
                                                  xa_action=form.cleaned_data['xa_action'],
-                                                 portfolio=form.cleaned_data['portfolio'])
-            elif (action == Transaction.DIV):
+                                                 account=form.cleaned_data['account'])
+            elif (action == Transaction.REDIV):
                 quantity = form.cleaned_data['quantity']
 
                 new = Transaction.objects.create(user=request.user,
@@ -332,15 +554,27 @@ def add_transaction(request):
                                                  price=0,
                                                  quantity=quantity,
                                                  xa_action=form.cleaned_data['xa_action'],
-                                                 portfolio=form.cleaned_data['portfolio'])
+                                                 account=form.cleaned_data['account'])
+            elif (action == Transaction.FEES):
+                quantity = form.cleaned_data['quantity']
+
+                new = Transaction.objects.create(user=request.user,
+                                                 equity=form.cleaned_data['equity'],
+                                                 real_date=form.cleaned_data['real_date'],
+                                                 price=0,
+                                                 quantity=quantity,
+                                                 xa_action=Transaction.SELL,
+                                                 account=form.cleaned_data['account'])
 
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
+                equity = new.equity.id if new.equity else None
                 form = TransactionForm(initial={'user': request.user,
-                                                'portfolio': new.portfolio,
-                                                'equity': new.equity,
-                                                'real_date': new.real_date})
+                                                'account': new.account,
+                                                'equity': equity,
+                                                'real_date': new.real_date,
+                                                'xa_action': new.xa_action})
             else:
-                return HttpResponseRedirect(reverse('portfolio_details', kwargs={'pk': new.portfolio.id}))
+                return HttpResponseRedirect(reverse('account_details', kwargs={'pk': new.account.id}))
     else:  # Initial get
         form = TransactionForm(initial={'user': request.user})
 
@@ -351,13 +585,42 @@ def add_transaction(request):
 
 
 @login_required
-def portfolio_compare(request, pk, symbol):
-    portfolio: Portfolio = get_object_or_404(Portfolio, pk=pk, user=request.user)
-    compare_equity: Equity = get_object_or_404(Equity, symbol=symbol)
-    compare_to: DataFrame = portfolio.switch(compare_equity)
+def account_equity_date_update(request, p_pk, e_pk, date_str):
+    """
 
-    x = sorted(portfolio.e_pd['Date'].unique())
-    new = portfolio.e_pd[['Date', 'EffectiveCost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
+    """
+    account = get_object_or_404(Account, pk=p_pk, user=request.user)
+    equity = get_object_or_404(Equity, pk=e_pk)
+    this_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+    if request.method == 'POST':
+        form = ManualUpdateEquityForm(request.POST)
+        if form.is_valid():
+            price = form.cleaned_data['shares'] / form.cleaned_data['value'] if form.cleaned_data['value'] else 0
+            if settings.ALPHAVANTAGEAPI_KEY:
+                equity.update(key=settings.ALPHAVANTAGEAPI_KEY)
+            return HttpResponseRedirect(reverse('account_table', kwargs={'pk': account.id}))
+        else:
+            pass
+    else:
+        shares = 0
+        value = 0
+        df = account.e_pd[(account.e_pd['Date'] == this_date) & (account.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
+        if not df.empty:
+            shares = df['Shares'].tolist()[0]
+            value = df['Value'].tolist()[0]
+        form = ManualUpdateEquityForm(initial={'account': account.id, 'equity': equity.id, 'report_date': this_date, 'shares': shares, 'value': value})
+    return render(request, 'stocks/portfolio_update_equity.html', context={'form': form, 'account': account, 'equity': equity})
+
+
+@login_required
+def account_compare(request, pk, symbol):
+    account: Account = get_object_or_404(Account, pk=pk, user=request.user)
+    compare_equity: Equity = get_object_or_404(Equity, symbol=symbol)
+    compare_to: DataFrame = account.switch(compare_equity)
+
+    x = sorted(account.e_pd['Date'].unique())
+    new = account.e_pd[['Date', 'EffectiveCost', 'InflatedCost', 'Value', 'TotalDividends']].groupby('Date').sum()
     comp = compare_to[['Date', 'Value',  'InflatedCost', 'TotalDividends']].groupby('Date').sum()
     total = new['Value']
     dividends = new['TotalDividends']
@@ -376,7 +639,7 @@ def portfolio_compare(request, pk, symbol):
     fig.update_layout(title='Return vs Cost', xaxis_title='Month', yaxis_title='Dollars')
     chart_html = pio.to_html(fig, full_html=False)
     return render(request, 'stocks/portfolio_compare.html',
-                  {'portfolio': portfolio, 'compare_to': compare_equity, 'chart': chart_html})
+                  {'account': account, 'compare_to': compare_equity, 'chart': chart_html})
 
 
 @login_required
@@ -398,15 +661,15 @@ def equity_update(request,  key):
 
 
 @login_required
-def portfolio_equity_compare(request, pk, orig_id, compare_id):
+def account_equity_compare(request, pk, orig_id, compare_id):
     try:
-        portfolio = Portfolio.objects.get(id=pk, user=request.user)
+        account = Account.objects.get(id=pk, user=request.user)
         compare_to = Equity.objects.get(id=compare_id)
         equity = Equity.objects.get(id=orig_id)
     except:
         JsonResponse({'status': 'false', 'message': 'Server Error - Does Not Exist'}, status=404)
 
-    xas = portfolio.transactions.filter(equity=equity) if equity else portfolio.transactions
+    xas = account.transactions.filter(equity=equity) if equity else account.transactions
     xas = xas.order_by('date')  # just to be safe
     xa_list = list(xas.values_list('date', flat=True))
 
@@ -473,7 +736,7 @@ def portfolio_equity_compare(request, pk, orig_id, compare_id):
 
 
 @login_required
-def portfolio_equity_details(request, pk, symbol):
+def account_equity_details(request, pk, symbol):
     """
 
     :param request:
@@ -484,7 +747,7 @@ def portfolio_equity_details(request, pk, symbol):
     table = pd.pivot_table(p.pd, values=['Cost', 'Value', 'TotalDividends'], index='Date', aggfunc='sum')
 
     """
-    portfolio = get_object_or_404(Portfolio, pk=pk, user=request.user)
+    account = get_object_or_404(Account, pk=pk, user=request.user)
     equity = get_object_or_404(Equity, symbol=symbol)
     compare_to = None
     if request.method == 'POST':
@@ -496,13 +759,11 @@ def portfolio_equity_details(request, pk, symbol):
     value_detail = dict(EquityValue.objects.filter(equity=equity).values_list('date', 'price'))
     form = EquityForm()
     data = []
-    #portfolio.pd['Date'] = pd.to_datetime(portfolio.pd['Date'])
-    df_sorted = portfolio.e_pd.sort_values(by='Date')
-    new_df = df_sorted.loc[df_sorted['Equity'] == equity.symbol]
+    new_df = account.e_pd.sort_values(by='Date').loc[account.e_pd['Equity'] == equity.symbol]
     for element in new_df.to_records():
         extra_data = ''
-        if element['Date'] in portfolio.trade_dates(equity):
-            quantity, price = portfolio.trade_details(equity, element['Date'])
+        if element['Date'] in account.trade_dates(equity):
+            quantity, price = account.trade_details(equity, element['Date'])
             if quantity < 0:
                 extra_data = f'Sold {quantity} shares at ${price}'
             else:
@@ -522,15 +783,21 @@ def portfolio_equity_details(request, pk, symbol):
 
         data.append([element['Date'], element['Shares'], element['Value'], element['EffectiveCost'],
                      total_dividends, equity_growth, dividend_price,
-                     share_price, extra_data])
+                     share_price, extra_data, element['AvgCost']])
 
     data.reverse()
-    funded = portfolio.transactions.filter(equity=equity, xa_action__in=(Transaction.BUY, Transaction.SELL)).aggregate(Sum('value'))['value__sum']
+    funded = account.transactions.filter(equity=equity, xa_action__in=(Transaction.BUY, Transaction.SELL)).aggregate(Sum('value'))['value__sum']
+    profit = False
+    if funded < 0:
+        profit = True
+        funded = funded * -1
+
     return render(request, 'stocks/portfolio_equity_detail.html',
                   {'context': data,
-                   'portfolio': portfolio,
+                   'account': account,
                    'equity': equity,
                    'funded': funded,
+                   'profit': profit,
                    'dividends': total_dividends,
                    'form': form,
                    'compare_to': compare_to
@@ -578,16 +845,58 @@ def overlay_dates(dataframe: DataFrame, key: str, symbol: str, list_of_dates):
 
 
 @login_required
+def get_equity_list(request):
+    """
+    API to get the proper set of equities base on the action, profile and date.
+    For instance,  A Sell/Reinvest action can only affect the equities you hold on a specific date
+    """
+    this_date = datetime.now()
+    action = None
+
+    if request.GET.get("date"):
+        try:
+            this_date = datetime.strptime(request.GET.get("date"), '%Y-%m-%d')
+        except ValueError:
+            logger.error("Received a ill formed date %s" % request.GET.get("date"))
+
+    if request.GET.get("action"):
+        try:
+            action = int(request.GET.get('action'))
+        except ValueError:
+            logger.error("Received a non-numeric action %s" % request.GET.get("action"))
+
+    values = Equity.objects.exclude(deactived_date__gt=this_date)
+
+    if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES]:
+        try:
+            account = Account.objects.get(id=request.GET.get("portfolio_id"), user=request.user)
+            this_date = normalize_date(this_date)
+            subset = account.e_pd.loc[account.e_pd['Date'] == this_date]['Equity']
+            values = values.filter(symbol__in=subset.values)
+        except Account.DoesNotExist:
+            logger.error('Someone %s is poking around, looking for %s' * (request.user, request.GET.get("portfolio_id")))
+            pass
+        except ValueError:
+            pass  # No value supplied
+
+    value_dictionary = dict()
+    for e in values.order_by('symbol'):
+        value_dictionary[e.id] = e
+
+    return render(request, "generic_selection.html", {"values": value_dictionary})
+
+
+@login_required
 def compare_equity_chart(request):
 
     try:
-        portfolio = Portfolio.objects.get(id=request.GET.get("portfolio_id"), user=request.user)
+        account = Account.objects.get(id=request.GET.get("portfolio_id"), user=request.user)
         compare_to = Equity.objects.get(id=request.GET.get("compare_id"))
         equity = Equity.objects.get(id=request.GET.get("equity_id"))
     except:
         JsonResponse({'status': 'false', 'message': 'Server Error - Does Not Exist'}, status=404)
 
-    xas = portfolio.transactions.filter(equity=equity) if equity else portfolio.transactions
+    xas = account.transactions.filter(equity=equity) if equity else account.transactions
     xas = xas.order_by('date')  # just to be safe
     xa_list = list(xas.values_list('date', flat=True))
 
@@ -652,56 +961,48 @@ def compare_equity_chart(request):
 @login_required
 def cost_value_chart(request):
     """
-    Build the chart.js data for a bar chart based on the standard search_filter
+    The cost value chart is displayed with accounts,  portfolio and equities (in an account)
     """
 
     colors = COLORS.copy()
     chart_data = {'labels': None,
                   'datasets': []}
 
-    portfolio_id = request.GET.get("portfolio_id")
+    object_id = request.GET.get('object_id')
+    object_type = request.GET.get("object_type")
     equity_id = request.GET.get("symbol")
 
-    try:
-        p = Portfolio.objects.get(id=portfolio_id, user=request.user)
-        if p.transactions:
-            chart_data['labels'] = sorted(p.p_pd['Date'].unique())
-            if not equity_id:
-                chart_data['datasets'].append({'label': 'Inflation Cost', 'fill': False,
-                                               'data': p.p_pd['InflatedCost'].tolist(),
-                                               'borderColor': colors[0], 'backgroundColor': colors[0], 'tension': 0.1})
-                chart_data['datasets'].append({'label': 'Effective Cost', 'fill': False,
-                                               'data': p.p_pd['EffectiveCost'].tolist(),
-                                               'borderColor': colors[1], 'backgroundColor': colors[1]})
-                value = p.p_pd['Value'] + p.p_pd['Cash']
-                chart_data['datasets'].append({'label': 'Value', 'fill': False,
-                                               'data': value.tolist(),
-                                               'borderColor': colors[3], 'backgroundColor': colors[3], 'tension': 0.1})
+    df = my_object = None
+    if object_type == 'Portfolio':
+        try:
+            my_object = Portfolio.objects.get(id=object_id, user=request.user)
+        except Portfolio.DoesNotExist:
+            JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
-            else:
-                try:
-                    equity = Equity.objects.get(id=equity_id)
-                except Equity.DoesNotExist:
-                    JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+    else:
+        try:
+            my_object = Account.objects.get(id=object_id, user=request.user)
+        except Account.DoesNotExist:
+            JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
-                new_df = p.e_pd.loc[p.e_pd['Equity'] == equity.symbol]
-                new_df['ec'] = new_df['EffectiveCost'] - new_df['TotalDividends']
+    if equity_id:
+        try:
+            equity = Equity.objects.get(id=equity_id)
+        except Equity.DoesNotExist:
+            JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+        if not my_object:
+            JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+        df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == 'FID281') & (my_object.e_pd['Shares'] != 0)]
 
-                ec = overlay_dates(new_df, 'ec', equity.symbol, chart_data['labels'])
-                cost = overlay_dates(p.e_pd, 'InflatedCost', equity.symbol, chart_data['labels'])
-                value = overlay_dates(p.e_pd, 'Value', equity.symbol, chart_data['labels'])
+    else:
+        df = my_object.p_pd
+        if my_object.end:
+            df = df.loc[df['Date'] <= my_object.end]
 
-                chart_data['datasets'].append({'label': 'Inflation Cost', 'fill': False,
-                                               'data': cost,
-                                               'borderColor': colors[0], 'backgroundColor': colors[0]})
-                chart_data['datasets'].append({'label': 'Effective Cost', 'fill': False,
-                                               'data': ec,
-                                               'borderColor': colors[1], 'backgroundColor': colors[1]})
-                chart_data['datasets'].append({'label': 'Value', 'fill': False,
-                                               'data': value,
-                                               'borderColor': colors[3], 'backgroundColor': colors[3]})
-
-    except Portfolio.DoesNotExist:
-        JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+    chart_data['labels'] = sorted(df['Date'].unique())
+    chart_data['datasets'].append({'label': 'Cost', 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': colors[0], 'backgroundColor': colors[0], 'tension': 0.1})
+    chart_data['datasets'].append({'label': 'Value', 'fill': False,'data': df['Value'].tolist(),'borderColor': colors[1], 'backgroundColor': colors[1]})
+    #if not equity_id:
+    #    chart_data['datasets'].append({'label': 'Cash', 'fill': False, 'data': df['Cash'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2]})
 
     return JsonResponse(chart_data)

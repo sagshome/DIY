@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Account Details{% endblock %}
+{% load stocks_tags %}
+    <style>
+        .tcright {
+        text-align: right;
+        }
+    </style>
+
+{% block content %}
+
+
+<script>
+    $(document).ready(function() {
+
+      $.ajax({
+        url: "{% url 'cost_value_chart' %}",
+        data: {'account_id': {{ account.id }}},
+        success: function (data) {
+          new Chart("lineChart", {
+            type: "line",
+            data: data,
+            options: {
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true
+                        }
+                    }]
+                },
+                elements: {
+                   point:{
+                       radius: 2
+                  }
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                  display: true,
+                  text: "Return vs Cost"
+                },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'center'
+                },
+            }
+          });
+        }
+      });
+    });
+</script>
+
+<h2 class="w3-margin">Account Table for {{account.name}}</h2>
+
+
+<div class="w3-bar w3-hide-small">
+    <div class="w3-bar-item">
+        <a href="{% url 'portfolio_list' %}"><button class="w3-button-medium w3-round-large w3-orange"> Home </button></a>
+    </div>
+
+    <div class="w3-bar-item">
+        <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
+    </div>
+
+</div>
+
+<div class="w3-row">
+    <div class="w3-container" style="overflow-y:auto;height:700">
+        <table class="w3-table w3-border tableFixHead">
+            <thead style="position: sticky; top: 0; z-index: 1;background:#eee;">
+                <th class="w3-left-align" style="width:100px">Date</th>
+                <th class="w3-left-align">Total Value</th>
+                {% for equity in equities %}
+                    <th><a href="{% url 'account_equity_details' account.id equity.symbol %}">{{equity.symbol}}</a><br><br>{{equity.name}}<br><br>Shares - Value</th>
+                {% endfor %}
+            </thead>
+            <tbody>
+            {% for element in data %}
+            <tr>
+                {% for item in element %}
+                    {% if forloop.first %}
+                        <td>{{item|date:"Y-M"}}</td>
+                    {% elif forloop.counter == 2 %}
+                        <td>${{item | floatformat:'0g'}}</td>
+                    {% else %}
+                        <td>
+                            {% if item.0 %}
+                                <a href="{% url 'update_by_date' account.id item.0 element.0 %}">
+                                {{item.1 | floatformat:'2g'}} - {{item.2 | floatformat:'0g' }}</a>
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock content %}
+
+{% block help_content %}
+<p>
+    <b>Account Details</b>.  This somewhat busy page is likely the most important.   The main summary is the first line,
+    it has the total funding and the total funds redeemed.  That is what I refer to as the Effective Cost.
+</p>
+<h4>Return vs Cost</h4>
+<b>Inflated cost</b>,  takes into account
+    what inflation does to the value of your funds.   A 10K investment overtime should continually drop since inflation
+    eats away at the value.   <b>Effective Cost</b> Is the total of Invested Funds less any dividends withdrawn regardless
+    of inflation.  It should be higher than the value, or you are really loosing money.   Lastly <b>Value</b> is the
+    actual value,  again regardless of inflation.
+<h4>Equity Summary</h4>
+This table is any equity you ever had in this account.   It has the current share
+<h4>Account Transaction</h4>
+This is the pertinent activities.  I don't include dividends, but you can see them as well as historic prices by selecting
+the equity in the equity summary table.
+{% endblock %}
