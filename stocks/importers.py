@@ -102,7 +102,7 @@ class StockImporter:
             equity: Equity
 
             #
-            account: Account = self.get_or_create_portfolio(self.user, self.pd_account_name(prow), self.pd_account_key(prow), False)
+            account: Account = self.get_or_create_account(self.user, self.pd_account_name(prow), self.pd_account_key(prow))
             if account.account_name not in equity_totals:
                 equity_totals[account.account_name] = {}
             if not account.last_import or (this_date > account.last_import):
@@ -372,13 +372,12 @@ class StockImporter:
         self.equities[lookup] = equity
         return self.equities[lookup]
 
-    def get_or_create_portfolio(self, user, name, account_id, managed):
+    def get_or_create_account(self, user, name, account_id):
         """
 
-        :param stub: A prefix to the action name
+        :param user: what
         :param name: The account name we import as
-        :param account_name:  The account id we are going to use as a none changable key
-        :param managed: True if We are not pulling dividends out of.
+        :param account_id:  The account id we are going to use as a none changable key
         :return:
         """
         if account_id not in self.accounts:
@@ -386,7 +385,7 @@ class StockImporter:
             try:
                 account = Account.objects.get(account_name=account_id, user=user)
             except Account.DoesNotExist:
-                account = Account(name=name, user=user, account_name=account_id, managed=managed)
+                account = Account(name=name, user=user, account_name=account_id, managed=self.managed)
                 account.save()
                 account = Account.objects.get(account_name=account_id, user=user)  # Refresh
             self.accounts[account_id] = account
@@ -541,8 +540,8 @@ class QuestTrade(StockImporter):
         'AccountKey': 'Account #'
     }
 
-    def __init__(self, reader: csv.reader,  user, name_stub: str):
-        super().__init__(reader, user, self.QuestTradeKeys, stub=name_stub, managed=False)
+    def __init__(self, reader: csv.reader,  user):
+        super().__init__(reader, user, self.QuestTradeKeys, managed=False)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]

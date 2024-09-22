@@ -15,7 +15,8 @@
 
       $.ajax({
         url: "{% url 'cost_value_chart' %}",
-        data: {'account_id': {{ account.id }}},
+        data: {'account_id': {{ account.id }},
+               'account_type': 'Error'}}},
         success: function (data) {
           new Chart("lineChart", {
             type: "line",

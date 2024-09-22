@@ -67,7 +67,6 @@ class AccountCloseForm(forms.ModelForm):
         return this
 
 
-
 class PortfolioForm(forms.ModelForm):
     class Meta:
         model = Portfolio

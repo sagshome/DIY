@@ -1,5 +1,5 @@
 from django.contrib import admin
-
+from django.contrib.admin import SimpleListFilter
 # Register your models here.
 
 from .models import Equity, Account, Transaction, EquityValue, EquityEvent, Inflation, EquityAlias, ExchangeRate, \
@@ -24,14 +24,24 @@ class AccountAdmin(admin.ModelAdmin):
     list_display = ("name",)
 
 
+
 class TransactionAdmin(admin.ModelAdmin):
     model = Transaction
-    list_display = ('account', 'equity', 'real_date', 'price', 'quantity', 'value', 'xa_action', 'estimated')
+    list_display = ('account__name', 'symbol', 'real_date', 'price', 'quantity', 'value', 'xa_action', 'estimated')
+    list_filter = ('account__name', 'equity__symbol', 'xa_action')
 
     fieldsets = [
         (None, {'fields': ['account', 'equity']}),
         ('Purchase', {'fields': ['real_date', 'date', 'xa_action', 'value', 'price', 'quantity', 'estimated']}),
     ]
+
+    def account__name(self, obj):
+        return obj.account.name
+
+    def symbol(self, obj):
+        if obj.equity:
+            return obj.equity.symbol
+        return None
 
 
 class EquityEventAdmin(admin.ModelAdmin):

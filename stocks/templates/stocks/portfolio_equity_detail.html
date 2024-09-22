@@ -4,12 +4,10 @@
         <script>
             var lineChart = ''
             $(document).ready(function() {
-                //var initial_data = {'labels': [], 'datasets': [{}]}
-                //lineChart = new Chart(document.getElementById('lineChart'), {type: "line", data: initial_data, options: {}})
-
               $.ajax({
                 url: "{% url 'cost_value_chart' %}",
-                data: {'account_id': {{ account.id }},
+                data: {'object_id': {{ account.id }},
+                       'object_type': '{{ account_type }}',
                        'symbol': {{ equity.id}} },
                 success: function (data) {
                   lineChart = new Chart("lineChart", {
@@ -106,10 +104,10 @@
     </p>
 
 <div  class="w3-row">
-        <div style="height:350px;" class="w3-threequarter w3-container">
+        <div style="height:350px;" class="w3-half w3-container">
             <canvas id="lineChart" class="w3-card-2"></canvas>
         </div>
-        <div class="w3-rest w3-container">
+        <div class="w3-half w3-container">
             <div id="documentation" class="w3-hide-small w3-container">
                 The <b>Return vs Cost</b> chart displays <br>
                 <ul>
@@ -125,44 +123,45 @@
         <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View</button></a>
         <a href="{% url 'account_table' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View</button></a>
     </div>
-
-    <div class="w3-container w3-margin-top" style="overflow-y:auto;height:400">
+</div>
+<div class="w3-row">
+    <div class="w3-half w3-container w3-margin-top">
         <table class="w3-table w3-stripped">
-            <thead class="w3-margin-bottom" style="position: sticky; top: 0; z-index: 1;background:#eee;">
+            <caption class="w3-wide w3-padding-16">Portfolio Equity Values</caption>
+            <thead class="w3-margin-bottom" style="background:#eee;">
                 <th style="width:100px">Date</th>
-                <th class="w3-hide-small">Shares Owned</th>
+                <th class="w3-hide-small">Shares</th>
                 <th class="w3-hide-small">Cost</th>
                 <th class="w3-hide-small">Value</th>
-                <th class="w3-hide-small">Total Dividends</th>
-                <th>Value (with Dividends)</th>
-                <th>Dividend Amount</th>
-                <th>Share Price</th>
+                <th class="w3-hide-small">Dividends</th>
+                <th>Price</th>
                 <th>Avg Cost</th>
-                <th>Activities</th>
             </thead>
             {% for data in context %}
-                {% if data.1 != 0 %}
-                <tr>
-                    <td>{{ data.0 | date:'Y-M' }}</td>
-                    <td class="w3-hide-small">{{data.1|floatformat:'0g'}}</td>
-                    <td class="w3-hide-small">${{data.3|floatformat:'2g'}}</td>
-                    <td class="w3-hide-small">${{data.2|floatformat:'2g'}}</td>
+                {% if data.shares != 0 %}
+                    <tr>
+                        <td>{{ data.date | date:'Y-M' }}</td>
+                        <td class="w3-hide-small">{{data.shares|floatformat:'0g'}}</td>
+                        <td class="w3-hide-small">${{data.cost|floatformat:'2g'}}</td>
+                        {% if data.value < 0 %}
+                            <td class="w3-red">
+                        {% else %}
+                            <td>
+                        {% endif %}
+                        ${{data.value|floatformat:'2g'}}</td>
 
-                    <td class="w3-hide-small">{% if data.4 != 0 %} ${{data.4|floatformat:'2g'}} {% endif %}</td>
+                        <td class="w3-hide-small">{% if data.total_dividends != 0 %} ${{data.4|floatformat:'2g'}} {% endif %}</td>
 
-                    {% if data.5 < 0 %}
-                        <td class="w3-red">
-                    {% else %}
-                        <td>
-                    {% endif %}
-                    ${{data.5|floatformat:'2g'}}</td>
-                    <td>{% if data.6 != 0 %} ${{data.6|floatformat:'2g'}} {% endif %}</td>
-                    <td>${{data.7|floatformat:'2g'}}</td>
-                    <td>${{data.9}}</td>
-                    <td>{{data.8}}</td>
-                </tr>
-            {% endif %}
+                        <td>${{data.price|floatformat:'2g'}}</td>
+                        <td>${{data.avgcost|floatformat:'2g'}}</td>
+                    </tr>
+                {% endif %}
            {% endfor %}
         </table>
     </div>
+
+    <div class="w3-rest w3-container w3-margin-top">
+        {% include 'stocks/transaction_list.html' %}
+    </div>
+
 {% endblock content %}

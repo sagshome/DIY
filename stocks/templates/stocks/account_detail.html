@@ -31,7 +31,7 @@
                 maintainAspectRatio: false,
                 title: {
                   display: true,
-                  text: "Return vs Cost"
+                  text: "Funding vs Value"
                 },
                 legend: {
                     display: true,
@@ -40,7 +40,11 @@
                 },
             }
           });
+        },
+        error: function(data) {
+            alert('Error occured');
         }
+
       });
     });
 </script>
@@ -49,10 +53,10 @@
 <p>Total Funding is: ${{funded|floatformat:'0g'}}, Total Redeemed is: ${{redeemed|floatformat:'0g'}}</p>
 
 <div class="w3-row">
-    <div style="height:350px;" class="w3-threequarter w3-container">
+    <div style="height:350px;" class="w3-half w3-container">
         <canvas id="lineChart" class="w3-card-2"></canvas>
     </div>
-    <div class="w3-rest w3-container">
+    <div class="w3-half w3-container">
         <div id="documentation" class="w3-hide-small w3-container">
             The <b>Return vs Cost</b> chart displays <br>
             <ul>
@@ -90,21 +94,21 @@
 {% endif %}
 <div class="w3-row">
     <div class="w3-half w3-container">
-        <table class="w3-table w3-border">
+        <table class="w3-table w3-stripped">
             <caption class="w3-wide w3-padding-16">Equity Summary (Present Day Value)</caption>
-            <tr>
+            <thead class="w3-margin-bottom" style="background:#eee;">
                 <th>Equity</th>
                 <th class="w3-right-align">Shares</th>
-                <th class="w3-right-align">Effective<br>Cost</th>
+                <th class="w3-right-align">Cost</th>
                 <th class="w3-right-align">Value</th>
-                <th class="w3-right-align">Total<br>Dividends</th>
-            </tr>
+                <th class="w3-right-align">Dividends</th>
+            </thead>
 
             {% for e in object.equity_keys %}
             <tr>
                 <td class="indent">
                     {% if object_type == 'Account' %}
-                        <a href="{% url 'account_equity_details' object.id e %}">{{e}}</a>
+                        <a href="{% url 'account_equity_details' object_type object.id e %}">{{e}}</a>
                     {% else %}
                         {{e}}
                     {% endif %}
@@ -117,49 +121,8 @@
             {% endfor %}
         </table>
     </div>
-    <div class="w3-rest w3-container">
-        <table class="w3-table w3-border">
-            <caption class="w3-wide w3-padding-16">Portfolio Transactions <a href="{% url 'account_table' object.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Show Dividends </button></a></caption>
-            <tr>
-                <th></th>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Equity<br></th>
-                <th class="w3-right-align">Value</th>
-                <th class="w3-center">Notes</th>
-            </tr>
-
-            {% for x in xas %}
-            <tr>
-
-                <td><a href="{% url 'transaction_delete' x.id %}"><span class="fa fa-trash"></span></a>&nbsp;&nbsp;&nbsp;
-                    <a href="{% url 'transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
-                <td>
-                    {% if x.real_date %}  <!-- Real Date was added after initial data,  until I can clean up fix display -->
-                        {{x.real_date}}
-                    {% else %}
-                        {{ x.date }}
-                    {% endif %}
-                </td>
-                <td>{{x.action_str}}</td>
-                <td>{% if x.equity %}{{x.equity.symbol}} {% endif %}</td>
-                <td class="w3-right-align">{% if x.value %} ${{x.value|floatformat:'0g'}}{% endif %}</td>
-                <td>
-                    {% if x.equity %}
-                        {% if x.price == 0 %}
-                            {% if x.xa_action == 4 %}
-                                {{x.quantity|floatformat:'1g'}} shares SOLD for funding
-                            {% else %}
-                                {{x.quantity|floatformat:'1g'}} shares split/reinvest (no cost)
-                            {% endif %}
-                        {% else %}
-                            {{x.quantity|floatformat:'1g'}} shares at ${{x.price|floatformat:'2g'}}
-                        {% endif %}
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
+    <div class="w3-half w3-container">
+        {% include 'stocks/transaction_list.html' %}
     </div>
 </div>
 {% endblock content %}
