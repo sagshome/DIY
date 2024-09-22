@@ -11,6 +11,7 @@ from dateutil import relativedelta
 import plotly.io as pio
 import plotly.graph_objects as go
 
+import pandas as pd
 from pandas import DataFrame
 
 from django.conf import settings
@@ -330,14 +331,23 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
             accounts = accounts.filter(portfolio=self.portfolio)
         self.initial['accounts'] = accounts
         self.initial['user'] = self.request.user.id
-        self.initial['end'] = datetime.today().date()
+        self.initial['_end'] = datetime.today().date()
         return self.initial
 
     def form_valid(self, form):
         # Access the updated form instance
         updated_data = form.cleaned_data
+        funded = self.object.get_attr('Funds', self.object.end)
+        value = self.objects.get_attr('Value', self.object.end)
         if updated_data['accounts']:
-            funded = self.object.get_attr('Fund', self.object.end)
+            Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
+                                       xa_action=Transaction.TRANS_OUT, account=self.object.account)
+            Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
+                                       xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
+        else:
+            Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
+                                       xa_action=Transaction.REDEEM, account=self.object.account)
+
 
         return super().form_valid(form)
 
@@ -736,10 +746,11 @@ def account_equity_compare(request, pk, orig_id, compare_id):
 
 
 @login_required
-def account_equity_details(request, pk, symbol):
+def account_equity_details(request, container_type, pk, symbol):
     """
 
     :param request:
+    :param container_type:
     :param pk:
     :param symbol:
     :return:
@@ -747,7 +758,11 @@ def account_equity_details(request, pk, symbol):
     table = pd.pivot_table(p.pd, values=['Cost', 'Value', 'TotalDividends'], index='Date', aggfunc='sum')
 
     """
-    account = get_object_or_404(Account, pk=pk, user=request.user)
+    if container_type == 'Account':
+        account = get_object_or_404(Account, pk=pk, user=request.user)
+    else:
+        account = get_object_or_404(Portfolio, pk=pk, user=request.user)
+
     equity = get_object_or_404(Equity, symbol=symbol)
     compare_to = None
     if request.method == 'POST':
@@ -755,15 +770,15 @@ def account_equity_details(request, pk, symbol):
         if form.is_valid():
             compare_to = form.cleaned_data['equity']
 
-    dividend_detail = dict(EquityEvent.objects.filter(event_type='Dividend', equity=equity).values_list('date', 'value'))
-    value_detail = dict(EquityValue.objects.filter(equity=equity).values_list('date', 'price'))
     form = EquityForm()
     data = []
     new_df = account.e_pd.sort_values(by='Date').loc[account.e_pd['Equity'] == equity.symbol]
+    new_df.sort_values(by='Date', ascending=False, inplace=True, kind='quicksort')
     for element in new_df.to_records():
         extra_data = ''
-        if element['Date'] in account.trade_dates(equity):
-            quantity, price = account.trade_details(equity, element['Date'])
+        this_date = pd.Timestamp(element['Date'])
+        if this_date in account.trade_dates(equity):
+            quantity, price = account.trade_details(equity, this_date)
             if quantity < 0:
                 extra_data = f'Sold {quantity} shares at ${price}'
             else:
@@ -776,16 +791,16 @@ def account_equity_details(request, pk, symbol):
             total_dividends = equity_growth = 0
         else:
             total_dividends = element['TotalDividends']
-            equity_growth = element['Value'] - element['EffectiveCost'] + total_dividends
+            equity_growth = element['Value'] - element['Cost'] + total_dividends
 
-        share_price = value_detail[element['Date']] if element['Date'] in value_detail else 0
-        dividend_price = dividend_detail[element['Date']] if element['Date'] in dividend_detail else 0
+        data.append({'date': this_date,
+                     'shares': element['Shares'],
+                     'value': element['Value'],
+                     'cost': element['Cost'],
+                     'total_dividends': total_dividends,
+                     'price': element['Price'],
+                     'avgcost': element['AvgCost']})
 
-        data.append([element['Date'], element['Shares'], element['Value'], element['EffectiveCost'],
-                     total_dividends, equity_growth, dividend_price,
-                     share_price, extra_data, element['AvgCost']])
-
-    data.reverse()
     funded = account.transactions.filter(equity=equity, xa_action__in=(Transaction.BUY, Transaction.SELL)).aggregate(Sum('value'))['value__sum']
     profit = False
     if funded < 0:
@@ -794,12 +809,14 @@ def account_equity_details(request, pk, symbol):
 
     return render(request, 'stocks/portfolio_equity_detail.html',
                   {'context': data,
+                   'account_type': container_type,
                    'account': account,
                    'equity': equity,
                    'funded': funded,
                    'profit': profit,
                    'dividends': total_dividends,
                    'form': form,
+                   'xas': account.transactions.filter(equity=equity).order_by('-date'),
                    'compare_to': compare_to
                    })
 
@@ -992,15 +1009,21 @@ def cost_value_chart(request):
             JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
         if not my_object:
             JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-        df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == 'FID281') & (my_object.e_pd['Shares'] != 0)]
+        df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == equity.symbol) & (my_object.e_pd['Shares'] != 0)]
 
     else:
         df = my_object.p_pd
+        de = my_object.e_pd.groupby('Date', as_index=False).sum('Value')
+        df = df.merge(de, on='Date', how='outer')
+        df['Cost'] = df['Funds']
         if my_object.end:
             df = df.loc[df['Date'] <= my_object.end]
+        df.fillna(0, inplace=True)
 
+    df['Date'] = df['Date'].dt.date
+    # pd.Timestamp(df['Date'])
     chart_data['labels'] = sorted(df['Date'].unique())
-    chart_data['datasets'].append({'label': 'Cost', 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': colors[0], 'backgroundColor': colors[0], 'tension': 0.1})
+    chart_data['datasets'].append({'label': 'Funding', 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2], 'tension': 0.1})
     chart_data['datasets'].append({'label': 'Value', 'fill': False,'data': df['Value'].tolist(),'borderColor': colors[1], 'backgroundColor': colors[1]})
     #if not equity_id:
     #    chart_data['datasets'].append({'label': 'Cash', 'fill': False, 'data': df['Cash'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2]})

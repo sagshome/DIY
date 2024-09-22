@@ -29,7 +29,7 @@
         {% include 'stocks/account_header.html' %}
         {% for portfolio in portfolio_list %}
             <tr>
-                <td class="w3-container">{{portfolio.name}}</a></td>
+                <td class="w3-container">{{portfolio}}</a></td>
                 <td class="w3-container w3-center">
                     <a href="{% url 'portfolio_details' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart </button></a>
                     <a href="{% url 'portfolio_table' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table </button></a>

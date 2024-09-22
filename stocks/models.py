@@ -69,8 +69,16 @@ Inflation WebSite: https://www150.statcan.gc.ca/t1/tbl1/en/cv.action?pid=1810000
 '''
 
 # my_currency = 'CAD'  # todo: Should be set via a user profile
-EQUITY_COL = ['Date', 'Equity', 'Shares', 'AvgCost', 'Dividend', 'Price', 'TotalDividends', 'Cost', 'Value', 'EffectiveCost', 'InflatedCost']
-ACCOUNT_COL = ['Date', 'TotalDividends', 'Cost', 'Value', 'EffectiveCost',  'InflatedCost', 'Cash']
+EQUITY_COL = ['Date', 'Equity',  # One record for each date we held the equity  todo: stop making records when equity is sold out
+              'Shares',  # The number of shares we hold on this date.  It can not be less than 1 (should be 0 but float value screw that up)
+              'Cost',  # We paid for the shares.  todo: on reivested dividends shares go up but not the cost. that may be wrong but I think it works for me
+              'Price',  # The price on that date
+              'Dividends',  # Cash dividends recorded in the ledgers for managed,  actual dividends for non managed equities
+              'TotalDividends', # A running accumulation for Dividends
+              ]  # Calculated - Value,  AvgCost
+# todo:  How do I do shares/Cost/Price for things that are transferred in/out.
+
+ACCOUNT_COL = ['Date', 'Funds', 'Redeemed']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
 
 
 def currency_factor(exchange_date: date, input_currency: str, my_currency: str) -> float:
@@ -670,18 +678,22 @@ class BaseContainer(models.Model):
     def e_pd(self) -> DataFrame:
         raise NotImplementedError
 
-    def get_eattr(self, key, query_date=normalize_today()):
+    def get_eattr(self, key, query_date=normalize_today(), symbol=None):
+        query_date = pd.Timestamp(query_date)
         try:
-            return self.p_pd.loc[self.p_pd['Date'] == query_date][key].agg(['sum']).item()
+            if not symbol:
+                return self.e_pd.loc[self.e_pd['Date'] == query_date][key].agg(['sum']).item()
+            else:
+                return self.e_pd.loc[(self.e_pd['Date'] == query_date) & (self.e_pd['Equity'] == symbol)][key].agg(['sum']).item()
         except ValueError:
             return 0
 
     def get_pattr(self, key, query_date=normalize_today()):
         return self.p_pd.loc[self.p_pd['Date'] == query_date][key].agg(['sum']).item()
 
-
-    def get_value(self, query_date=None):
-        return self.get_pattr('Value', query_date)
+    @property
+    def transactions(self):
+        raise NotImplementedError
 
 
 class Portfolio(BaseContainer):
@@ -699,7 +711,7 @@ class Portfolio(BaseContainer):
 
     @property
     def end(self):
-        if not Account.objects.filter(portfolio=self, end__isnull=True).exists():
+        if not Account.objects.filter(portfolio=self, _end__isnull=True).exists():
             try:
                 return Account.objects.filter(portfolio=self).latest('_end')._end
             except Account.DoesNotExist:
@@ -774,69 +786,35 @@ class AccountSummary:
         self.epd = equity_pd
         self.currency = currency
 
+    ACCOUNT_COL = ['Date', 'Funds', 'Redeemed']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
+
     @property
     def pd(self) -> DataFrame:
-        now = datetime.now()
-        monthly_inflation: Dict[date, float] = dict(Inflation.objects.all().values_list('date', 'inflation'))
-        final_date = normalize_today()
+
         new = pd.DataFrame(columns=ACCOUNT_COL)
         if not self.xas:  # Account is new/empty
             return new
 
-        this_date = self.xas.order_by('date')[0].date
+        trades: QuerySet = self.xas.filter(xa_action__in=[Transaction.FUND, Transaction.REDEEM]).order_by('date')
+        if not trades.exists():
+            logger.error('Transaction set:  No Funding/Withdraws in transaction data for %s' % self.name)
+            return new
+        this_date = trades.earliest('date').date
+        final_date = normalize_today()
+
         xa_dates = list(self.xas.values_list('date', flat=True).distinct())
-        cost = effective_cost = inflated_cost = cash = 0
+        funding = redeemed = 0
         while this_date <= final_date:
             if this_date in xa_dates:
-                this_funding = self.xas.filter(xa_action__in=[Transaction.FUND, Transaction.REDEEM], date=this_date).aggregate(Sum('value'))['value__sum']
-                if this_funding:
-                    cost += this_funding
-                    effective_cost += this_funding
-                    inflated_cost += this_funding
-                    cash += this_funding
-                    logger.debug('%s:Funding:%s Cost:%s EffectiveCost:%s InflatedCost:%s Cash:%s' % (
-                        this_date, this_funding, cost, effective_cost, inflated_cost, cash))
-                this_cash = self.xas.filter(xa_action__in=[Transaction.TRANS_OUT, Transaction.TRANS_OUT], date=this_date).aggregate(Sum('value'))['value__sum']
+                funds = trades.filter(xa_action=Transaction.FUND, date=this_date).aggregate(Sum('value'))['value__sum']
+                funding += funds if funds else 0
+                withdraw = trades.filter(xa_action=Transaction.REDEEM, date=this_date).aggregate(Sum('value'))['value__sum']
+                redeemed += withdraw if withdraw else 0
 
-                for equity_id in (self.xas.filter(date=this_date).exclude(equity__isnull=True).values_list('equity', flat=True).distinct()):
-                    e: Equity = Equity.objects.get(id=equity_id)
-                    cf = currency_factor(this_date, e.currency, self.currency)
-                    xa_costs = self.xas.filter(xa_action__in=[Transaction.BUY, Transaction.SELL],
-                                               date=this_date, equity=e).aggregate(Sum('value'))['value__sum']
-                    try:
-                        converted_cost = xa_costs * cf
-                    except TypeError:
-                        logger.debug('Failed to convert xa_cost: %s cf %s' % (xa_costs, cf))
-                        converted_cost = xa_costs
-                    if xa_costs:  # for debug else next line
-                        cash -= converted_cost  # for debug else next line
-                        # cash -= xa_costs * cf if xa_costs else 0
-                        # logger.debug('%s:Trade: Cost:%s ConvCost:%s Cash:%s Value:%s Equity:%s' % (
-                        #    this_date, xa_costs, converted_cost, cash,
-                        #    self.epd.loc[self.epd['Date'] == this_date]['Value'].sum(), e.symbol))
-
-                    interest = self.xas.filter(xa_action=Transaction.INTEREST, date=this_date).aggregate(Sum('value'))['value__sum']
-                    cash += interest * cf if interest else 0
-
-            dividends = self.epd.loc[self.epd['Date'] == this_date]['Dividend'].sum()
-            if dividends:
-                cash += dividends
-                #logger.debug('%s:Dividends: Cost:%s ConvCost:%s Cash:%s Value:%s' % (
-                #    this_date, dividends, dividends, cash,
-                #    self.epd.loc[self.epd['Date'] == this_date]['Value'].sum()))
-            cash = cash if cash > 0 else 0
-
-            new.loc[len(new.index)] = [this_date,
-                                       self.epd.loc[self.epd['Date'] == this_date]['TotalDividends'].sum(),
-                                       cost,
-                                       self.epd.loc[self.epd['Date'] == this_date]['Value'].sum(),
-                                       effective_cost,
-                                       inflated_cost, cash]
-            if this_date in monthly_inflation:  # Edge case incase inflation tables were not updated
-                inflated_cost += monthly_inflation[this_date] / 100 * inflated_cost
+            new.loc[len(new.index)] = [this_date, funding, redeemed]
             this_date = next_date(this_date)
-        logger.debug('Created Account DataFrame for %s in %s' % (self.name, (datetime.now() - now).seconds))
 
+        new['Date'] = pd.to_datetime(new['Date'])
         return new
 
 
@@ -858,73 +836,50 @@ class AccountEquitySummary:
 
     def process_equity(self, equity: Equity, df: DataFrame) -> DataFrame:
         """ New """
-        dividends: Dict[date, float]
-        value: EquityValue
-        trades = self.xas.filter(equity=equity, xa_action__in=[Transaction.BUY, Transaction.REDIV, Transaction.SELL]).order_by('date')
+        dividends: Dict[date, float]  # for NonManaged
+        moneys: Dict[date, float]
+        entry: EquityValue
+        trades: QuerySet = self.xas.filter(equity=equity, xa_action__in=Transaction.SHARE_TRANSACTIONS).exclude(xa_action=Transaction.REDIV).order_by('date')
+
         if len(trades) == 0:  # pragma: no cover
             logger.error('Transaction set %s:  No Trades in transaction data' % equity)
             return df
+        trade_dates = list(trades.order_by('date').values_list('date', flat=True).distinct())
+        first = trades.earliest('date').date
 
-        lots = list()  # Used to recalculate Average Cost
-        search_equity = self.fake_equity if self.fake_equity else equity
-        xa_dates = list(trades.order_by('date').values_list('date', flat=True).distinct())
-        first = xa_dates[0]
+        equity_values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
+        dividends = dict(EquityEvent.objects.filter(date__gte=first, equity=equity, event_type='Dividend').values_list('date', 'value'))
+        moneys = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action__in=[Transaction.FEES, Transaction.INTEREST]).values_list('date', 'value'))
+        redivs = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action=Transaction.REDIV).values_list('date', 'quantity'))
 
-        equity_values = EquityValue.objects.filter(date__gte=first, equity=search_equity).order_by('date')
-        dividends = dict(EquityEvent.objects.filter(date__gte=first, equity=search_equity, event_type='Dividend').values_list('date','value'))
+        shares = cost = price = dividend = total_dividends = 0
+        for entry in equity_values:  # This is over every month you owned this equity.
+            cf = currency_factor(entry.date, self.currency, equity.currency)
+            # for debugging - I don't think I can hit this
+            # shares += redivs[entry.date] if entry.date in redivs and self.managed else 0
+            if self.managed:
+                shares += redivs[entry.date] if entry.date in redivs else 0
+            else:
+                if entry.date in redivs:
+                    raise Exception('Unexpected combo')  # If im not managed,  who did the rediv?
+            if entry.date in trade_dates:  # We did something on this normalized day
+                trade = trades.filter(date=entry.date).aggregate(Sum('quantity'), Sum('value'))
+                if trade['quantity__sum']:
+                    shares += trade['quantity__sum']
+                if trade['value__sum']:
+                    cost += trade['value__sum'] * cf
 
-        shares = purchase_cost = purchased_shares = avg_cost = effective_cost = total_dividends = inflation = 0
-        for value in equity_values:  # This is over every month you owned this equity.
-            cf = currency_factor(value.date, self.currency, search_equity.currency)
-            dividend = dividends[value.date] * cf if value.date in dividends else 0
-            change_cost: float = 0
-            if value.date in xa_dates:  # We did something on this normalized day
-                # Update the avg_cost per share
-                real_trade = trades.filter(date=value.date, xa_action__in=[Transaction.BUY, Transaction.SELL]).aggregate(Sum('quantity'), Sum('value'))
-                if real_trade['quantity__sum']:
-                    purchase_cost += real_trade['value__sum']
-                    purchased_shares += real_trade['quantity__sum']
-                    # Since I am explicitly not including DRIPed shares we may indeed sell more than we bought
-                    avg_cost = purchase_cost / purchased_shares if purchased_shares > 0 else 0
+            if self.managed:
+                dividend = moneys[entry.date] * cf if entry.date in moneys else 0
+            else:
+                dividend = dividends[entry.date] * cf * shares if entry.date in dividends else 0
+            total_dividends += dividend
+            value = entry.price * shares * cf
 
-                change = trades.filter(date=value.date).aggregate(Sum('quantity'), Sum('value'))
-                if change['quantity__sum']:  # Off chance, we bought and sold on the same normalised day
-                    trade_value = change['value__sum'] * cf
-                    if trade_value == 0:  # Gifted some shares (split or dividends)
-                        if not self.fake_equity:
-                            shares += change['quantity__sum']
-                        else:
-                            if self.managed:
-                                shares += trade_value / value.price
-                    else:
-                        change_cost = change['value__sum'] * cf if change['value__sum'] else 0
-                        change_shares = trade_value / value.price if self.fake_equity else change['quantity__sum']
-                        shares += change_shares
-                        lots.append({'cost': change['quantity__sum'], 'shares': change_shares})
+            if value < 0:
+                logger.debug('%s:%s - %s Negative value %s' % (self.name, equity, entry.date, value))
 
-                    effective_cost += change_cost
-
-            if effective_cost < 0:
-                effective_cost = 0
-
-            inflation += change_cost
-
-            this_dividend = shares * dividend * cf if not self.managed else 0
-            total_dividends += this_dividend
-            this_value = value.price * shares * cf
-
-            if inflation < 0:
-                inflation = 0
-
-            if this_value < 0:
-                this_value = 0
-
-
-            df.loc[len(df.index)] = [value.date, search_equity.symbol, shares, avg_cost, this_dividend, value.price * cf, total_dividends, purchase_cost,
-                                     this_value, effective_cost, inflation]
-
-            if value.date in self.inflation_rates:
-                inflation += inflation * self.inflation_rates[value.date] / 100
+            df.loc[len(df.index)] = [entry.date, equity.symbol, shares, cost, entry.price, dividend, total_dividends]
 
         return df
 
@@ -949,6 +904,10 @@ class AccountEquitySummary:
                     self.process_equity(equity, new)
             else:
                 self.process_equity(equity, new)
+
+        new['Value'] = new['Shares'] * new['Price']
+        new['AvgCost'] = new['Cost'] / new['Shares']
+        new['Date'] = pd.to_datetime(new['Date'])
         logger.warning('Created Equity DataFrame for %s in %s' % (self.name, (datetime.now() - now).seconds))
         return new
 
@@ -1068,7 +1027,6 @@ class Account(BaseContainer):
         price = round(result['price__avg'], 2) if result['price__avg'] else 0
         return quantity, price
 
-
     def update(self):
         """
         Ensure that each of my equities is updated
@@ -1091,11 +1049,15 @@ class Account(BaseContainer):
 
         """
 
-        self._cost = self.get_pattr('Cost')
-        self._dividends = self.get_pattr('TotalDividends')
-        self._value = self.get_pattr('Value') + self.get_pattr('Cash')
-        self._start = self.p_pd['Date'].min()
+        self._cost = self.get_pattr('Funds')
+        self._dividends = self.get_eattr('TotalDividends')
+        self._value = self.get_eattr('Value')
+        if len(self.p_pd) != 0:
+            self._start = self.p_pd['Date'].min()
+        elif len(self.e_pd) != 0:
+            self._start = self.e_pd['Date'].min()
         self.save()
+
 
 class Transaction(models.Model):
     """
@@ -1112,6 +1074,8 @@ class Transaction(models.Model):
     TRANS_IN = 8
     TRANS_OUT = 9
 
+    SHARE_TRANSACTIONS = [BUY, REDIV, SELL, TRANS_IN, TRANS_OUT]
+    MONEY_TRANSACTIONS = [FUND, REDEEM, INTEREST, FEES]
     def get_choices(self):
         choices = list()
 
@@ -1132,10 +1096,11 @@ class Transaction(models.Model):
                         (TRANS_IN, 'Transferred In'),
                         (TRANS_OUT, 'Transferred Out')
                         )
+
     TRANSACTION_MAP = dict(TRANSACTION_TYPE)
 
-    account = models.ForeignKey(Account, on_delete=models.CASCADE)
-    equity = models.ForeignKey(Equity, null=True, blank=True, on_delete=models.CASCADE)
+    account: Account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    equity: Equity = models.ForeignKey(Equity, null=True, blank=True, on_delete=models.CASCADE)
 
     real_date: date = models.DateField(verbose_name='Transaction Date', null=True)
     date: date = models.DateField(verbose_name='Normalized Date')
@@ -1170,6 +1135,13 @@ class Transaction(models.Model):
         return (f'{self.account}:{self.equity}:{self.date}:{self.price} {self.quantity} {self.value} '
                 f'{xa_str}')  # pragma: no cover
 
+    @property
+    def is_major(self) -> bool:
+        if self.xa_action in [self.FUND, self.BUY, self.SELL, self.REDEEM, self.TRANS_IN, self.TRANS_OUT] or \
+                (self.value and self.value > 100 and self.xa_action != self.REDIV):
+            return True
+        return False
+
     def save(self, *args, **kwargs):
 
         self.date = normalize_date(self.real_date) if self.real_date else None
@@ -1178,16 +1150,21 @@ class Transaction(models.Model):
         if self.xa_action == self.REDIV:
             self.price = 0  # On Dividends
         else:
-            self.price = reported_price
+            self.price = abs(reported_price)
 
         if self.quantity:
-            if (self.xa_action == self.SELL and self.quantity > 0) or (self.xa_action == self.BUY and self.quantity < 0):
-                self.quantity *= -1
+            self.quantity = abs(self.quantity)
+            if self.xa_action in [self.SELL, self.TRANS_OUT]:
+                self.quantity = self.quantity * -1
         else:
             self.quantity = 0
 
         if not self.value:
             self.value = self.price * self.quantity
+        else:
+            self.value = abs(self.value)
+            if self.value in [self.SELL, self.TRANS_OUT]:
+                self.value = self.value * -1
 
         super(Transaction, self).save(*args, **kwargs)
 

@@ -1,5 +1,5 @@
 import logging
-
+import pandas as pd
 from datetime import datetime, date
 from django import template
 from django.utils.safestring import mark_safe
@@ -30,14 +30,10 @@ def equity_value(obj, equity_key, *args):
     pd.loc[(pd['Date'] == this_day) & (pd['Equity'] == equity_key)].groupby('Equity')[args[0]].agg(['sum']).iloc[0]['sum']
     """
     this_day = normalize_today()
-    pd = getattr(obj, 'e_pd')
     try:
-        value = pd.loc[(pd['Date'] == this_day) & (pd['Equity'] == equity_key)].groupby('Equity')[args[0]].agg(['sum']).iloc[0]['sum']
+        value = obj.get_eattr(args[0], this_day, symbol=equity_key)
     except KeyError:
         logger.error('%s %s Error searching on %s' % (obj, equity_key, args[0]))
-        value = 0
-    except IndexError:
-        logger.error('%s %s Error Indexing on %s' % (obj, equity_key, args[0]))
         value = 0
 
     if len(args) > 1:
