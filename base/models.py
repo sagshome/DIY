@@ -1,9 +1,18 @@
+import logging
+import requests
+
+from datetime import datetime, timedelta
+from requests.exceptions import ConnectTimeout, ConnectionError
+from requests.models import Response
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+
+logger = logging.getLogger(__name__)
 
 
 CURRENCIES = (
@@ -22,7 +31,53 @@ class Profile(models.Model):
     av_api_key = models.CharField(max_length=24, null=True, blank=True)
 
     def __str__(self):
-        return(self.user.email)
+        return self.user.name
+
+
+class URL(models.Model):
+    '''
+    Support making an API offline and catch some traps and return a valid / invalid response
+    '''
+
+    ERROR_SECONDS = 60 * 60 * 3  # Or 3 hours
+
+    name = models.CharField(primary_key=True, null=False, blank=False, max_length=32)
+    base = models.CharField(null=False, blank=False, max_length=132)
+    _active = models.BooleanField(default=True)
+    _last_fail = models.DateTimeField(null=True, blank=True)
+
+    @classmethod
+    def get(cls, name, extra=None):   # return a get.result or None
+        reason = ''
+        try:
+            url = cls.objects.get(name=name)
+            if url.ready_or_reset():
+                try:
+                    return requests.get(url.base + extra)
+                except ConnectTimeout:
+                    reason = 'Connection Timeout'
+                except ConnectionError:
+                    reason = 'Connection Error'
+                url._active = False
+                url._last_fail = datetime.now()
+                url.save()
+
+        except URL.DoesNotExist:
+            reason = 'Configuration Error'
+
+        result = Response()
+        result.status_code = 500
+        result.reason = reason
+        return result
+
+    def ready_or_reset(self):
+        if self._active:
+            return True
+        if self._last_fail < datetime.now() - timedelta(seconds=self.ERROR_SECONDS):
+            self._active = True
+            self.save()
+            return True
+        return False
 
 
 '''

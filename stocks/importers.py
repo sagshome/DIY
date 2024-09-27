@@ -112,13 +112,13 @@ class StockImporter:
                 if xa_action == FUND:
                     Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND, quantity=0, price=0)
                 elif xa_action == REDEEM:
-                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=REDEEM, quantity=0, price=0)
+                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM, quantity=0, price=0)
                 elif xa_action == JUNK:
                     pass
                 elif xa_action == INT:
                     Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=INT, quantity=quantity, price=price)
                 elif xa_action == FEES:
-                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FEES, quantity=quantity, price=price)
+                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=FEES, quantity=quantity, price=price)
 
                 elif xa_action == DIV:
                     equity = self.equity_lookup(symbol, self.pd_description(prow), region)
@@ -143,27 +143,26 @@ class StockImporter:
                                     price = price if price else EquityValue.lookup_price(equity, this_date)
                             else:
                                 price = 0
+
                             action = Transaction.BUY if xa_action != REINVESTED else Transaction.REDIV
-                            price = price if xa_action != SPLIT else 0
                             amount = amount if amount else price * quantity
                             Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=action, quantity=quantity, price=price)
 
                         elif xa_action in [SELL, TRANSFER_OUT]:
                             if amount and quantity:
-                                price = amount / quantity * -1  # Sometimes amount includes fees!,  quantity will be negative
+                                price = amount / quantity  # Sometimes amount includes fees!,  quantity will be negative
                             else:
                                 price = price if price else EquityValue.lookup_price(equity, this_date)
 
                             amount = amount if amount else price * quantity
-                            amount = amount if amount < 0 else amount * -1
-                            Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=SELL, quantity=quantity, price=price)
+                            Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1, xa_action=SELL, quantity=quantity * -1, price=price)
                         elif xa_action == TFSA_TRANSFER:
                             price = EquityValue.lookup_price(equity, normalize_date(this_date))
                             amount = amount if amount else price * quantity
                             if quantity < 0:
-                                Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=SELL,
-                                                           quantity=quantity, price=price)
-                                Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=REDEEM)
+                                Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1 , xa_action=SELL,
+                                                           quantity=quantity * -1, price=price)
+                                Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM)
                             elif quantity > 0:
                                 Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=BUY,
                                                            quantity=quantity, price=price)
@@ -295,13 +294,13 @@ class StockImporter:
         return self.pd_get(row, 'Date').date()
 
     def pd_price(self, row) -> float:
-        return float(self.pd_get(row, 'Price'))
+        return abs(float(self.pd_get(row, 'Price')))
 
     def pd_quantity(self, row) -> float:
-        return float(self.pd_get(row, 'Quantity'))
+        return abs(float(self.pd_get(row, 'Quantity')))
 
     def pd_amount(self, row) -> float:
-        return float(self.pd_get(row, 'Amount'))
+        return abs(float(self.pd_get(row, 'Amount')))
 
     def pd_xa_type(self, row) -> int:
         return self.pd_get(row, 'XAType')

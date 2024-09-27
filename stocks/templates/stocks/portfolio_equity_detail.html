@@ -143,7 +143,7 @@
                         <td>{{ data.date | date:'Y-M' }}</td>
                         <td class="w3-hide-small">{{data.shares|floatformat:'0g'}}</td>
                         <td class="w3-hide-small">${{data.cost|floatformat:'2g'}}</td>
-                        {% if data.value < 0 %}
+                        {% if data.loss %}
                             <td class="w3-red">
                         {% else %}
                             <td>

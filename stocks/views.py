@@ -326,9 +326,9 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
 
     def get_initial(self):
         super().get_initial()
-        accounts = Account.objects.filter(user=self.request.user, end__isnull=True).exclude(id=self.object.id)
+        accounts = Account.objects.filter(user=self.request.user, _end__isnull=True).exclude(id=self.object.id)
         if self.object.portfolio:
-            accounts = accounts.filter(portfolio=self.portfolio)
+            accounts = accounts.filter(portfolio=self.object.portfolio)
         self.initial['accounts'] = accounts
         self.initial['user'] = self.request.user.id
         self.initial['_end'] = datetime.today().date()
@@ -797,6 +797,7 @@ def account_equity_details(request, container_type, pk, symbol):
                      'shares': element['Shares'],
                      'value': element['Value'],
                      'cost': element['Cost'],
+                     'loss': element['Cost'] - element['Value'] > 0,
                      'total_dividends': total_dividends,
                      'price': element['Price'],
                      'avgcost': element['AvgCost']})
@@ -1011,11 +1012,11 @@ def cost_value_chart(request):
             JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
         df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == equity.symbol) & (my_object.e_pd['Shares'] != 0)]
 
-    else:
+    else:  # Portfolio or Account
         df = my_object.p_pd
         de = my_object.e_pd.groupby('Date', as_index=False).sum('Value')
         df = df.merge(de, on='Date', how='outer')
-        df['Cost'] = df['Funds']
+        df['Cost'] = df['Funds'] - df['Redeemed']
         if my_object.end:
             df = df.loc[df['Date'] <= my_object.end]
         df.fillna(0, inplace=True)

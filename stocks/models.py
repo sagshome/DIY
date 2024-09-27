@@ -17,7 +17,7 @@ from typing import List, Dict
 from datetime import datetime, date
 from time import sleep
 from pandas import DataFrame
-
+from requests.exceptions import ConnectionError
 
 from django.contrib.auth.models import User
 from django.urls import reverse
@@ -26,6 +26,7 @@ from django.db.models import QuerySet, Sum, Avg
 from django.conf import settings
 from django.utils.functional import cached_property
 
+from base.models import URL
 from base.utils import normalize_date, normalize_today, next_date
 
 logger = logging.getLogger(__name__)
@@ -52,12 +53,6 @@ CURRENCIES = (
 )
 
 EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy working
-
-AV_URL = 'https://www.alphavantage.co/query?function='
-
-BOC_URL = 'https://www.bankofcanada.ca/valet/observations/'  # To calculate US <-> CAN dollar conversions
-# https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/json?start_date=2015-01-01&order_dir=desc'
-
 
 AV_REGIONS = {'Toronto': {'suffix': 'TRT'},
               'United States': {'suffix': None},
@@ -179,11 +174,10 @@ class ExchangeRate(models.Model):
         value for the last month
         """
         first_str = EPOCH.strftime('%Y-%m-%d')
-        url = f'{BOC_URL}FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc'
+        result = URL.get('BOC',f'FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc')
 
-        result = requests.get(url)
         if not result.status_code == 200:  # pragma: no cover
-            logger.error('BOC %s failure: %s - %s' % (url, result.status_code, result.reason))
+            logger.error('BOC: failure: %s - %s' % (result.status_code, result.reason))
             return
 
         data = result.json()
@@ -242,10 +236,9 @@ class Inflation(models.Model):
         first = EPOCH
         first_str = first.strftime('%Y-%m-%d')
 
-        url = f'{BOC_URL}STATIC_INFLATIONCALC/json?start_date={first_str}'
-        result = requests.get(url)
+        result = URL.get('BOC',f'STATIC_INFLATIONCALC/json?start_date={first_str}')
         if not result.status_code == 200:
-            logger.error('BOC %s failure: %s - %s' % (url, result.status_code, result.reason))
+            logger.error('BOC failure: %s - %s' % (result.status_code, result.reason))
         else:
             # Pass 1 - Get all the inflation CPI values
             data = result.json()
@@ -322,9 +315,7 @@ class Equity(models.Model):
             self.update_external_equity_data(False)
 
     def set_equity_data(self):
-        search = AV_URL + 'SYMBOL_SEARCH&keywords=' + self.key + '&apikey=' + AV_API_KEY
-        logger.debug(search)
-        request = requests.get(search)
+        request = URL.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
         if request.status_code == 200:
             self.validated = True
             data = request.json()
@@ -392,12 +383,11 @@ class Equity(models.Model):
             if now == self.last_updated and not force:
                 logger.info('%s - Already updated %s' % (self, now))
             else:
-                url = f'{AV_URL}TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={AV_API_KEY}'
                 data_key = 'Monthly Adjusted Time Series'
-                logger.debug(url)
-                result = requests.get(url)
+                result = URL.get('AVURL', 'TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={AV_API_KEY}')
+
                 if not result.status_code == 200:
-                    logger.warning('%s Result is %s - %s' % (url, result.status_code, result.reason))
+                    logger.warning('AVURL Result is %s - %s' % (result.status_code, result.reason))
                     return
 
                 data = result.json()
@@ -762,11 +752,11 @@ class Portfolio(BaseContainer):
 
     @cached_property
     def p_pd(self) -> DataFrame:
-
+        alist = []
         new = pd.DataFrame(columns=ACCOUNT_COL)
         for account in self.account_set.all():
-            new = pd.concat([new, account.p_pd], axis=0)
-        #return new.groupby('Date').sum()
+            alist.append(account.p_pd)
+        new = pd.concat(alist).groupby('Date').sum().reset_index()
         return new
 
     @cached_property
