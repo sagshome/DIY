@@ -1,8 +1,11 @@
 import logging
 import pandas as pd
+from babel.numbers import format_decimal
 from datetime import datetime, date
 from django import template
 from django.utils.safestring import mark_safe
+from django.utils.translation import to_locale, get_language
+
 from stocks.models import normalize_today
 register = template.Library()
 
@@ -15,6 +18,7 @@ def render_help_text(field):
         )
     return ''
 
+
 @register.simple_tag
 def month_year(obj, field):
     date_field = getattr(obj, field)
@@ -22,6 +26,21 @@ def month_year(obj, field):
         return date_field.strftime("%b-%Y")
     else:
         return '-'
+
+
+@register.simple_tag
+def calc_return(obj, value):
+    cost = abs(obj)
+    value = abs(value)
+    result = round(cost-value)
+    result_str = format_decimal(abs(result), locale=to_locale(get_language()))
+
+    if result > 0:
+        return f'has a net loss of ${result_str}'
+    elif result < 0:
+        return f"has a net gain of ${result_str}"
+    else:
+        return "has not loss or gain"
 
 
 @register.simple_tag

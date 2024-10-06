@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 class BasicSetup(TestCase):
 
     def setUp(self):
+        # Result on too many calls
+        # {
+        #     "Information": "Thank you for using Alpha Vantage! Our standard API rate limit is 25 requests per day. Please subscribe to any of the premium plans at https://www.alphavantage.co/premium/ to instantly remove all daily rate limits."
+        # }
+        # on success we do not get "Information record
         super().setUp()
         # print(self.__class__.__name__, self._testMethodName)
         self.equity: Equity = Equity.objects.create(symbol='e', name='equity nAme', searchable=False, validated=True)

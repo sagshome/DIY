@@ -50,7 +50,7 @@
 </script>
 
 <h2 class="w3-margin">{{object_type}} Details for {{object.name}}</h2>
-<p>Total Funding is: ${{funded|floatformat:'0g'}}, Total Redeemed is: ${{redeemed|floatformat:'0g'}}</p>
+<p>Total Funding is: ${{funded|floatformat:'0g'}}, Total Redeemed is: ${{redeemed|floatformat:'0g'}} {% calc_return funded redeemed %}</p>
 
 <div class="w3-row">
     <div style="height:350px;" class="w3-half w3-container">
@@ -94,7 +94,7 @@
 {% endif %}
 <div class="w3-row">
     <div class="w3-half w3-container">
-        <table class="w3-table w3-stripped">
+        <table class="w3-table w3-striped">
             <caption class="w3-wide w3-padding-16">Equity Summary (Present Day Value)</caption>
             <thead class="w3-margin-bottom" style="background:#eee;">
                 <th>Equity</th>

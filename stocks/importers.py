@@ -47,7 +47,7 @@ class StockImporter:
     default_pd_columns = ['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency',
                           'Quantity', 'Price', 'Amount']
 
-    def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], managed: bool = False):
+    def __init__(self, currency: str, reader: csv.reader, user: User, headers: Dict[str, str], managed: bool = False):
         self.warnings = []
         self.user = user
         self.managed = managed
@@ -59,7 +59,7 @@ class StockImporter:
         self.pd = pd.DataFrame(columns=self._columns)
         self.accounts: Dict[str, Account] = {}
         self.equities: Dict[str, Equity] = {}
-
+        self.new_account_currency = currency
         self.mappings = self.get_headers(reader)
 
         for row in reader:
@@ -102,7 +102,7 @@ class StockImporter:
             equity: Equity
 
             #
-            account: Account = self.get_or_create_account(self.user, self.pd_account_name(prow), self.pd_account_key(prow))
+            account: Account = self.get_or_create_account(self.user, self.pd_account_name(prow), self.pd_account_key(prow), self.new_account_currency)
             if account.account_name not in equity_totals:
                 equity_totals[account.account_name] = {}
             if not account.last_import or (this_date > account.last_import):
@@ -110,15 +110,15 @@ class StockImporter:
                 last_import = this_date  # This has been pre-ordered by date
 
                 if xa_action == FUND:
-                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND, quantity=0, price=0)
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND, quantity=0, price=0).save()
                 elif xa_action == REDEEM:
-                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM, quantity=0, price=0)
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM, quantity=0, price=0).save()
                 elif xa_action == JUNK:
                     pass
                 elif xa_action == INT:
-                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=INT, quantity=quantity, price=price)
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=INT, quantity=quantity, price=price).save()
                 elif xa_action == FEES:
-                    Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=FEES, quantity=quantity, price=price)
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=FEES, quantity=quantity, price=price).save()
 
                 elif xa_action == DIV:
                     equity = self.equity_lookup(symbol, self.pd_description(prow), region)
@@ -146,7 +146,7 @@ class StockImporter:
 
                             action = Transaction.BUY if xa_action != REINVESTED else Transaction.REDIV
                             amount = amount if amount else price * quantity
-                            Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=action, quantity=quantity, price=price)
+                            Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=action, quantity=quantity, price=price).save()
 
                         elif xa_action in [SELL, TRANSFER_OUT]:
                             if amount and quantity:
@@ -155,18 +155,18 @@ class StockImporter:
                                 price = price if price else EquityValue.lookup_price(equity, this_date)
 
                             amount = amount if amount else price * quantity
-                            Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1, xa_action=SELL, quantity=quantity * -1, price=price)
+                            Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1, xa_action=SELL, quantity=quantity * -1, price=price).save()
                         elif xa_action == TFSA_TRANSFER:
                             price = EquityValue.lookup_price(equity, normalize_date(this_date))
                             amount = amount if amount else price * quantity
                             if quantity < 0:
-                                Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1 , xa_action=SELL,
-                                                           quantity=quantity * -1, price=price)
-                                Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM)
+                                Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1 , xa_action=SELL,
+                                                           quantity=quantity * -1, price=price).save()
+                                Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM).save()
                             elif quantity > 0:
-                                Transaction.objects.create(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=BUY,
-                                                           quantity=quantity, price=price)
-                                Transaction.objects.create(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND)
+                                Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=BUY,
+                                                           quantity=quantity, price=price).save()
+                                Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND).save()
                         else:
                             raise DIYImportException(f'Unexpected Activity type {xa_action}')
 
@@ -371,7 +371,7 @@ class StockImporter:
         self.equities[lookup] = equity
         return self.equities[lookup]
 
-    def get_or_create_account(self, user, name, account_id):
+    def get_or_create_account(self, user, name, account_id, base_currency):
         """
 
         :param user: what
@@ -384,7 +384,7 @@ class StockImporter:
             try:
                 account = Account.objects.get(account_name=account_id, user=user)
             except Account.DoesNotExist:
-                account = Account(name=name, user=user, account_name=account_id, managed=self.managed)
+                account = Account(name=name, user=user, account_name=account_id, managed=self.managed, currency=base_currency)
                 account.save()
                 account = Account.objects.get(account_name=account_id, user=user)  # Refresh
             self.accounts[account_id] = account
@@ -422,8 +422,8 @@ class Manulife(StockImporter):
         'Date': 'Process Date',
     }
 
-    def __init__(self, file_name: csv.reader, user: User):
-        super().__init__(file_name, user, self.ManulifeKeys, managed=True)
+    def __init__(self, currency: str, file_name: csv.reader, user: User):
+        super().__init__(currency, file_name, user, self.ManulifeKeys, managed=True)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
@@ -479,15 +479,15 @@ class ManulifeWealth(StockImporter):
         'Date': 'Date',
     }
 
-    def __init__(self, file_name: csv.reader, user: User):
-        super().__init__(file_name, user, self.ManulifeKeys, managed=True)
+    def __init__(self, currency: str, file_name: csv.reader, user: User):
+        super().__init__(currency, file_name, user, self.ManulifeKeys, managed=True)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
-        if csv_value in ['Conversion',]:
-            if row[self.mappings['Quantity']] == 0:
-                return INT
-            return TRANSFER_IN
+        #if csv_value in ['Conversion',]:
+        #    if row[self.mappings['Quantity']] == 0:
+        #        return INT
+        #    return TRANSFER_IN
         if csv_value in ['Buy', ]:
             return BUY
         if csv_value == 'Transfer Out - External':  # Do not know,  we have not ever withdrawn funds
@@ -498,7 +498,7 @@ class ManulifeWealth(StockImporter):
             return REINVESTED
         elif csv_value == 'Dividend':
             return INT
-        elif csv_value in ['Conversion Buy', 'Conversion Entry']:
+        elif csv_value in ['Conversion Buy', 'Conversion Entry', 'Conversion']:
             return JUNK
         elif csv_value == 'Tfsa Contribution':
             return TFSA_TRANSFER
@@ -539,8 +539,8 @@ class QuestTrade(StockImporter):
         'AccountKey': 'Account #'
     }
 
-    def __init__(self, reader: csv.reader,  user):
-        super().__init__(reader, user, self.QuestTradeKeys, managed=False)
+    def __init__(self, currency, reader: csv.reader,  user):
+        super().__init__(currency, reader, user, self.QuestTradeKeys, managed=False)
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]

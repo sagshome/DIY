@@ -52,7 +52,7 @@
     });
 </script>
 
-<h2 class="w3-margin">Account Table for {{account.name}}</h2>
+<h2 class="w3-margin">{{account_type}} for {{account.name}}</h2>
 
 
 <div class="w3-bar w3-hide-small">
@@ -60,40 +60,74 @@
         <a href="{% url 'portfolio_list' %}"><button class="w3-button-medium w3-round-large w3-orange"> Home </button></a>
     </div>
 
+
     <div class="w3-bar-item">
-        <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
+        {% if account_type == 'Account' %}
+            <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
+        {% else %}
+            <a href="{% url 'portfolio_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View </button></a>
+        {% endif %}
     </div>
 
 </div>
 
+{% if account_list  %}
+    <h2>Account(s) List</h2>
+    <div class="w3-row>">
+        <table class="w3-table w3-striped w3-boarder w3-padding-top w3-padding-bottom">
+            {% include 'stocks/account_header.html' %}
+            {% include 'stocks/account_list.html' %}
+        </table>
+    </div>
+{% endif %}
+
+
 <div class="w3-row">
     <div class="w3-container" style="overflow-y:auto;height:700">
-        <table class="w3-table w3-border tableFixHead">
+        <!-- <table class="w3-table w3-border w3-stripped tableFixHead"> -->
+        <table class="w3-table w3-striped tableFixHead">
+            <caption class="w3-wide w3-padding-16">(Equity History)</caption>
+
             <thead style="position: sticky; top: 0; z-index: 1;background:#eee;">
                 <th class="w3-left-align" style="width:100px">Date</th>
                 <th class="w3-left-align">Total Value</th>
                 {% for equity in equities %}
-                    <th><a href="{% url 'account_equity_details' account.id equity.symbol %}">{{equity.symbol}}</a><br><br>{{equity.name}}<br><br>Shares - Value</th>
+                    <th><a href="{% url 'account_equity_details' 'Account' account.id equity.symbol %}">{{equity.symbol}}</a>
+                        <br><br><span class="w3-small">{{equity.name}}</span><br><br>Shares - Price - Value
+                    </th>
                 {% endfor %}
             </thead>
             <tbody>
             {% for element in data %}
-            <tr>
-                {% for item in element %}
-                    {% if forloop.first %}
-                        <td>{{item|date:"Y-M"}}</td>
-                    {% elif forloop.counter == 2 %}
-                        <td>${{item | floatformat:'0g'}}</td>
-                    {% else %}
-                        <td>
-                            {% if item.0 %}
-                                <a href="{% url 'update_by_date' account.id item.0 element.0 %}">
-                                {{item.1 | floatformat:'2g'}} - {{item.2 | floatformat:'0g' }}</a>
+                <tr>
+                    {% for item in element %}
+                        {% if forloop.first %}
+                            <td>{{item|date:"Y-M"}}</td>
+                        {% elif forloop.counter == 2 %}
+                            <td>${{item | floatformat:'0g'}}</td>
+                            {% else %}
+                                <td>
+                                    {% if item.0 %}
+                                    {% if account_type == 'Account'%}<a href="{% url 'update_by_date' account.id item.0 element.0 %}">{% endif %}
+                                            {{item.1 | floatformat:'2g'}} -
+                                            {% if item.3 %}$
+                                                {% if item.4 == '!' %} $<span class="w3-text-black">{{item.3|floatformat:'2g'}}</span>
+                                                {% elif item.4 == 'F' %}<span class="w3-text-red">{{item.3|floatformat:'2g'}}</span>
+                                                {% elif item.4 == 'A' %}<span class="w3-text-blue">{{item.3|floatformat:'2g'}}</span>
+                                                {% elif item.4 == 'U' %}<span class="w3-text-green">{{item.3|floatformat:'2g'}}</span>
+                                                {% elif item.4 == 'M' %}<span class="w3-text-purple">{{item.3|floatformat:'2g'}}</span>
+                                                {% elif item.4 == 'E' %}<span class="w3-text-orange">{{item.3|floatformat:'2g'}}</span>
+                                                {% else %}<span class="w3-text-yellow">{{item.3|floatformat:'2g'}}</span>
+                                             -
+                                            {% endif %}
+                                            ${{item.2 | floatformat:'0g' }}
+                                    {% if account_type == 'Account' %}</a>{% endif %}
+                                    {% endif %}
+                                </td>
                             {% endif %}
-                        </td>
-                    {% endif %}
-                {% endfor %}
-            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
             {% endfor %}
             </tbody>
         </table>
@@ -103,18 +137,19 @@
 
 {% block help_content %}
 <p>
-    <b>Account Details</b>.  This somewhat busy page is likely the most important.   The main summary is the first line,
-    it has the total funding and the total funds redeemed.  That is what I refer to as the Effective Cost.
+    <b>Account Table</b>.  This page tables every equity you owned and for the duration of the account.   You can alter the data for that month.  That would
+    typically be done when trying to compare to a statement received by the institution.   You can alter the number of shares owned by you can can only
+    alter the price if the value was estimated.   We estimate values when we have months between to reported values with no data.  The share price is
+    color coded to match the source of the equity price.
 </p>
-<h4>Return vs Cost</h4>
-<b>Inflated cost</b>,  takes into account
-    what inflation does to the value of your funds.   A 10K investment overtime should continually drop since inflation
-    eats away at the value.   <b>Effective Cost</b> Is the total of Invested Funds less any dividends withdrawn regardless
-    of inflation.  It should be higher than the value, or you are really loosing money.   Lastly <b>Value</b> is the
-    actual value,  again regardless of inflation.
-<h4>Equity Summary</h4>
-This table is any equity you ever had in this account.   It has the current share
-<h4>Account Transaction</h4>
-This is the pertinent activities.  I don't include dividends, but you can see them as well as historic prices by selecting
-the equity in the equity summary table.
+<p> The sources and their color codes are</p>
+<ol>
+    <li class="w3-text-black">Admin update</li>
+                                                <li class="w3-text-red">Manually Adjusted</li>
+                                                <li class="w3-text-blue">The system update the value via an  API into a external vendor</li>
+                                                <li class="w3-text-green">Set by you uploading a file with transactions</li>
+                                                <li class="w3-text-purple">Set by you doing a modification (via this page)</li>
+                                               <li class="w3-text-orange">This system estimated the price</li>
+                                   <li class="w3-text-yellow">No idea where this came from!</li>
+</ol>
 {% endblock %}

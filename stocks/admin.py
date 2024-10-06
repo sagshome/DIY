@@ -32,7 +32,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
     fieldsets = [
         (None, {'fields': ['account', 'equity']}),
-        ('Purchase', {'fields': ['real_date', 'date', 'xa_action', 'value', 'price', 'quantity', 'estimated']}),
+        ('Purchase', {'fields': ['real_date', 'date', 'xa_action', 'value', 'currency_value', 'price', 'quantity', 'estimated']}),
     ]
 
     def account__name(self, obj):
@@ -46,7 +46,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
 class EquityEventAdmin(admin.ModelAdmin):
     list_display = ("equity", "event_type", "date", "value", "source")
-    list_filter = ('date',)
+    list_filter = ('date', 'equity__symbol', 'event_type')
 
 
 class EquityValueAdmin(admin.ModelAdmin):

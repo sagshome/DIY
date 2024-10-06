@@ -1,6 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from .models import Equity, Account, Transaction, Portfolio
+from .models import DataSource, Equity, EquityValue, Account, Transaction, Portfolio, CURRENCIES
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
 
 
@@ -20,7 +20,7 @@ class EquityForm(forms.Form):
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Account
-        fields = ('account_name', 'name', 'portfolio', 'currency', 'managed', 'user')
+        fields = ('account_name', 'name', 'portfolio', 'currency', 'managed', 'account_type', 'user')
         widgets = {
             'end': forms.TextInput(attrs={'type': 'date'}),
             'user': forms.HiddenInput(),
@@ -156,8 +156,9 @@ class ManualUpdateEquityForm(forms.Form):
     account = forms.IntegerField(widget=forms.HiddenInput(), required=True)
     equity = forms.IntegerField(widget=forms.HiddenInput(), required=True)
     report_date = forms.DateField()
-    shares = forms.FloatField()
-    value = forms.FloatField()
+    shares = forms.FloatField(required=False)
+    value = forms.FloatField(required=False)
+    price = forms.FloatField(required=False)
 
     class Meta:
         widgets = {
@@ -168,9 +169,26 @@ class ManualUpdateEquityForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if 'initial' in kwargs and 'equity' in kwargs['initial']:
+            try:
+                equity = Equity.objects.get(id=kwargs['initial']['equity'])
+                if equity.searchable:
+                    self.fields['price'].widget.attrs['style'] = 'background-color:Wheat'
+                    self.fields["price"].widget.attrs['readonly'] = True
+                else:
+                    value_obj = EquityValue.objects.get(equity=equity, date=kwargs['initial']['report_date'])
+                    if value_obj.source < DataSource.UPLOAD.value:
+                        self.fields['price'].widget.attrs['style'] = 'background-color:Wheat'
+                        self.fields["price"].widget.attrs['readonly'] = True
+            except Equity.DoesNotExist:
+                pass
+
+        self.fields['value'].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["value"].widget.attrs['readonly'] = True
 
         self.fields['report_date'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["report_date"].widget.attrs['readonly'] = True
+
 
     def clean(self):
         cleaned_data = super().clean()
@@ -197,6 +215,8 @@ class UploadFileForm(forms.Form):
                                           ('QuestTrade', 'QuestTrade'),
                                           ('Manulife', 'Manulife Original'),
                                           ('Wealth', 'Manulife Wealth')])
+    new_account_currency = forms.ChoiceField(label='New Account Currency',
+                                             choices=CURRENCIES)
     csv_file = forms.FileField()
 
     def clean(self):

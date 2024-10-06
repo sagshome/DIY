@@ -34,7 +34,7 @@ if ('test' in sys.argv  # set with manage.py test
         or 'test' in sys.argv[0]  # set with pytest
         or ('PYTEST_RUN_CONFIG' in os.environ and os.environ['PYTEST_RUN_CONFIG'])
         or DIY_LOCALDB):  # set with local pycharm tests
-    print(f'Using a local DB - {DIY_LOCALDB}')
+    # print(f'Using a local DB - {DIY_LOCALDB}')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -42,7 +42,7 @@ if ('test' in sys.argv  # set with manage.py test
         }
     }
 else:
-    print('Using a remote DB')
+    # print('Using a remote DB')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',

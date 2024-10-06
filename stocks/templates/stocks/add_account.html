@@ -21,9 +21,11 @@
                 <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>
                 <td class="w3-container w3-margin"> {{ field }}</td>
                 {% if field.errors %}
+                    <td class="w3-red w3-round-xlarge">
                     {% for error in field.errors %}
-                        <td class="w3-red w3-round-xlarge"> {{ error }} </td>
+                         {{ error }}
                     {% endfor %}
+                    </td>
                 {% endif %}
             </tr>
         {% endfor %}

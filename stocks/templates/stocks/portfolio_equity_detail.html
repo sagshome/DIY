@@ -150,7 +150,7 @@
                         {% endif %}
                         ${{data.value|floatformat:'2g'}}</td>
 
-                        <td class="w3-hide-small">{% if data.total_dividends != 0 %} ${{data.4|floatformat:'2g'}} {% endif %}</td>
+                        <td class="w3-hide-small">{% if data.total_dividends != 0 %} ${{data.total_dividends|floatformat:'2g'}} {% endif %}</td>
 
                         <td>${{data.price|floatformat:'2g'}}</td>
                         <td>${{data.avgcost|floatformat:'2g'}}</td>

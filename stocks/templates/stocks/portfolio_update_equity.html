@@ -17,7 +17,6 @@
             </div>
         {% endfor %}
         {% for hidden_field in form.hidden_fields %}
-            hidden
             <div class="w3-row w3-blue">
                 {{ hidden_field.errors }}
                 {{ hidden_field }}
@@ -40,16 +39,24 @@
         </div>
 
         <div class="diyrow w3-row w3-margin-bottom ">
+            <div class="w3-col w3-container l1">{{ form.value.label_tag }}</div>
+            <div class="w3-col w3-container m2">{{ form.value }}</div>
+            <div class="w3-col w3-container">{{ form.value.errors }}</div>
+        </div>
+
+        <div class="diyrow w3-row w3-margin-bottom ">
+            <div class="w3-col w3-container l1">{{ form.price.label_tag }}</div>
+            <div class="w3-col w3-container m2">{{ form.price }}</div>
+            <div class="w3-col w3-container">{{ form.price.errors }}</div>
+        </div>
+
+        <div class="diyrow w3-row w3-margin-bottom ">
             <div class="w3-col w3-container l1">{{ form.shares.label_tag }}</div>
             <div class="w3-col w3-container m2">{{ form.shares }}</div>
             <div class="w3-col w3-container">{{ form.shares.errors }}</div>
         </div>
 
-        <div class="diyrow w3-row w3-margin-bottom ">
-            <div class="w3-col w3-container l1">{{ form.value.label_tag }}</div>
-            <div class="w3-col w3-container m2">{{ form.value }}</div>
-            <div class="w3-col w3-container">{{ form.value.errors }}</div>
-        </div>
+
 
         <div class="w3-row">
             <div class="w3-col w3-container m2">
@@ -63,4 +70,14 @@
         </div>
     </form>
 
+{% endblock %}
+{% block help_content %}
+<p>
+    The Manual Account Update allows you to correct/update data.  Typically, this is only needed if your statement does not match the data presented here.  The
+    changes will a transaction in your account.   This transaction can later be deleted.   Report Data and Value are always read-only and only presented to
+    provide context.<br><br>
+    The Price can only be updated if the equity in question is not updated via an API or the price has not been estimated based on other uploaded transactions.
+    <br><br>
+    The Shares can always be updated.   The value you enter should be the number of shares your think you had at the end of this report date month.
+</p>
 {% endblock %}

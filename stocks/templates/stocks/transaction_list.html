@@ -23,7 +23,7 @@
                 </td>
                 <td>{{x.action_str}}</td>
                 <td>{% if x.equity %}{{x.equity.symbol}} {% endif %}</td>
-                <td class="w3-right-align">{% if x.value %} ${{x.value|floatformat:'0g'}}{% endif %}</td>
+                <td class="w3-right-align">{% if x.currency_value %} ${{x.currency_value|floatformat:'0g'}}{% endif %}</td>
                 <td>
                     {% if x.equity %}
                         {% if x.price == 0 %}

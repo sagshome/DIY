@@ -28,7 +28,7 @@ from django.views.generic.dates import DateMixin
 from django.http import JsonResponse
 
 
-from .models import Equity, Account, Transaction, EquityEvent, EquityValue, Portfolio
+from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio
 from .forms import AccountAddForm, AccountForm, TransactionForm, AccountCopyForm, UploadFileForm, ManualUpdateEquityForm, EquityForm, AddEquityForm, PortfolioForm, AccountCloseForm
 from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
 from base.utils import DIYImportException, normalize_today, normalize_date
@@ -130,7 +130,17 @@ class AccountTableView(LoginRequiredMixin, DetailView):
                         if shares == 0 or value == 0:
                             this_record.append((None, None, None))
                         else:
-                            this_record.append((equity.id, shares, value))
+                            try:
+                                equity_value = EquityValue.objects.get(equity=equity, date=this_date.to_pydatetime().date())
+                                price = equity_value.price
+                                source = DataSource.source_key(equity_value.source)
+                            except EquityValue.DoesNotExist:
+                                price = '-'
+                                source = ''
+                            except EquityValue.MultipleObjectsReturned:
+                                pass
+
+                            this_record.append((equity.id, shares, value, price, source))
                             total_value += value
                 except KeyError:
                     this_record.append((None, None))
@@ -139,6 +149,7 @@ class AccountTableView(LoginRequiredMixin, DetailView):
                 data.append(this_record)
         data.sort(reverse=True)
         return {'account': a,
+                'account_type': 'Account',
                 'data': data,
                 'equities': elist,
                 'equity_count': elist.count()
@@ -179,7 +190,18 @@ class PortfolioTableView(LoginRequiredMixin, DetailView):
                         if shares == 0 or value == 0:
                             this_record.append((None, None, None))
                         else:
-                            this_record.append((equity.id, shares, value))
+                            try:
+                                equity_value = EquityValue.objects.get(equity=equity, date=this_date.to_pydatetime().date())
+                                price = equity_value.price
+                                source = DataSource.source_key(equity_value.source)
+                            except EquityValue.DoesNotExist:
+                                price = '-'
+                                source = ''
+                            except EquityValue.MultipleObjectsReturned:
+                                pass
+
+                            this_record.append((equity.id, shares, value, price, source))
+
                             total_value += value
                 except KeyError:
                     this_record.append((None, None))
@@ -188,6 +210,8 @@ class PortfolioTableView(LoginRequiredMixin, DetailView):
                 data.append(this_record)
         data.sort(reverse=True)
         return {'account': p,
+                'account_type': 'Portfolio',
+                'account_list': p.account_set.all().order_by('-_start'),
                 'data': data,
                 'equities': elist,
                 'equity_count': elist.count()
@@ -223,10 +247,10 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
             redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
         return {'object': p,
                 'object_type': 'Portfolio',
-                'account_list': p.account_set.all(),
+                'account_list': p.account_set.all().order_by('-_start'),
                 'xas': p.transactions.order_by('-real_date', 'xa_action'),
                 'funded': funded,
-                'redeemed': redeemed,
+                'redeemed': abs(redeemed),
                 }
 
 
@@ -337,18 +361,19 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         # Access the updated form instance
         updated_data = form.cleaned_data
-        funded = self.object.get_attr('Funds', self.object.end)
-        value = self.objects.get_attr('Value', self.object.end)
-        if updated_data['accounts']:
-            Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
-                                       xa_action=Transaction.TRANS_OUT, account=self.object.account)
-            Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
-                                       xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
+        funded = self.object.get_pattr('Funds', normalize_date(self.object.end))
+        if self.object.account_type == 'Holding':
+            value = self.object.get_pattr('Redeemed', normalize_date(self.object.end))
         else:
-            Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
+            value = self.object.get_pattr('Value', normalize_date(self.object.end))
+            if updated_data['accounts']:
+                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
+                                           xa_action=Transaction.TRANS_OUT, account=self.object.account)
+                Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
+                                           xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
+            else:
+                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
                                        xa_action=Transaction.REDEEM, account=self.object.account)
-
-
         return super().form_valid(form)
 
 
@@ -409,7 +434,6 @@ class TransactionEdit(LoginRequiredMixin, UpdateView):
 
 class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
     model = Account
-    # fields = ['name', 'currency', 'managed', 'end']
     template_name = 'stocks/add_account.html'
     date_filed = 'end'
     form_class = AccountForm
@@ -425,6 +449,7 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
         return {'name': original.name,
                 'currency': original.currency,
                 'managed': original.managed,
+                'account_type': original.account_type,
                 'user': original.user}
 
     def get_context_data(self, **kwargs):
@@ -480,13 +505,13 @@ def upload_file(request):
             reader = csv.reader(text_file.splitlines())
             try:
                 if form.cleaned_data["csv_type"] == 'QuestTrade':
-                    importer = QuestTrade(reader, request.user)
+                    importer = QuestTrade(form.cleaned_data['new_account_currency'], reader, request.user)
                 elif form.cleaned_data["csv_type"] == 'Manulife':
-                    importer = Manulife(reader, request.user)
+                    importer = Manulife(form.cleaned_data['new_account_currency'], reader, request.user)
                 elif form.cleaned_data["csv_type"] == 'Wealth':
-                    importer = ManulifeWealth(reader, request.user)
+                    importer = ManulifeWealth(form.cleaned_data['new_account_currency'], reader, request.user)
                 else:
-                    importer = StockImporter(reader, request.user, HEADERS, managed=False)
+                    importer = StockImporter(form.cleaned_data['new_account_currency'], reader, request.user, HEADERS, managed=False)
                 importer.process()
                 if len(importer.warnings) != 0:
                     return render(request, "stocks/uploadfile.html",
@@ -601,25 +626,28 @@ def account_equity_date_update(request, p_pk, e_pk, date_str):
     """
     account = get_object_or_404(Account, pk=p_pk, user=request.user)
     equity = get_object_or_404(Equity, pk=e_pk)
-    this_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    this_date = datetime.strptime(date_str, '%Y-%m-%d 00:00:00').date()
+    shares = round(account.get_eattr('Shares', this_date, symbol=equity.symbol), 2)
+    value = round(account.get_eattr('Value', this_date, symbol=equity.symbol), 2)
+    price = round(EquityValue.lookup_price(equity, this_date), 2)
 
     if request.method == 'POST':
         form = ManualUpdateEquityForm(request.POST)
         if form.is_valid():
-            price = form.cleaned_data['shares'] / form.cleaned_data['value'] if form.cleaned_data['value'] else 0
-            if settings.ALPHAVANTAGEAPI_KEY:
-                equity.update(key=settings.ALPHAVANTAGEAPI_KEY)
+            if form.cleaned_data['shares'] or form.cleaned_data['shares'] == 0:
+                quantity = form.cleaned_data['shares'] - shares
+                action = Transaction.BUY if quantity > 0 else Transaction.SELL
+                Transaction.objects.create(account=account, equity=equity, xa_action=action, real_date=this_date, quantity=quantity, estimated=True)
+            if form.cleaned_data['price'] and form.cleaned_data['price'] != price:
+                ev = EquityValue.objects.get(equity=equity, date=this_date)
+                ev.price = form.cleaned_data['price']
+                ev.source = DataSource.USER.value
+                ev.save()
             return HttpResponseRedirect(reverse('account_table', kwargs={'pk': account.id}))
         else:
             pass
     else:
-        shares = 0
-        value = 0
-        df = account.e_pd[(account.e_pd['Date'] == this_date) & (account.e_pd['Equity'] == equity.symbol)][['Shares', 'Value']]
-        if not df.empty:
-            shares = df['Shares'].tolist()[0]
-            value = df['Value'].tolist()[0]
-        form = ManualUpdateEquityForm(initial={'account': account.id, 'equity': equity.id, 'report_date': this_date, 'shares': shares, 'value': value})
+        form = ManualUpdateEquityForm(initial={'account': account.id, 'equity': equity.id, 'report_date': this_date, 'shares': shares, 'value': value, 'price': price})
     return render(request, 'stocks/portfolio_update_equity.html', context={'form': form, 'account': account, 'equity': equity})
 
 
@@ -769,7 +797,7 @@ def account_equity_details(request, container_type, pk, symbol):
         form = EquityForm(request.POST)
         if form.is_valid():
             compare_to = form.cleaned_data['equity']
-
+    total_dividends = 0
     form = EquityForm()
     data = []
     new_df = account.e_pd.sort_values(by='Date').loc[account.e_pd['Equity'] == equity.symbol]
@@ -1011,22 +1039,32 @@ def cost_value_chart(request):
         if not my_object:
             JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
         df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == equity.symbol) & (my_object.e_pd['Shares'] != 0)]
+        df['adjusted_value'] = df['Value'] + df['TotalDividends']
+        label1 = 'Cost'
 
     else:  # Portfolio or Account
         df = my_object.p_pd
-        de = my_object.e_pd.groupby('Date', as_index=False).sum('Value')
-        df = df.merge(de, on='Date', how='outer')
+        if object_type == 'Portfolio' or (object_type == 'Account' and my_object.account_type == 'Investment'):
+            de = my_object.e_pd.groupby('Date', as_index=False).sum('Value')
+            df = df.merge(de, on='Date', how='outer')
+        else:  # Very small edge case
+            df['Value'] = df['Funds'] - df['Redeemed']
         df['Cost'] = df['Funds'] - df['Redeemed']
         if my_object.end:
-            df = df.loc[df['Date'] <= my_object.end]
+            df = df.loc[df['Date'] <= pd.to_datetime(my_object.end)]
         df.fillna(0, inplace=True)
+        label1 = 'Funding'
 
-    df['Date'] = df['Date'].dt.date
-    # pd.Timestamp(df['Date'])
-    chart_data['labels'] = sorted(df['Date'].unique())
-    chart_data['datasets'].append({'label': 'Funding', 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2], 'tension': 0.1})
-    chart_data['datasets'].append({'label': 'Value', 'fill': False,'data': df['Value'].tolist(),'borderColor': colors[1], 'backgroundColor': colors[1]})
-    #if not equity_id:
-    #    chart_data['datasets'].append({'label': 'Cash', 'fill': False, 'data': df['Cash'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2]})
+    if df.empty:
+        chart_data = {}
+    else:
+        df['Date'] = df['Date'].dt.date
+        chart_data['labels'] = sorted(df['Date'].unique())
+        chart_data['datasets'].append({'label': label1, 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2], 'tension': 0.1})
+        chart_data['datasets'].append({'label': 'Value', 'fill': False,'data': df['Value'].tolist(),'borderColor': colors[1], 'backgroundColor': colors[1]})
+        if equity_id:
+            chart_data['datasets'].append(
+                {'label': 'Value w/ Dividends', 'fill': False, 'data': df['adjusted_value'].tolist(), 'borderColor': colors[3], 'backgroundColor': colors[3]})
 
     return JsonResponse(chart_data)
+
