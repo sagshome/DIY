@@ -1,5 +1,6 @@
 asgiref==3.7.2
 asttokens==2.4.1
+babel==2.16.0
 cachetools==5.3.2
 certifi==2023.11.17
 chardet==5.2.0
@@ -20,7 +21,6 @@ iniconfig==2.0.0
 jedi==0.19.1
 matplotlib-inline==0.1.6
 mysqlclient==2.2.1
-numpy
 packaging==23.2
 pandas
 parso==0.8.3
