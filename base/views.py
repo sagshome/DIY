@@ -24,6 +24,7 @@ from django.views.generic.base import TemplateView
 
 from expenses.models import Item
 
+
 @login_required
 def diy_main(request):
     items = Item.objects.filter(user=request.user)
@@ -63,9 +64,11 @@ class NewAccountDoneView(PasswordContextMixin, TemplateView):
     template_name = "base/new_account_done.html"
     title = "New Account Sent"
 
+
 class NewAccountComplete(PasswordResetCompleteView):
     class PasswordResetCompleteView(PasswordContextMixin, TemplateView):
         template_name = "registration/password_reset_complete.html"
+
 
 def diy_help(request, fakepath):
     return render(request, "diy/help.html", {})

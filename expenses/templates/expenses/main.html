@@ -178,9 +178,9 @@
 
 {% block help_content %}
 <p>
-    <b>Welcome to expenses</b>.  The purpose of this application is to give you the ability to track your expenditures over
-    time allowing you to see how you are doing (kind of like budget?).  <!-- todo: You can also compare your spending
-    vs national averages and aggregated data from other users -->
+    <b>Welcome to expenses</b>.  Track your expenditures over
+    time allowing you to see how you are doing (kind of like budget?).
+    <!-- todo: You can also compare your spending vs national averages and aggregated data from other users -->
 </p>
 <p>
     <b>A few basics before we start</b>.  One of the actions is "Import a CSV File",  this is the only sane way to use this
@@ -194,11 +194,11 @@
     This page by default shows the last 7 years of none hidden data.  You can change the date range (or clear the values) using the
     filters and then hitting "Reapply Filter".   The concept behind hidden records is some expense data you may not want
     to process.  For example,  when I pay bills it shows up on my banks statement,  I do not want to add that as an
-    expense since I already have the expense via my VISA bill.  So I "hide" it.
+    expense since I already have the expense via my credit card bill.  So I "hide" it.
     I could delete <i class="fa fa-trash"></i> it, but if I ever reimport
     that data it will show up again.
     The other filters are pretty self-explanatory the only caveat to point out is description will search that string
-    anywhere in the description.  It is also case-insensitive so searching on "ottawa",  will find both "Ottawa Hydro" and
+    anywhere in the description or in the notes.  It is also case-insensitive so searching on "ottawa",  will find both "Ottawa Hydro" and
     "the ottawa Little theatre" One <em>bug/feature</em> is that doing the reapply filter will also process and
     records in the table below the charts.
 </p>
@@ -210,6 +210,6 @@ subcategory.</p>
 <h4>The Table</h4>
 <p>The table is a list of the expenses, matching the filters order by date.   You can reassign categories,  you can deside to hide
     the record,  you can add notes and even delete the record.   If you select (click in) the description you can preform
-    extra actions on the expense.  These include <b>Split</b> and <b>Amortize</b>.  Help on that is on the action itself.
+    extra actions on the expense.  These include <b>Split</b> and <b>Level</b>.  Help on that is on the action itself.
 </p>
 {% endblock %}

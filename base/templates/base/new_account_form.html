@@ -1,39 +1,65 @@
 {% extends "base.html" %}
-{% block title %}DIY Login{% endblock %}
-{% block help_content %}
-<p>I do not do anything with this info and if I ever do,  I will tell you.</p>
-<p>It is all pretty common information asks,  the only thing out of the ordinary is you can provide your own ALPHA VANTAGE API Key.
-Having your own key will allow you to force a stock price update.   The keys are free but limited to 25 calls a
-day.   Here is the <a href="https://www.alphavantage.co/">Alpha Vantages</a> website</p>
-{% endblock %}
+{% block title %}New Account{% endblock %}
 
 <!-- todo: Ugly page -->
 {% block content %}
-    <p class="w3-margin-top">Forgotten your password? Enter your email address below, and we’ll email instructions for setting a new one.</p>
+    <p class="w3-margin-top">Request an account, the email entered will receive further instructions.</p>
 
     <form class="w3-margin-bottom" method="post">{% csrf_token %}
-        <fieldset class="module aligned">
-            <div class="form-row field-email">
-                {{ form.email.errors }}<label>Email address:</label>{{ form.email }}
+        {% for error in form.non_field_errors %}
+            <div class="w3-row w3-red"> {{ error }}</div>
+        {% endfor %}
+        {% for hidden_field in form.hidden_fields %}
+            <div class="w3-row w3-blue">
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
             </div>
-            <div class="form-row field-currency">
-                {{ form.currency.errors }}<label>Your Currency:</label>{{ form.currency }}
-            </div>
+        {% endfor %}
+        <table>
+        <tr class="w3-row w3-margin-bottom">
+            <td class="w3-container w3-margin w3-right-align">* Email:</td>
+            <td class="w3-container w3-margin">{{ form.email }}</td>
+            <td class="w3-container w3-margin">{{ form.email.errors }}</td>
+            <td class="w3-container w3-margin w3-right-align">AV API Key:</td>
+            <td class="w3-container w3-margin">{{ form.av_api_key }}</td>
+            <td class="w3-container w3-margin">{{ form.av_api_key.errors }}</td>
 
-            <div class="form-row">
-                {{ form.first_name.errors }}<label>First Name:</label>{{ form.first_name }}
-            </div>
+        </tr>
+        <tr class="w3-row w3-margin-bottom">
+            <td class="w3-container w3-margin w3-right-align">* Currency:</td>
+            <td class="w3-container w3-margin">{{ form.currency }}</td>
+            <td class="w3-container w3-margin">{{ form.currency.errors }}</td>
+            <td class="w3-container w3-margin w3-right-align">Annual Income:</td>
+            <td class="w3-col w3-margin" style="width:10px">{{ form.income }}</td>
+            <td class="w3-container w3-margin">{{ form.income.errors }}</td>
+        </tr>
+        <tr class="w3-row w3-margin-bottom">
+            <td class="w3-container w3-margin w3-right-align">* First Name:</td>
+            <td class="w3-container w3-margin">{{ form.first_name }}</td>
+            <td class="w3-container w3-margin">{{ form.first_name.errors }}</td>
+            <td class="w3-container w3-margin w3-right-align">Estimated Net Worth:</td>
+            <td class="w3-container w3-margin">{{ form.worth }}</td>
+            <td class="w3-container w3-margin">{{ form.worth.errors }}</td>
+        </tr>
+        <tr class="w3-row w3-margin-bottom">
+            <td class="w3-container w3-margin w3-right-align">* Last Name:</td>
+            <td class="w3-container w3-margin">{{ form.last_name }}</td>
+            <td class="w3-container w3-margin">{{ form.last_name.errors }}</td>
+            <td class="w3-container w3-margin w3-right-align">Savings Goals (month):</td>
+            <td class="w3-container w3-margin">{{ form.goals }}</td>
+            <td class="w3-container w3-margin">{{ form.goals.errors }}</td>
 
-            <div class="form-row">
-                {{ form.last_name.errors }}<label>Last Name:</label>{{ form.last_name }}
-            </div>
-            <div class="form-row">
-                {{ form.av_api_key.errors }}<label>AV API Key:</label>{{ form.av_api_key }}
-            </div>
+        </tr>
+        </table>
+        <p class="w3-margin-top">* Fields are required.</p>
 
-            <input type="submit" value="Submit">
-        </fieldset>
+        <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" value="Submit">
     </form>
 
+{% endblock %}
 
+{% block help_content %}
+<p>The only thing out of the ordinary is you can provide your own ALPHA VANTAGE API Key.
+Having your own key will allow you to force a stock price update.   The keys are free but limited to 25 calls a
+day.   Here is the <a href="https://www.alphavantage.co/">Alpha Vantages</a> website</p>
 {% endblock %}

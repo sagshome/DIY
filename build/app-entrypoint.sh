@@ -10,5 +10,4 @@ done
 
 echo "Django docker is fully configured successfully."
 
-
 exec "$@"

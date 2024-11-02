@@ -9,13 +9,14 @@ urlpatterns = [
     path(r'upload/', views.upload_expenses, name='expenses_upload'),
     path(r'assign/', views.assign_expenses, name='expenses_assign'),
 
-    path(r'item_add/', views.ItemAdd.as_view(), name='expense_add'),
-    path(r'<int:pk>/item_edit/', views.ItemEdit.as_view(), name='expense_edit'),
-    path(r'<int:pk>/item_del/', views.ItemDelete.as_view(), name='expense_delete'),
+    path(r'expense/add/', views.ItemAdd.as_view(), name='expense_add'),
+    path(r'expense/<int:pk>/edit/', views.ItemEdit.as_view(), name='expense_edit'),
+    path(r'expense/<int:pk>/delete/', views.ItemDelete.as_view(), name='expense_delete'),
 
-    path(r'templates/', views.templates, name='expenses_templates'),
-    path(r'<int:pk>/template_delete/', views.DeleteTemplateView.as_view(), name='template_delete'),
-    path(r'<int:pk>/template_edit/', views.edit_template, name='template_edit'),
+    path(r'template/', views.ListTemplates.as_view(), name='expenses_templates'),
+    path(r'template/<int:item_pk>/add/', views.AddTemplateView.as_view(), name='add_template'),
+    path(r'template/<int:pk>/delete/', views.DeleteTemplateView.as_view(), name='template_delete'),
+    path(r'template/<int:pk>/edit/', views.edit_template, name='template_edit'),
 
     path('ajax/load-subcategories/', views.load_subcategories, name='ajax-load-subcategories'),
     path('ajax/load-subcategories-search/', views.load_subcategories_search, name='ajax-load-subcategories-search'),

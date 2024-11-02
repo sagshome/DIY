@@ -1,17 +1,13 @@
 {% load i18n static %}
-{% load base_tags %}
 {% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}
 <html lang="{{ LANGUAGE_CODE|default:'en-us' }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
 <head>
-  <title>{% block title %}{% endblock %}</title>
+  <title>{% block title %}DIY{% endblock %}</title>
   <!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="{% static 'favicon.ico' %}">
   <link rel="stylesheet" href="{% static 'w3-css/w3.css' %}">
-  <!--<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato">-->
-  <!--<script src="https://kit.fontawesome.com/2e6959303f.js" crossorigin="anonymous"></script>-->
-
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"">
   <style>
     body {font-family: "Lato", sans-serif}
@@ -23,7 +19,8 @@
 
 </head>
 
-{% block navscript %}
+<body>
+  {% block navscript %}
   <script>
     function show_hide_small() {
       var x = document.getElementById("navSmall");
@@ -43,86 +40,79 @@
        var help_page = document.getElementById('DIYHelpContent');
        help_page.style.display='none';
     }
-
-
   </script>
+  {% endblock navscript %}
+  {% block navbar %}
+  <div class="w3-top">
+    <div class="w3-bar w3-black w3-card">
+      <a href="{% url 'diy_main' %}" class="w3-bar-item w3-button w3-padding-large">HOME</a>
+      <div class="w3-dropdown-hover w3-hide-small">
+        <button class="w3-padding-large w3-button w3-black" title="Expenses">EXPENSES <i class="fa fa-caret-down"></i></button>
+        <div class="w3-dropdown-content w3-bar-block w3-card-4">
+          <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Main Page</a>
+          <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">Add an Expense</a>
+          <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
+          <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Templates</a>
+        </div>
+      </div>
 
-{% endblock navscript %}
-<body>
-{% block navbar %}
-<div class="w3-top">
-  <div class="w3-bar w3-black w3-card">
-    <a href="{% url 'diy_main' %}" class="w3-bar-item w3-button w3-padding-large">HOME</a>
-    <div class="w3-dropdown-hover w3-hide-small">
-      <button class="w3-padding-large w3-button w3-black" title="Expenses">EXPENSES <i class="fa fa-caret-down"></i></button>
-      <div class="w3-dropdown-content w3-bar-block w3-card-4">
-        <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Main Page</a>
-        <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">Add an Expense</a>
-        <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
-        <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Templates</a>
+      <div class="w3-dropdown-hover w3-hide-small">
+        <button class="w3-padding-large w3-button w3-black" title="Investments">INVESTMENTS <i class="fa fa-caret-down"></i></button>
+        <div class="w3-dropdown-content w3-bar-block w3-card-4">
+          <a href="{% url 'portfolio_list' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Main Page</a>
+          <a href="{% url 'portfolio_add' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Portoflio</a>
+          <a href="{% url 'portfolio_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
+          <a href="{% url 'transaction_add' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Transaction</a>
+          <hr>
+          <a href="{% url 'add_equity' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Request new Equity/Fund</a>
+        </div>
+      </div>
+      <button onclick=show_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>
+
+      <div class="w3-right">
+        {% if request.user.is_authenticated %}
+          <form title="log out" action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button class="w3-bar-item w3-button w3-padding-large" title="Investments">LOGOUT</button>
+          </form>
+        {% endif %}
       </div>
     </div>
 
-    <div class="w3-dropdown-hover w3-hide-small">
-      <button class="w3-padding-large w3-button w3-black" title="Investments">INVESTMENTS <i class="fa fa-caret-down"></i></button>
-      <div class="w3-dropdown-content w3-bar-block w3-card-4">
-        <a href="{% url 'portfolio_list' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Main Page</a>
-        <a href="{% url 'portfolio_add' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Portoflio</a>
-        <a href="{% url 'portfolio_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
-        <a href="{% url 'transaction_add' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Transaction</a>
-        <hr>
-        <a href="{% url 'add_equity' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Request new Equity/Fund</a>
-      </div>
-    </div>
-    <button onclick=show_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>
-
-    <div class="w3-right">
-      {% if request.user.is_authenticated %}
-        <form title="log out" action="{% url 'logout' %}" method="post">
-          {% csrf_token %}
-          <button class="w3-bar-item w3-button w3-padding-large" title="Investments">LOGOUT</button>
-        </form>
-      {% endif %}
-    </div>
   </div>
+  {% endblock navbar %}
 
-</div>
-{% endblock navbar %}
-
-
-
-<div class="w3-content " style="max-width:2000px;margin-top:46px">
-  <div class="w3-container w3-boarder">
-    <!-- The Modal -->
-    <div id="DIYHelpContent" style="display:none">
-      <div>
-        {% block help_content %}
-        <p>
-          DIY services are a personal hobby.   They provide a way to track investments and expenses.  If you have any
-          querstions please contact me at <a href="D1Yapp.ca@gmail.com">D1Yapp.ca@gmail.com</a>.
-        </p>
-        <p>
-          Please specific help on each page.
-        </p>
-
-
-        {% endblock %}
-        </div>
-        <div>
-            <button onclick=hide_help() class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-red" title="Close">Close</button>
-        </div>
-    </div>
-  </div>
+  <div class="w3-content " style="max-width:2000px;margin-top:46px">
     <div class="w3-container w3-boarder">
-    {% block content %}
-    {% endblock content %}
-      </div>
-  </div>
-</div>
-{% block footer %}
-<div class="w3-botton w3-container w3-grey">
-    <p>This is the footer</p>
+      <!-- The Modal -->
+      <div id="DIYHelpContent" style="display:none">
+        <div>
+          {% block help_content %}
+          <p>
+            DIY services are a personal hobby.   They provide a way to track investments and expenses.  If you have any
+            querstions please contact me at <a href="D1Yapp.ca@gmail.com">D1Yapp.ca@gmail.com</a>.
+          </p>
+          <p>
+            Please specific help on each page.
+          </p>
 
-</div>
-{% endblock footer %}
+
+          {% endblock %}
+          </div>
+          <div>
+              <button onclick=hide_help() class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-red" title="Close">Close</button>
+          </div>
+      </div>
+    </div>
+      <div class="w3-container w3-boarder">
+        {% block content %}
+        {% endblock content %}
+      </div>
+    </div>
+  </div>
+  {% block footer %}
+  <div class="w3-botton w3-container w3-grey">
+      <container class="w3-container w3-center"><p>© 2024 Scott Sargent</p></container>
+  </div>
+  {% endblock footer %}
 </body>

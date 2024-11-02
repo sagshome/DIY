@@ -29,9 +29,13 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     currency = models.CharField(max_length=3, choices=CURRENCIES, default='CAD')
     av_api_key = models.CharField(max_length=24, null=True, blank=True)
+    income = models.DecimalField(decimal_places=0, max_digits=9, default=0)
+    # knowledge = forms.ChoiceField(choices=KNOWLEDGE)
+    worth = models.DecimalField(decimal_places=0, max_digits=9, default=0)
+    goals = models.DecimalField(decimal_places=0, max_digits=9, default=0)
 
     def __str__(self):
-        return self.user.name
+        return self.user.username
 
 
 class URL(models.Model):

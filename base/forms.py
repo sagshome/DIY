@@ -29,10 +29,28 @@ class UserRequestForm(PasswordResetForm):
     """
     Build both the base user and the base profile objects.
     """
+    KNOWLEDGE = (
+        (1, 'None'),
+        (2, 'A Little'),
+        (3, 'Medium'),
+        (4, 'Very Comfortable'),
+        (5, 'Expert')
+    )
     currency = forms.ChoiceField(choices=CURRENCIES)
-    first_name = forms.CharField(required=False, max_length=150)
-    last_name = forms.CharField(required=False, max_length=150)
+    first_name = forms.CharField(required=True, max_length=150)
+    last_name = forms.CharField(required=True, max_length=150)
     av_api_key = forms.CharField(required=False, max_length=24)
+    income = forms.DecimalField(required=False)
+    # knowledge = forms.ChoiceField(choices=KNOWLEDGE)
+    worth = forms.DecimalField(required=False)
+    goals = forms.DecimalField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["income"].widget.attrs['style'] = 'width:100px;'
+        self.fields["currency"].widget.attrs['style'] = 'width:215;'
+        self.fields["worth"].widget.attrs['style'] = 'width:100px;'
+        self.fields["goals"].widget.attrs['style'] = 'width:100px;'
 
     def save(
         self,
@@ -55,8 +73,18 @@ class UserRequestForm(PasswordResetForm):
                                    first_name=self.cleaned_data["first_name"],
                                    last_name=self.cleaned_data["last_name"])
 
-        Profile.objects.create(user=user,  currency=self.cleaned_data["currency"],
-                                         av_api_key=self.cleaned_data["av_api_key"])
+        income = forms.DecimalField(required=False)
+        # knowledge = forms.ChoiceField(choices=KNOWLEDGE)
+        worth = forms.DecimalField(required=False)
+        goals = forms.DecimalField(required=False)
+
+        Profile.objects.create(user=user,
+                               currency=self.cleaned_data["currency"],
+                               av_api_key=self.cleaned_data["av_api_key"],
+                               income = self.cleaned_data["income"],
+                               worth = self.cleaned_data["worth"],
+                               goals = self.cleaned_data["goals"]
+                               )
         if not domain_override:
             current_site = get_current_site(request)
             site_name = current_site.name

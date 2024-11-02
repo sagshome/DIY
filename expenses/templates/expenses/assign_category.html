@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
-    <h2>Update Expenses - Unassigned Count:&nbsp;{{count}}</h2>
+<h2>Update Expenses - Unassigned Count:&nbsp;{{count}}</h2>
 
 <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
     {% csrf_token %}
@@ -14,7 +14,7 @@
             {{ error }}
         {% endfor %}
     {% endfor %}
-    <table id="formset" class="table form">
+    <table id="formset" class="table w3-striped">
         {% for form in formset.forms %}
             {% if forloop.first %}
             <thead>
@@ -26,6 +26,7 @@
                            <th>Shortcuts</th>
                         {% endif %}
                     {% endfor %}
+                    <th></th>
                 </tr>
             </thead>
             {% endif %}
@@ -35,7 +36,6 @@
                         {# Include the hidden fields in the form #}
                         {% if forloop.first %}
                             <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
-
                             {% for hidden in form.hidden_fields %}
                                 {{ hidden }}
                             {% endfor %}
@@ -62,14 +62,21 @@
                         <span onclick="setValues(this, 'Other', 'Unknown')"><i title="Other - Unknown" class="fa fa-question-circle"></i></span>
                     </td>
                     {% endif %}
+                    {% if field.name == 'ignore' %}
+                        <td>
+                            <button class="w3-margin-left w3-button w3-round-xlarge  w3-orange" name="submit-type" value="Template-{{form.instance.id}}" type="submit">Template</button>
+                        </td>
+                    {% endif %}
                 {% endfor %}
             </tr>
         {% endfor %}
     </table>
-    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Save</button>
+    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" name="submit-type" value="Save" type="submit">Submit</button>
+
 </form><br><br>
 <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 <script>
+
     function setValues(button, cat, sub) {
         // ShortCuts must be in the table just before Category and Subcategory
         let my_cell = $(button).closest('td');

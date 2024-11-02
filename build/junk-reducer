@@ -1,0 +1,57 @@
+# /etc/nginx/
+# ACTE Technology
+# https://github.com/acte-solutions/nginx-junk-reducer
+
+
+###
+# Block common Wordpress attacks
+location ~* wlwmanifest.xml$ { deny all; }
+
+location ~* /(wp-config|wp-version|wp-cache|wp-login|xmlrpc|wp-sbb|wp-json).php {
+    deny all;
+}
+
+location ~* /(wp-admin|wp-login|wp-includes|wp-content) {
+    deny all;
+}
+
+
+###
+# Block phpmyadmin|adminer requests
+location ~* /(phpmyadmin|myadmin) {
+    deny all;
+}
+location ~* /adminer*.php {
+    deny all;
+}
+
+
+###
+# Block other common requests
+
+location ~* install.php {
+    deny all;
+}
+
+###
+# Block phpunit requests
+
+location ~* phpunit.xsd {
+    deny all;
+}
+
+###
+# Deny some archives extensions
+location ~* \.(gz|tar|bz2)$|/\. {
+    return 404;
+}
+
+# Block extensions
+location ~* \.(bak|sql|dump|asp|aspx)$|/\. {
+    deny all;
+}
+
+# Block hidden files
+location ~/\. {
+    deny all;
+}

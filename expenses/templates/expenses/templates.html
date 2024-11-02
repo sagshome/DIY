@@ -30,7 +30,7 @@
         <th>Spent</th>
 
     </tr>
-    {% for template in templates %}
+    {% for template in template_list %}
         <tr>
             <td><a href="{% url 'template_edit' template.id %}"><button class="w3-button-small w3-round-large w3-orange">Update</button></a></td>
             <td><a href="{% url 'template_delete' template.id %}"><button class="w3-button-small w3-round-large w3-red">Delete</button></a></td>

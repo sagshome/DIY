@@ -11,7 +11,7 @@ from django.forms import modelformset_factory
 from django.db.models import Q, Sum
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, UpdateView, FormView
+from django.views.generic import CreateView, DeleteView, UpdateView, FormView, ListView
 from django.http import JsonResponse
 from django.db.models.functions import TruncMonth
 
@@ -73,6 +73,39 @@ class AssignCategory(LoginRequiredMixin, UpdateView):
     model = Item
     form_class = ItemForm
     success_url = reverse_lazy("expense_upload")
+
+
+class ListTemplates(LoginRequiredMixin, ListView):
+    model = Template
+    template_name = 'expenses/templates.html'
+
+    def get_queryset(self):
+        return Template.objects.filter(user=self.request.user).order_by('-count')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return context
+
+
+class AddTemplateView(LoginRequiredMixin, CreateView):
+    model = Template
+    form_class = TemplateForm
+    success_url = reverse_lazy('expenses_assign')
+
+    def get_initial(self):
+        super().get_initial()
+        self.initial['user'] = self.request.user.id
+        item: Item = Item.objects.get(id=self.kwargs['item_pk'])
+        self.initial['expression'] = item.description
+        self.initial['category'] = item.category
+        self.initial['subcategory'] = item.subcategory
+        self.initial['ignore'] = item.ignore
+        return self.initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['action'] = 'Create'
+        return context
 
 
 class DeleteTemplateView(LoginRequiredMixin, DeleteView):
@@ -138,18 +171,18 @@ def expense_main(request):
         search_form = SearchForm(request.POST)
         formset = ItemFormSet(request.POST)
         if search_form.is_valid() and formset.is_valid():
-            super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data)
+            super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data).order_by('-date')
             total = super_set.aggregate(Sum('amount'))['amount__sum']
             formset.save()
             formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
 
     else:
         super_set = Item.objects.filter(
             ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date')
         total = super_set.aggregate(Sum('amount'))['amount__sum']
         formset = ItemFormSet(queryset=Item.objects.filter(
-            id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])))
+            id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
 
     unassigned = Item.unassigned()
     if unassigned.count() != 0:
@@ -161,13 +194,6 @@ def expense_main(request):
         'search_form': search_form,
         'total': total,
     })
-
-
-@login_required
-def templates(request):
-    templates = Template.objects.all().order_by("expression")
-    return render(request, 'expenses/templates.html',
-                  {'templates': templates})
 
 
 class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
@@ -183,21 +209,25 @@ class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
 
 @login_required
 def assign_expenses(request):
-
+    Item.apply_templates()
     max_size = 50
 
     search_form = SearchForm(initial={'search_ignore': 'No',
                                       'search_category': '- NONE -',
                                       'search_subcategory': '- NONE -'})
 
-    basic_filter = Item.objects.filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
+    basic_filter = Item.objects.filter(user=request.user).filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
     count = basic_filter.count()
     if request.method == "POST":
         search_form = SearchForm(request.POST)
         formset = AssignFormSet(request.POST)
         if search_form.is_valid() and formset.is_valid():
             formset.save()
-            Item.apply_templates()
+            if "submit-type" in request.POST and request.POST["submit-type"].startswith('Template-'):
+                index = request.POST["submit-type"].split('Template-')
+                if index[1]:
+                    return HttpResponseRedirect(reverse('add_template', kwargs={'item_pk': index[1]}))
+
             filtered_set = Item.filter_search(basic_filter, search_form.cleaned_data)
             count = filtered_set.count()
             queryset = Item.objects.filter(id__in=list(filtered_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')

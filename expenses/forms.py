@@ -88,7 +88,11 @@ class TemplateForm(forms.ModelForm):
 
     class Meta:
         model = Template
-        fields = ("type", "expression",  "category", "subcategory", "ignore")
+        fields = ("user", "type", "expression",  "category", "subcategory", "ignore")
+
+        widgets = {
+            'user': forms.HiddenInput(),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -97,6 +101,42 @@ class TemplateForm(forms.ModelForm):
         self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
         self.fields["category"].widget.attrs['style'] = 'width:125px;'
         self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
+        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'  # Used in the search javascript
+
+    def clean_expression(self):
+        if self.cleaned_data['expression'].find('$') != -1:
+            raise forms.ValidationError('Expression can not contain a "$" character')
+
+        if not Template.test_expression(self.cleaned_data['type'], self.initial['expression'],  self.cleaned_data['expression']):
+            raise forms.ValidationError(
+                f"Expression {self.cleaned_data['expression']} is not valid with \"{Template.choice(self.cleaned_data['type'])}\"  {self.initial['expression']}")
+
+        return self.cleaned_data['expression']
+
+    def clean_subcategory(self):
+        if not self.cleaned_data['subcategory']:
+            if self.cleaned_data['category']:
+                raise forms.ValidationError('A subcategory is required if you enter a category')
+        return self.cleaned_data['subcategory']
+
+    def clean_category(self):
+        if not self.cleaned_data['category']:
+            if "subcategory" in self.cleaned_data:
+                raise forms.ValidationError('A category is required if you enter a subcategory')
+        return self.cleaned_data['category']
+
+    def clean_ignore(self):
+        if self.cleaned_data['ignore']:
+            if self.cleaned_data['category']:
+                raise forms.ValidationError('You can not Ignore a record if you have supplied a category')
+        return self.cleaned_data['ignore']
+
+    def clean(self):
+        ignore = self.cleaned_data['ignore'] if 'ignore' in self.cleaned_data else False
+        if not ignore and not self.cleaned_data['category']:
+            raise forms.ValidationError('A template must specify "Ignore" or a Category/Subcategory pair')
+
+        return self.cleaned_data
 
 
 class UploadFileForm(forms.Form):
@@ -116,9 +156,34 @@ class UploadFileForm(forms.Form):
             self.add_error("csv_type", f"Source Value {csv_type} is not currently supported")
 
 
-class ItemListForm(forms.ModelForm):
+class BaseItemForm(forms.ModelForm):
+    """
+    All Item Forms have these fields so let treat them consistantly
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
+        self.fields["date"].widget.attrs['readonly'] = True
+
+        self.fields["description"].widget.attrs['style'] = 'width:500px;background-color:LightBlue'
+        self.fields["description"].widget.attrs['readonly'] = True
+
+        self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
+        self.fields["amount"].widget.attrs['readonly'] = True
+        self.fields["amount"].widget.attrs['class'] = 'w3-right-align'
+
+        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
+        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'
+
+        if "ignore" in self.fields:
+            self.fields["ignore"].label = 'Hidden'
+
+
+class ItemListForm(BaseItemForm):
     is_split = forms.BooleanField(required=False, label='Split')
-    is_amortized = forms.BooleanField(required=False, label='Amortized')
+    is_amortized = forms.BooleanField(required=False, label='Leveled')
     # amortized_expense = forms.BooleanField()
 
     class Meta:
@@ -132,19 +197,6 @@ class ItemListForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
-        self.fields["date"].widget.attrs['readonly'] = True
-
-        self.fields["description"].widget.attrs['style'] = 'width:700px;background-color:LightBlue'
-        self.fields["description"].widget.attrs['readonly'] = True
-
-        self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
-        self.fields["amount"].widget.attrs['readonly'] = True
-
-        self.fields["category"].widget.attrs['class'] = 'item-list-category'  # Used in the search javascript
-        self.fields["subcategory"].widget.attrs['class'] = 'item-list-subcategory'
-
-        self.fields["ignore"].label = 'Hidden'
 
         if self.instance.is_split:
             self.fields['is_split'].initial = True
@@ -158,7 +210,6 @@ class ItemListForm(forms.ModelForm):
             self.fields['is_amortized'].initial = False
         self.fields["is_amortized"].widget.attrs['disabled'] = 'disabled'
 
-
     def clean(self):
         super().clean()
         if self.cleaned_data["category"] and not self.cleaned_data["subcategory"]:
@@ -167,7 +218,7 @@ class ItemListForm(forms.ModelForm):
             raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
 
 
-class ItemAddForm(forms.ModelForm):
+class ItemAddForm(BaseItemForm):
     class Meta:
         model = Item
         fields = ("user", "date", "description", "amount", "category", "subcategory", "ignore")
@@ -176,22 +227,13 @@ class ItemAddForm(forms.ModelForm):
             'date': forms.TextInput(attrs={'type': 'date'}),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-        self.fields["description"].widget.attrs['style'] = 'width:400px;'
-        self.fields["amount"].widget.attrs['style'] = 'width:100px;'
-        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
-        self.fields["category"].widget.attrs['style'] = 'width:125px;'
-        self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
-
-
-class ItemEditForm(forms.ModelForm):
+class ItemEditForm(BaseItemForm):
     amortize_type = forms.ChoiceField(required=False, choices=(('backward', 'Past - Historic Savings'),
                                                                              ('forward', 'Future budget item'),
                                                                              ('around', 'Split expense around the date')))
     amortize_months = forms.IntegerField(required=False)
-    s_amount = forms.FloatField(required=False)
+    s_amount = forms.DecimalField(required=False)
     s_description = forms.CharField(required=False)
 
 
@@ -202,14 +244,6 @@ class ItemEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["date"].widget.attrs['style'] = 'width:110px;background-color:Wheat'
-        self.fields["date"].widget.attrs['readonly'] = True
-
-        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:Wheat'
-        self.fields["description"].widget.attrs['readonly'] = True
-
-        self.fields["amount"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
-        self.fields["amount"].widget.attrs['readonly'] = True
 
         self.fields["amortize_months"].widget.attrs['style'] = 'width:100px;'
         self.fields["s_amount"].widget.attrs['style'] = 'width:100px;'
@@ -234,7 +268,7 @@ class ItemEditForm(forms.ModelForm):
                 self.cleaned_data["ignore"] = False
 
         if self.cleaned_data["s_amount"]:
-            if self.instance.is_split:
+            if self.instance.was_split:
                 raise forms.ValidationError(
                     f'Error: this item is already split')
 
@@ -244,34 +278,17 @@ class ItemEditForm(forms.ModelForm):
             self.cleaned_data["ignore"] = True
 
 
-class ItemForm(forms.ModelForm):
+class ItemForm(BaseItemForm):
 
-    template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
-    template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
+    #template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
+    #template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
 
     class Meta:
         model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "template_type", "template")
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore")  # "template_type", "template")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
-        self.fields["date"].widget.attrs['readonly'] = True
-
-        self.fields["description"].widget.attrs['style'] = 'width:400px;background-color:LightBlue'
-        self.fields["description"].widget.attrs['readonly'] = True
-
-        self.fields["amount"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
-        self.fields["amount"].widget.attrs['readonly'] = True
-
-        self.fields["template"].widget.attrs['style'] = 'width:400px;'
-        self.fields["template"].widget.attrs['style'] = 'width:400px;'
-
-        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
-        self.fields["category"].widget.attrs['style'] = 'width:125px;'
-
-        self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
-
         self.fields['ignore'].label = "Hide"
 
     def clean_template(self):

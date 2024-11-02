@@ -44,47 +44,48 @@
         {% endfor %}
       </div>
     {% endif %}
-    <table id="formset" class="table form">
+    <table id="formset" class="table w3-striped">
         {% for form in formset.forms %}
             {% if forloop.first %}
-            <thead>
-                <tr>
-                    {% for field in form.visible_fields %}
-                        <th>{{ field.label|capfirst }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
+                <thead>
+                    <tr>
+                        {% for field in form.visible_fields %}
+                            <th>{{ field.label|capfirst }}</th>
+                        {% endfor %}
+                    </tr>
+                    <tr>Actions</tr>
+                </thead>
+
             {% endif %}
             <tr>
                 {% for field in form.visible_fields %}
-
                     {% if field.name == 'ignore' or field.name == 'split_expense' or field.name == 'is_amortized' %}
                         <td class="w3-center">
                             {% else %}
-                            <td>
+                        <td>
                     {% endif %}
 
-                        {# Include the hidden fields in the form #}
-                        {% if forloop.first %}
-                            <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
+                    {# Include the hidden fields in the form #}
+                    {% if forloop.last %}
+                        <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
+                        {% for hidden in form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+                    {% endif %}
 
-                            {% for hidden in form.hidden_fields %}
-                                {{ hidden }}
-                            {% endfor %}
-                        {% endif %}
 
+                    {{ field.errors.as_ul }}
+                    {% if field.name == 'description' %}
+                        <a href="{% url 'expense_edit' form.instance.id %}">{{field}}</a>
+                    {% else %}
+                        {{ field }}
+                    {% endif %}
 
-                        {{ field.errors.as_ul }}
-                        {% if field.name == 'description' %}
-                            <a href="{% url 'expense_edit' form.instance.id %}">{{field}}</a>
-                        {% else %}
-                            {{ field }}
-                        {% endif %}
 
                     </td>
                 {% endfor %}
             </tr>
         {% endfor %}
     </table>
-    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Submit</button>
+    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" name="submit-type" value="Save" type="submit">Submit</button>
 {% endblock %}

@@ -1,4 +1,5 @@
 import copy
+import decimal
 import logging
 import re
 
@@ -112,33 +113,25 @@ for t in Template.objects.all():
                 return
         super().save(*args, **kwargs)
 
-    @property
-    def found(self):
-        return Item.objects.filter(template=self)
+    @classmethod
+    def choice(cls, value):
+        for key, string in cls.CHOICES:
+            if key == value:
+                return string
+        return "----"
 
-    @property
-    def missed(self):
-        ids = []  
-        for item in Item.objects.exclude(template=self):
-            if self.test_item(item.description):
-                ids.append(item.id)
-        if len(ids) > 0:
-            return Item.objects.filter(id__in=ids)
-        else:
-            return Item.objects.none() 
-
-    @property
-    def missed_count(self):
-        return self.missed.count()
+    @classmethod
+    def test_expression(cls, template_type, description, expression):
+        if template_type == 'starts':
+            return description.startswith(expression)
+        if template_type == 'ends':
+            return description.endswith(expression)
+        return re.search(expression, description)
 
     def test_item(self, description: str):
-        matched = self.type == 'starts' and description.startswith(self.expression)
-        matched = matched or (self.type == 'ends' and description.endswith(self.expression))
-        matched = matched or (self.type == 'contains' and re.search(self.expression, description))
-        if matched:
+        if Template.test_expression(self.type, description, self.expression):
             return self
-        else:
-            return None
+        return None
 
     @classmethod
     def update_counts(cls):
@@ -165,7 +158,7 @@ class Item(models.Model):
     """
     date = models.DateField(null=False, blank=False, verbose_name="Date")
     description: str = models.CharField(max_length=120, null=False, blank=False)
-    amount: float = models.FloatField(null=False, blank=False)
+    amount: decimal = models.DecimalField(null=False, max_digits=9, decimal_places=2, blank=False)
     source = models.CharField(max_length=40, null=False, blank=False)
     template = models.ForeignKey(Template, blank=True, null=True, on_delete=models.SET_NULL)
     category = models.ForeignKey(Category, blank=True, null=True, on_delete=models.SET_NULL)
@@ -177,7 +170,6 @@ class Item(models.Model):
 
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
     notes = models.TextField(blank=True, null=True)
-
 
     def __str__(self):
         if self.template:
@@ -196,7 +188,6 @@ class Item(models.Model):
                 if Item.objects.filter(split=siblings[0]).count() != 0:
                     return False
         return True
-
 
     @property
     def was_split(self) -> bool:
