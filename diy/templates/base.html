@@ -12,6 +12,9 @@
   <style>
     body {font-family: "Lato", sans-serif}
     .mySlides {display: none}
+    .w3-container-300 {
+      min-height: 300px; /* or any other value you prefer */
+    }
   </style>
 
   <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
@@ -31,15 +34,15 @@
       }
     }
 
-    function show_help() {
+    function toggle_help() {
        var help_page = document.getElementById('DIYHelpContent');
-       help_page.style.display='block';
+       if (help_page.style.display == 'none') {
+          help_page.style.display='block';
+       } else {
+        help_page.style.display='none';
+       }
     }
 
-    function hide_help() {
-       var help_page = document.getElementById('DIYHelpContent');
-       help_page.style.display='none';
-    }
   </script>
   {% endblock navscript %}
   {% block navbar %}
@@ -51,8 +54,11 @@
         <div class="w3-dropdown-content w3-bar-block w3-card-4">
           <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Main Page</a>
           <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">Add an Expense</a>
-          <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
-          <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Templates</a>
+          <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Show Templates</a>
+          <hr>
+          <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import</a>
+          <a href="{% url 'expenses_export' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Export</a>
+
         </div>
       </div>
 
@@ -67,7 +73,7 @@
           <a href="{% url 'add_equity' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Request new Equity/Fund</a>
         </div>
       </div>
-      <button onclick=show_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>
+      <button onclick=toggle_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>
 
       <div class="w3-right">
         {% if request.user.is_authenticated %}
@@ -100,7 +106,7 @@
           {% endblock %}
           </div>
           <div>
-              <button onclick=hide_help() class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-red" title="Close">Close</button>
+              <button onclick=toggle_help() class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-red" title="Close">Close</button>
           </div>
       </div>
     </div>

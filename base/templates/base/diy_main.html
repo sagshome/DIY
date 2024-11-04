@@ -1,24 +1,40 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
 <p>Welcome {{ request.user }}</p>
 <div class="w3-container w3-cell-row">
-    <div class="w3-cell s12 m6 l4">
-        <canvas height=25 width=50 id="myChart" class="w3-card-4"></canvas>
-    </div>
-    <div class="w3-cell w3-cell-middle">
-        <p>This is the breakdown by category for every expense</p>
+    <div class="w3-cell-row w3-margin">
+        <div class="w3-cell">
+            <div style="height:310px;" >
+                <canvas id="myChart" class="w3-card-2"></canvas>
+                <p>Total: ${{total | floatformat:2}}</p>
+            </div>
+
+        </div>
+        <div class="w3-cell">
+            <div style="height:310px;">
+                <canvas id="barChart" class="w3-card-2"></canvas>
+                <p>IncomeChart</p>
+            </div>
+        </div>
     </div>
 </div>
-
+<div class="w3-container w3-cell-row">
+    <div class="w3-green w3-cell w3-mobile w3-cell-middle">
+        <p>Investments</p>
+    </div>
+    <div class="w3-orange w3-cell w3-mobile w3-cell-middle">
+        <p>Extra Tasks</p>
+    </div>
+</div>
 <script>
+    var data = JSON.parse("{{item_search_criteria|escapejs}}");
+
     $(document).ready(function() {
       $.ajax({
         url: '/expenses/ajax/expense-pie',
-
-        data: {'search_ignore': 'No',
-               'search_start_date': '{{from_date}}'
-                },
+        data: data,
         success: function (data) {
           new Chart("myChart", {
             type: "pie",
@@ -32,11 +48,11 @@
             options: {
                 title: {
                   display: true,
-                  text: "Expenses - breakdown by category"
+                  text: "Expenses - past 12 months"
                 },
                 animation: {
-                    animateScale: true,
-                    animateRotate: true
+                    animateScale: false,
+                    animateRotate: false
                 },
                 legend: {
                     display: true,

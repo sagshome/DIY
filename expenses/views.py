@@ -3,17 +3,17 @@ import logging
 
 from datetime import datetime
 from dateutil import relativedelta
+from json import dumps
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-
-from django.forms import modelformset_factory
 from django.db.models import Q, Sum
+from django.db.models.functions import TruncMonth
+from django.forms import modelformset_factory
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView, FormView, ListView
-from django.http import JsonResponse
-from django.db.models.functions import TruncMonth
 
 from base.models import COLORS
 from base.utils import DIYImportException
@@ -268,6 +268,21 @@ def upload_expenses(request):
     return render(request, "expenses/uploadfile.html", {"form": form})
 
 
+@login_required
+def export_expenses(request):
+    response = HttpResponse(
+        content_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="expense_export.csv"'},
+    )
+    writer = csv.writer(response)
+    writer.writerow(['Date', 'Description', 'Amount', 'Category', 'Subcategory', 'Details', 'Notes'])
+
+    for item in Item.objects.filter(user=request.user).exclude(split__isnull=False).exclude(amortized__isnull=False):
+        cname = item.category.name if item.category else None
+        sname = item.subcategory.name if item.subcategory else None
+        writer.writerow([item.date, item.description, item.amount, cname, sname, item.details, item.notes])
+
+    return response
 def load_subcategories(request):
     category = request.GET.get("category")
     if category:

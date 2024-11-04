@@ -1,3 +1,13 @@
+Needed for Launch
+1) Support Income
+   2) Income will come from bank statement (mostly) - Just like expenses
+   3) 
+2) Have domain mail
+3) Rebrand
+4) HTTPS
+5) Main Page - revamp
+6) Bulk Edit
+
 The collection of things in DIY are utilities I wrote for myself.   The instruction below may help you (more likely just me) 
 get things up and running.
 
