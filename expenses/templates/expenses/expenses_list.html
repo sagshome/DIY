@@ -1,37 +1,29 @@
-{% block script %}
+{% block list_script %}
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script>
         $(document).ready(function() {
-          var url = $("#itemForm").attr("data-subcategories-url");  // Setup mousedown to fetch valid data for choice
-          $('.item-list-subcategory').each(function(index, element) {
-             var row_id = this.id.slice(8, this.id.length - 12);  // Just the number part
-             var subcat_id = '#' + this.id  // Seems this must be part of the id, not just prepended
-             var cat_id = '#id_form-' + row_id + '-category';
-             $(subcat_id).mousedown(function () {
-                var category_value = $(cat_id).val();
-                $.ajax({
-                  url: url,
-                  data: {
-                    'category': category_value,
-                  },
-                  success: function (data) {
-                    $(subcat_id).html(data);  // replace the contents
-                  }
-                });
-             });
-          });
-
-          $('.item-list-category').each(function(index, element) {  // Invalidate subcategory when category changed
-             document.getElementById(this.id).addEventListener("change", function() {
-                var row_id = this.id.slice(8, this.id.length - 9);  // Just the number part
-                // var cat_id = '#' + this.id  // Seems this must be part of the id, not just prepended
-                var subcat_id = '#id_form-' + row_id + '-subcategory';
-                $(subcat_id).html('<option value="">---------</option>');
-             });
-          });
-        });
+            $('.diy-category').each(function(index, element) {  // Invalidate subcategory when category changed
+                document.getElementById(this.id).addEventListener("change", function() {
+                    var row_id = this.id.slice(8, this.id.length - 9);  // Just the number part
+                    var category_id = document.getElementById("id_form-" + row_id + "-category")
+                    var subcategory_id = document.getElementById("id_form-" + row_id + "-subcategory")
+                    var category = $(category_id).val()
+                    $.ajax({
+                        url: '{% url 'ajax-load-subcategories' %}',
+                        data: {category: category},
+                        success: function(data) {
+                            $(subcategory_id).html(data);
+                            console.log(data);
+                            },
+                        error: function(ts) {
+                            console.log(ts.responseText)
+                        }
+                    })  // ajax
+                })  // add Event
+            });  // for each
+        });  // document ready
     </script>
-{% endblock script %}
+{% endblock list_script %}
 {% block content %}
 
     {{ formset.management_form }}

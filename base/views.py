@@ -15,6 +15,8 @@ from base.forms import UserRequestForm, UserForm, ProfileForm
 from base.models import Profile
 from django.contrib.auth.views import PasswordContextMixin, INTERNAL_RESET_SESSION_TOKEN
 from django.contrib.auth.tokens import default_token_generator
+from django.db.models import Q, Sum
+
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
@@ -33,9 +35,16 @@ def diy_main(request):
     from_date = today.replace(year=today.year-1).strftime('%Y-%m-%d')
     item_search_criteria = {'search_ignore': 'No',
                             'search_start_date': from_date}
-    items = Item.filter_search(Item.objects.filter(user=request.user), item_search_criteria)
+    items = Item.filter_search(Item.objects.filter(user=request.user, income=False), item_search_criteria)
+    income = Item.filter_search(Item.objects.filter(user=request.user, income=True), item_search_criteria)
 
-    return render(request, "base/diy_main.html",{'expense_total': items.count(), 'item_search_criteria': dumps(item_search_criteria)})
+    expense_total = items.aggregate(Sum('amount'))['amount__sum']
+    income_total = income.aggregate(Sum('amount'))['amount__sum']
+
+    return render(request, "base/diy_main.html",{
+        'expense_total': expense_total,
+        'income_total': income_total,
+        'item_search_criteria': dumps(item_search_criteria)})
 
 
 class NewAccountView(PasswordResetView):

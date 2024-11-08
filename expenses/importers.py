@@ -19,11 +19,7 @@ DEFAULT = {
 
 class ExpenseImporter:
     """
-    Do not import objects tha the CSV file into a pd structure, so we can sort it.   Sorting is required, so we can calculate the dividends
-    based on the amount of shares owned.
-    1. pass1 build imports{date}{amount}{description}[1] - for anything not in the DB
     """
-
 
     def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], source: str):
         self.source = source

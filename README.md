@@ -7,6 +7,8 @@ Needed for Launch
 4) HTTPS
 5) Main Page - revamp
 6) Bulk Edit
+7) export Investments
+8) Fix CRON
 
 The collection of things in DIY are utilities I wrote for myself.   The instruction below may help you (more likely just me) 
 get things up and running.

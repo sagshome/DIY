@@ -171,6 +171,8 @@ def expense_main(request):
         search_form = SearchForm(request.POST)
         formset = ItemFormSet(request.POST)
         if search_form.is_valid() and formset.is_valid():
+            search_dict = search_form.cleaned_data
+            search_dict['income'] = 'true' if search_dict['search_category'] == 'Income' else 'false'
             super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data).order_by('-date')
             total = super_set.aggregate(Sum('amount'))['amount__sum']
             formset.save()
@@ -283,6 +285,7 @@ def export_expenses(request):
         writer.writerow([item.date, item.description, item.amount, cname, sname, item.details, item.notes])
 
     return response
+
 def load_subcategories(request):
     category = request.GET.get("category")
     if category:
@@ -317,7 +320,10 @@ def load_subcategories_search(request):
 def load_categories_search(request):
     default = copy.copy(DEFAULT_CATEGORIES)
     for category in Category.objects.all().order_by("name").values_list('name', flat=True):
-        default.append((category, category))
+        if not category == 'Income':
+            default.append((category, category))
+    default.append(('', '------'))
+    default.append(('Income', 'Income'))
     return render(request, "expenses/search_options.html", {"options": default})
 
 
@@ -326,9 +332,24 @@ def expense_pie(request):
     data = []
     labels = []
     super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
-    category_list = super_set.order_by('category__name').values_list('category__name', flat=True).distinct()
+    show_sub = False if request.GET['search_category'] == '- ALL -' or request.GET['search_category'] == 'Income' else True
+    show_income = request.GET.get("income")
+    if show_income == 'true':
+        show_sub = True
+    else:
+        super_set = super_set.exclude(category__name='Income')
+
+    if show_sub:
+        category_list = super_set.order_by('subcategory__name').values_list('subcategory__name', flat=True).distinct()
+    else:
+        category_list = super_set.order_by('category__name').values_list('category__name', flat=True).distinct()
+
     for category in category_list:
-        item = super_set.filter(category__name=category).aggregate(sum=Sum('amount'))
+        if show_sub:
+            item = super_set.filter(subcategory__name=category).aggregate(sum=Sum('amount'))
+        else:
+            item = super_set.filter(category__name=category).aggregate(sum=Sum('amount'))
+
         labels.append(category)
         value = int(item['sum'])
         data.append(value)
@@ -340,9 +361,11 @@ def expense_bar(request):
     """
     Build the chart.js data for a bar chart based on the standard search_filter
     """
-
     super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
-    show_sub = False if request.GET['search_category'] == '- ALL -' else True
+    show_income = True if request.GET.get("income") == 'true' else False
+    show_sub = False if request.GET['search_category'] == '- ALL -' or request.GET['search_category'] == 'Income' else True
+    if show_income == 'true':
+        show_sub = True
 
     if super_set.count() == 0:
         return JsonResponse({'datasets': [], 'labels': []})
@@ -380,6 +403,7 @@ def expense_bar(request):
         if name not in data_dict:
             datasets.append({'label': name,
                              'data': initial_data.copy(),
+                             'stack': 'stack',
                              'backgroundColor': colors.pop()})
             data_dict[name] = len(datasets) - 1
         try:

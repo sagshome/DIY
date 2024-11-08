@@ -197,7 +197,6 @@ class ItemListForm(BaseItemForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-
         if self.instance.is_split:
             self.fields['is_split'].initial = True
         else:
@@ -226,6 +225,19 @@ class ItemAddForm(BaseItemForm):
             'user': forms.HiddenInput(),
             'date': forms.TextInput(attrs={'type': 'date'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["date"].widget.attrs['style'] = 'width:95px;'
+        self.fields["date"].widget.attrs['readonly'] = False
+
+        self.fields["description"].widget.attrs['style'] = 'width:500px;'
+        self.fields["description"].widget.attrs['readonly'] = False
+
+        self.fields["amount"].widget.attrs['style'] = 'width:80px;'
+        self.fields["amount"].widget.attrs['readonly'] = False
+        self.fields["amount"].widget.attrs['class'] = 'w3-right-align'
 
 
 class ItemEditForm(BaseItemForm):

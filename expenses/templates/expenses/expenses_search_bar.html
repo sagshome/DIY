@@ -1,38 +1,27 @@
 {% load static %}
-{% block script %}
+{% block search_script %}
 <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 <script>
     $(document).ready(function() {
-      var suburl = $("#itemForm").attr("sub-search-url");
-      var caturl = $("#itemForm").attr("cat-search-url");
+      document.getElementById("id_search_category").addEventListener("change", function() {
+         var category_id = document.getElementById("id_search_category")
+         var subcategory_id = document.getElementById("id_search_subcategory")
+         var category = $(category_id).val()
 
-      var category_id = document.getElementById("id_search_category")
-      var subcategory_id = document.getElementById("id_search_subcategory")
-
-      category_id.addEventListener("mousedown", function() {
-        $.ajax({
-          url: caturl,
-          success: function (data) {
-            $(category_id).html(data);  // replace the contents
-          }
-        });
-      });
-
-      subcategory_id.addEventListener("mousedown", function() {
-        var category = $(category_id).val()
-        $.ajax({
-          url: suburl,
-          data: {
-            'category': category,
-          },
-          success: function (data) {
-            $(subcategory_id).html(data);  // replace the contents
-          }
-        });
-      });
-    });
+         $.ajax({
+            url: '{% url 'ajax-load-subcategories-search' %}',
+            data: {category: category},
+            success: function(data) {
+                $(subcategory_id).html(data);
+                },
+            error: function(ts) {
+                console.log(ts.responseText)
+                }
+            })  // ajax
+        });  // add event
+    });  // document ready
 </script>
-{% endblock script %}
+{% endblock search_script %}
 
 {% block content %}
     {% if search_form  %}

@@ -165,6 +165,7 @@ class Item(models.Model):
     subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.SET_NULL)
     details = models.CharField(max_length=80, blank=True, null=True)
     ignore = models.BooleanField(default=False)
+    income = models.BooleanField(default=False)
     amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='parent')
     split = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='split_from')
 
@@ -176,6 +177,16 @@ class Item(models.Model):
             return f'{self.date}: {self.description} - {self.amount} ({self.template.expression})'
         else:
             return f'{self.date}: {self.description} - {self.amount}'
+
+    def save(self, *args, **kwargs):
+        if self.category and self.category.name == 'Income':
+            if self.amount < 0:
+                self.amount *= -1
+            self.income = True
+        else:
+            self.income = False
+
+        super().save(*args, **kwargs)
 
     @property
     def can_delete(self) -> bool:
@@ -368,20 +379,31 @@ class Item(models.Model):
 
     @classmethod
     def filter_search(cls, item_filter, search_dict):
+        '''
+        This is kludged up to support Income searches
+        '''
+        income_search = True if 'income' in search_dict and search_dict['income'] == 'true' else False
+        income_category = True if 'search_category' in search_dict and search_dict['search_category'] == 'Income' else False
+        income_item = Category.objects.get(name='Income')
         if 'search_description' in search_dict and search_dict['search_description']:
             item_filter = item_filter.filter(description__icontains=search_dict['search_description'])
         if 'search_category' in search_dict:
-            category = search_dict['search_category']
-            if category == '- NONE -':
-                item_filter = item_filter.filter(category__isnull=True)
-            elif category != '- ALL -':
-                item_filter = item_filter.filter(category__name=category)
+            if income_search:
+                item_filter = item_filter.filter(category=income_item)
+            else:
+                item_filter = item_filter.exclude(category=income_item)
+                category = search_dict['search_category']
+                if category == '- NONE -':
+                    item_filter = item_filter.filter(category__isnull=True)
+                elif category != '- ALL -' and not income_category:
+                    item_filter = item_filter.filter(category__name=category)
         if 'search_subcategory' in search_dict:
-            subcategory = search_dict['search_subcategory']
-            if subcategory == '- NONE -':
-                item_filter = item_filter.filter(subcategory__isnull=True)
-            elif subcategory != '- ALL -':
-                item_filter = item_filter.filter(subcategory__name=subcategory)
+            if not income_search or income_search and income_category:
+                subcategory = search_dict['search_subcategory']
+                if subcategory == '- NONE -':
+                    item_filter = item_filter.filter(subcategory__isnull=True)
+                elif subcategory != '- ALL -' and not income_category:
+                    item_filter = item_filter.filter(subcategory__name=subcategory)
         if 'search_ignore' in search_dict:
             if search_dict['search_ignore'] == 'Yes':
                 item_filter = item_filter.filter(ignore=True)
@@ -401,3 +423,4 @@ class Item(models.Model):
 
         item_filter = item_filter.order_by('-date')
         return item_filter
+

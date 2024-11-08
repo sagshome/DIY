@@ -3,139 +3,116 @@
 {% load expenses_tags %}
 
 {% block content %}
-    {% block main_scripts %}
-        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-        <script>
-            function toggleDiv(divId) {
-                var div = document.getElementById(divId);
-                if (div.style.display === "none") {
-                    div.style.display = "block";
-                    document.getElementById('id_show_list').value = "Show";
-                } else {
-                    div.style.display = "none";
-                    document.getElementById('id_show_list').value = "Hide";
-                }
-            }
-        </script>
-        <script>
-            $(document).ready(function() {
-              var hide_value = "{{ search_form.show_list.value }}"
-              if (hide_value == "Hide") {
-                toggleDiv("expense_list")
-              }
-            });
-        </script>
-        <script>
-            $(document).ready(function() {
-              var cat_filter = $("#id_search_category").val();
-              var sub_filter = $("#id_search_subcategory").val();
-              var ignore_filter = $("#id_search_ignore").val();
-              var from_filter = $("#id_search_start_date").val();
-              var to_filter = $("#id_search_end_date").val();
-              var amt_string = $("#id_search_amount_qualifier").val();
-              var amt_value = $("#id_search_amount").val();
-              var description = $("#id_search_description").val();
+{% block main_scripts %}
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 
-              $.ajax({
+    <script>
+        function bar_chart(search_data, title_text, canvas) {
+
+            $.ajax({
                 url: "{% url 'ajax-expense-bar' %}",
-                data: {'search_category': cat_filter,
-                       'search_subcategory': sub_filter,
-                       'search_ignore': ignore_filter,
-                       'search_start_date': from_filter,
-                       'search_end_date': to_filter,
-                       'search_amount_qualifier': amt_string,
-                       'search_amount': amt_value,
-                       'search_description': description},
+                data: search_data,
                 success: function (data) {
-                  new Chart("barChart", {
-                    type: "bar",
-                    data: {
-                        labels: data['labels'],
-                        datasets: data['datasets']
-                    },
-                    options: {
-                        maintainAspectRatio: false,
-                        responsive: true,
-                        title: {
-                          display: true,
-                          text: "Expense breakdown over time"
-                        },
-                        legend: {
-                            display: true,
-                            position: 'right',
-                            align: 'center'
-                        },
-                        scales: {
-                            xAxes: [{
-                                stacked: true // this should be set to make the bars stacked
-                            }],
-                            yAxes: [{
-                                stacked: true // this also..
-                            }]
-                        }
-                    }
-                  });
+                    new Chart(canvas,
+                        {
+                            type: "bar",
+                            data: {
+                                labels: data['labels'],
+                                datasets: data['datasets']
+                            },
+                            options: {
+                                maintainAspectRatio: false,
+                                responsive: true,
+                                title: {
+                                  display: true,
+                                  text: title_text
+                                },
+                                legend: {
+                                    display: true,
+                                    position: 'right',
+                                    align: 'center'
+                                },
+                            },
+                            scales: {
+                                xAxes: [{
+                                    stacked: false // this should be set to make the bars stacked
+                                }],
+                                yAxes: [{
+                                    stacked: true // this also..
+                                }]
+                            }
+
+                    });
                 }
-              });
             });
-        </script>
+        };
 
-        <script>
-            $(document).ready(function() {
-              var cat_filter = $("#id_search_category").val();
-              var sub_filter = $("#id_search_subcategory").val();
-              var ignore_filter = $("#id_search_ignore").val();
-              var from_filter = $("#id_search_start_date").val();
-              var to_filter = $("#id_search_end_date").val();
-              var amt_string = $("#id_search_amount_qualifier").val();
-              var amt_value = $("#id_search_amount").val();
-              var description = $("#id_search_description").val();
-
-              $.ajax({
+        function pie_chart(search_data, title_text, canvas) {
+            $.ajax({
                 url: "{% url 'ajax-expense-pie' %}",
-                data: {'search_category': cat_filter,
-                       'search_subcategory': sub_filter,
-                       'search_ignore': ignore_filter,
-                       'search_start_date': from_filter,
-                       'search_end_date': to_filter,
-                       'search_amount_qualifier': amt_string,
-                       'search_amount': amt_value,
-                       'search_description': description},
-
+                data: search_data,
                 success: function (data) {
-                  new Chart("pieChart", {
-                    type: "pie",
-                    data: {
-                        labels: data['labels'],
-                        datasets: [{
-                          data: data['data'],
-                          backgroundColor: data['colors'],
-                        }]
-                    },
-                    options: {
-                        responsive: false,
-                        maintainAspectRatio: false,
-                        title: {
-                          display: true,
-                          text: "Expenses - breakdown by category"
-                        },
-                        animation: {
-                            animateScale: true,
-                            animateRotate: true
-                        },
-                        legend: {
-                            display: true,
-                            position: 'right',
-                            align: 'center'
-                        },
+                      new Chart(canvas, {
+                            type: "pie",
+                            data: {
+                                labels: data['labels'],
+                                datasets: [{
+                                  data: data['data'],
+                                  backgroundColor: data['colors'],
+                                }]
+                            },
+                            options: {
+                                responsive: false,
+                                maintainAspectRatio: false,
+                                title: {
+                                  display: true,
+                                  text: 'foobar'
+                                },
+                                animation: {
+                                    animateScale: true,
+                                    animateRotate: true
+                                },
+                                legend: {
+                                    display: true,
+                                    position: 'right',
+                                    align: 'center'
+                                }  // legend
+                            }  // options
+                      })  // chart
+                } // success
+              });  // ajax
+        } // function
 
-                    }
-                  });
-                }
-              });
-            });
-        </script>
-    {% endblock main_scripts %}
+
+        function expense_chart(type, canvas, text, income = false) {
+              var data = {
+                'search_category': $("#id_search_category").val(),
+                'search_subcategory': $("#id_search_subcategory").val(),
+                'search_ignore': $("#id_search_ignore").val(),
+                'search_start_date': $("#id_search_start_date").val(),
+                'search_end_date': $("#id_search_end_date").val(),
+                'search_amount': $("#id_search_amount_qualifier").val(),
+                'search_amount_qualifier': $("#id_search_amount").val(),
+                'search_description': $("#id_search_description").val(),
+                'income': income
+              }
+
+              if (type == 'bar') {
+                  bar_chart(data, text, canvas);
+              } else {
+                  pie_chart(data, text, canvas);
+              }
+        }
+
+        $(document).ready(function() {
+            expense_chart('bar', 'barChart', 'Stacked - Expenses over time', false);
+            expense_chart('pie', 'pieChart', 'Breakdown - by Category', false)
+            expense_chart('bar', 'incomeBar', 'Stacked - Income over time', true);
+            expense_chart('pie', 'incomePie', 'Breakdown - by Category', true)
+
+        });
+    </script>
+{% endblock main_scripts %}
 
     <div class="w3-container">
         {% if warnings %}
@@ -145,8 +122,6 @@
         {% endif %}
         <form method="post" id="itemForm"
               data-subcategories-url="{% url 'ajax-load-subcategories' %}"
-              sub-search-url="{% url 'ajax-load-subcategories-search' %}"
-              cat-search-url="{% url 'ajax-load-categories-search' %}"
               novalidate>
             {% csrf_token %}
             <div class="w3-row">
@@ -167,6 +142,21 @@
                     </div>
                 </div>
             </div>
+            <div class="w3-cell-row w3-margin">
+                <div class="w3-cell">
+                    <div style="height:310px;" >
+                        <canvas id="incomePie" class="w3-card-2"></canvas>
+                        <p>Total: ${{total | floatformat:2}}</p>
+                    </div>
+
+                </div>
+                <div class="w3-cell">
+                    <div style="height:310px;">
+                        <canvas id="incomeBar" class="w3-card-2"></canvas>
+                        <p>Expense breakdown over time</p>
+                    </div>
+                </div>
+            </div>
             <div class="w3-row">
                 <div id="expense_list">
                     {% include 'expenses/expenses_list.html' %}
@@ -178,14 +168,14 @@
 
 {% block help_content %}
 <p>
-    <b>Welcome to expenses</b>.  Track your expenditures over
-    time allowing you to see how you are doing (kind of like budget?).
+    <b>Welcome to "Cash"</b>.  Track your expenses and income over time.   This is as close as we get to a budget application.
+    Coming soon will be the ability to compare your expenses to national averages.
     <!-- todo: You can also compare your spending vs national averages and aggregated data from other users -->
 </p>
 <p>
-    <b>A few basics before we start</b>.  One of the actions is "Import a CSV File",  this is the only sane way to use this
-    system.   I import my credit card and bank statements, I rarely use cash but if I do I can add a single item with
-    the "Add an Expense" action.  Both of this are under the EXPENSES drop down on the top of you screen.   The
+    <b>A few basics before we start</b>.  One of the desktop actions is "Import",  this is the only sane way to use the cash application.
+    I import my credit card and bank statements, I rarely use cash but if I do I can add a single item with
+    the "New Entry" action.  Both of this are under the CASH drop down on the top of you screen.   The
     formats I support are based on my bank,  CIBC. If you want me to add yours you got to
     <a href="D1Yapp.ca@gmail.com">send me</a> a faked up CSV file.
 </p>
