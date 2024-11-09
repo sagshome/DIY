@@ -166,9 +166,11 @@ def expense_main(request):
                                       'search_start_date': default_start,
                                       'search_end_date': default_end,
                                       'show_list': 'Hide'})
+    bulk_edit_form = BulkEditForm()
 
     if request.method == "POST":
         search_form = SearchForm(request.POST)
+        bulk_edit_form = BulkEditForm(request.POST)
         formset = ItemFormSet(request.POST)
         if search_form.is_valid() and formset.is_valid():
             super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data).order_by('-date')
@@ -192,6 +194,7 @@ def expense_main(request):
         'warnings': warnings,
         'formset': formset,
         'search_form': search_form,
+        'bulk_edit': bulk_edit_form,
         'total': total,
     })
 

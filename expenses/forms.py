@@ -181,17 +181,30 @@ class BaseItemForm(forms.ModelForm):
             self.fields["ignore"].label = 'Hidden'
 
 
+class BulkEditForm(forms.Form):
+    bulk_category = forms.ChoiceField(choices=get_categories())
+    bulk_subcategory = forms.ChoiceField(choices=get_subcategories())
+    bulk_ignore = forms.ChoiceField(required=False, choices=[(None, '---'), ('Yes', 'Yes'), ('No', 'No')])
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["bulk_category"].widget.attrs['class'] = 'bulk-category'  # Used in the search javascript
+        self.fields["bulk_subcategory"].widget.attrs['class'] = 'bulk-subcategory'
+
+
 class ItemListForm(BaseItemForm):
     is_split = forms.BooleanField(required=False, label='Split')
     is_amortized = forms.BooleanField(required=False, label='Leveled')
+    selected = forms.BooleanField(required=False, label='')
     # amortized_expense = forms.BooleanField()
 
     class Meta:
         model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "is_split", "is_amortized",
+        fields = ("selected", "date", "description", "amount", "category", "subcategory", "ignore", "is_split", "is_amortized",
                   "notes")
         widgets = {
           'notes': forms.Textarea(attrs={'rows':1, 'cols':15}),
+          'selected': forms.CheckboxInput()
         }
 
     def __init__(self, *args, **kwargs):

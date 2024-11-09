@@ -53,7 +53,6 @@
                             <th>{{ field.label|capfirst }}</th>
                         {% endfor %}
                     </tr>
-                    <tr>Actions</tr>
                 </thead>
 
             {% endif %}
@@ -66,22 +65,18 @@
                     {% endif %}
 
                     {# Include the hidden fields in the form #}
-                    {% if forloop.last %}
-                        <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
-                        {% for hidden in form.hidden_fields %}
-                            {{ hidden }}
-                        {% endfor %}
-                    {% endif %}
-
-
                     {{ field.errors.as_ul }}
                     {% if field.name == 'description' %}
                         <a href="{% url 'expense_edit' form.instance.id %}">{{field}}</a>
                     {% else %}
                         {{ field }}
                     {% endif %}
-
-
+                    {% if forloop.last %}
+                        <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
+                        {% for hidden in form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+                    {% endif %}
                     </td>
                 {% endfor %}
             </tr>
