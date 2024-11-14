@@ -145,14 +145,14 @@ class UploadFileForm(forms.Form):
                                           ("Generic", "Generic File"),
                                           ("CIBC_VISA", "CIBC VISA Download"),
                                           ("CIBC_Bank", "CIBC Bank Download"),
-                                          ("Personal", "Scott's Legacy CSV")])
+                                          ])
     csv_file = forms.FileField(label="CSV File:")
 
     def clean(self):
         cleaned_data = super().clean()
         csv_type = cleaned_data.get("csv_type")
 
-        if csv_type not in ("CIBC_Bank", "CIBC_VISA", "Generic", "Personal"):
+        if csv_type not in ("CIBC_Bank", "CIBC_VISA", "Generic"):
             self.add_error("csv_type", f"Source Value {csv_type} is not currently supported")
 
 

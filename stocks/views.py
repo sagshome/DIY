@@ -12,7 +12,7 @@ import plotly.io as pio
 import plotly.graph_objects as go
 
 import pandas as pd
-from pandas import DataFrame
+from pandas import DataFrame, to_datetime
 
 from django.conf import settings
 
@@ -293,6 +293,7 @@ class AccountDetailView(LoginRequiredMixin, DetailView):
                 }
 
 
+@login_required
 def account_update(request, pk):
     """
     :param request:
@@ -307,16 +308,6 @@ def account_update(request, pk):
     account = get_object_or_404(Account, pk=pk, user=request.user)
     account.update()
     return HttpResponse(status=200)
-
-
-def diy_update(request):
-    """
-    :param request:
-    :return:
-    :return:
-    """
-    daily_update()
-    return HttpResponseRedirect(reverse('portfolio_list'))
 
 
 class PortfolioView(LoginRequiredMixin):
@@ -458,68 +449,32 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
         return context
 
 
-class AccountCopy(CreateView):
-    model = Account
-    template_name = 'stocks/add_account.html'
-    form_class = AccountCopyForm
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
-
-
-    def get_initial(self):
-        original = Account.objects.get(pk=self.kwargs['pk'])
-        return {'name': f'{original.name}_copy',
-                'user': original.user,
-                'managed': original.managed,
-                'currency': original.currency,
-                'end': original.end}
-
-    def form_valid(self, form):
-        """
-
-        :param form:
-        :return:
-        """
-        result = super().form_valid(form)
-        original = Account.objects.get(pk=self.kwargs['pk'])
-        for t in Transaction.objects.filter(account=original):
-            Transaction.objects.create(account=self.object, equity=t.equity, date=t.date,
-                                       price=t.price, value=t.value,
-                                       quantity=t.quantity, xa_action=t.xa_action)
-
-
-        return result
-
-    def get_success_url(self):
-        return reverse('account_details', kwargs={'pk': self.object.id})
-
-
 @login_required
 def upload_file(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
             bin_file = form.cleaned_data['csv_file'].read()
-            text_file = bin_file.decode('utf-8')
-            reader = csv.reader(text_file.splitlines())
             try:
-                if form.cleaned_data["csv_type"] == 'QuestTrade':
-                    importer = QuestTrade(form.cleaned_data['new_account_currency'], reader, request.user)
-                elif form.cleaned_data["csv_type"] == 'Manulife':
-                    importer = Manulife(form.cleaned_data['new_account_currency'], reader, request.user)
-                elif form.cleaned_data["csv_type"] == 'Wealth':
-                    importer = ManulifeWealth(form.cleaned_data['new_account_currency'], reader, request.user)
-                else:
-                    importer = StockImporter(form.cleaned_data['new_account_currency'], reader, request.user, HEADERS, managed=False)
-                importer.process()
-                if len(importer.warnings) != 0:
-                    return render(request, "stocks/uploadfile.html",
-                                  {"form": form, 'custom_warnings': importer.warnings})
-            except DIYImportException as e:
-                return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': str(e)})
-            return HttpResponseRedirect(reverse('portfolio_list'))
-
+                text_file = bin_file.decode('utf-8')
+                reader = csv.reader(text_file.splitlines())
+                try:
+                    if form.cleaned_data["csv_type"] == 'QuestTrade':
+                        importer = QuestTrade(form.cleaned_data['new_account_currency'], reader, request.user)
+                    elif form.cleaned_data["csv_type"] == 'Manulife':
+                        importer = Manulife(form.cleaned_data['new_account_currency'], reader, request.user)
+                    elif form.cleaned_data["csv_type"] == 'Wealth':
+                        importer = ManulifeWealth(form.cleaned_data['new_account_currency'], reader, request.user)
+                    else:  # Must be generic
+                        importer = StockImporter(form.cleaned_data['new_account_currency'], reader, request.user, HEADERS, managed=False)
+                    importer.process()
+                    if len(importer.warnings) != 0:
+                        return render(request, "stocks/uploadfile.html",
+                                      {"form": form, 'custom_warnings': importer.warnings})
+                except DIYImportException as e:
+                    return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': str(e)})
+            except UnicodeDecodeError:
+                return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': 'File is invalid.'})
     else:
         form = UploadFileForm()
     return render(request, "stocks/uploadfile.html", {"form": form})
@@ -548,6 +503,59 @@ def edit_transaction(request, pk):
                 xa.xa_action = form.cleaned_data['xa_action']
                 xa.account = form.cleaned_data['account']
             xa.save()
+
+
+@login_required
+def export_stocks_download(request):
+    """
+    Export equity / transaction data for the logged-in user.
+    The format is suitable for reloading into the application using the 'default' format.
+    """
+
+    response = HttpResponse(
+        content_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="stock_exported.csv"'},
+    )
+    writer = csv.writer(response)
+    writer.writerow(['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency', 'Quantity', 'Price', 'Amount'])
+
+    accounts = Account.objects.filter(user=request.user)
+    equities = []
+    for account in accounts:
+        for t in account.transactions:
+            if t.equity:
+                currency = t.equity.currency
+                symbol = t.equity.symbol + '.TRT' if t.equity.region == 'Canada' else t.equity.symbol
+                description = t.equity.name
+                if t.equity not in equities:
+                    equities.append(t.equity)
+            else:
+                currency = t.account.currency
+                symbol = None
+                description = None
+
+            writer.writerow([t.real_date.strftime('%Y-%m-%d %H:%M:%S %p'),
+                             t.account.name, t.account.account_name, symbol, description, t.action_str, currency, t.quantity, t.price, t.value])
+
+        for element in account.e_pd.loc[account.e_pd['Dividends'] != 0].to_records():
+            this_date = to_datetime(element[1]).strftime('%Y-%m-%d %H:%M:%S %p')
+            symbol = element[2]
+            amount = element[6] / element[3]
+            writer.writerow([this_date,  t.account.name, t.account.account_name, symbol, None, 'DIV_VALUE', None, None, None, amount])
+
+    for v in EquityValue.objects.filter(equity__in=equities):
+        writer.writerow([v.real_date.strftime('%Y-%m-%d %H:%M:%S %p'), None, None, v.equity.symbol, None, 'EQ_VALUE', None, None, v.price, None])
+    return response
+
+
+@login_required
+def export_stocks(request):
+    """
+    Export equity / transaction data for the logged-in user.
+    The format is suitable for reloading into the application using the 'default' format.
+    """
+    return render(request, "stocks/export.html", {
+            'expenses': Transaction.objects.filter(user=request.user).count()})
 
 
 @login_required
@@ -850,6 +858,7 @@ def account_equity_details(request, container_type, pk, symbol):
                    })
 
 
+@login_required
 def add_equity(request):
 
     if request.method == 'POST':
@@ -877,17 +886,6 @@ def add_equity(request):
         'form': form,
     }
     return render(request, 'stocks/add_equity.html', context)
-
-
-def overlay_dates(dataframe: DataFrame, key: str, symbol: str, list_of_dates):
-    result = []
-    for this_date in list_of_dates:
-        value = dataframe.loc[(dataframe['Equity'] == symbol) & (dataframe['Date'] == this_date)][key]
-        if len(value) != 1:
-            result.append(0)
-        else:
-            result.append(value.item())
-    return result
 
 
 @login_required

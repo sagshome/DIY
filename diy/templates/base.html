@@ -66,11 +66,12 @@
         <button class="w3-padding-large w3-button w3-black" title="Investments">INVESTMENTS <i class="fa fa-caret-down"></i></button>
         <div class="w3-dropdown-content w3-bar-block w3-card-4">
           <a href="{% url 'portfolio_list' %}" class="w3-bar-item w3-button w3-padding-large">Main Page</a>
-          <a href="{% url 'portfolio_add' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Portoflio</a>
-          <a href="{% url 'portfolio_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import a CSV File</a>
           <a href="{% url 'transaction_add' %}" class="w3-bar-item w3-button w3-padding-large">New Transaction</a>
-          <hr>
-          <a href="{% url 'add_equity' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Request new Equity/Fund</a>
+          <hr class="w3-hide-small">
+          <a href="{% url 'portfolio_add' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Portoflio</a>
+          <a href="{% url 'add_equity' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Request new Equity/Fund</a>
+          <a href="{% url 'portfolio_upload' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Import</a>
+          <a href="{% url 'stocks_export' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Export</a>
         </div>
       </div>
       <button onclick=toggle_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>

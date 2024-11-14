@@ -1,5 +1,5 @@
 Needed for Launch
-1) Support Income
+1) ~~Support Income~~
    2) Income will come from bank statement (mostly) - Just like expenses
    3) 
 2) Have domain mail
@@ -9,6 +9,11 @@ Needed for Launch
 6) Bulk Edit
 7) export Investments
 8) Fix CRON
+9) Understand Stock Types
+   a) Stocks/ETFs  <- I can look these up
+   b) Mutual Funds  <- I can input and or import transactions/values
+   10)   How do these differ from presentation - imports/exports 
+      c) Values  <- I have no idea what I own,  I just know the value each month
 
 The collection of things in DIY are utilities I wrote for myself.   The instruction below may help you (more likely just me) 
 get things up and running.

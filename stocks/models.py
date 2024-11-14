@@ -279,10 +279,10 @@ class Inflation(models.Model):
 class Equity(models.Model):
 
     EQUITY_TYPES = (
-        ('Equity', 'Equity/Stock'),
+        ('Equity', 'Equity/ETF'),
         ('ETF', 'Exchange Traded Fund'),
         ('MF', 'Mutual Fund'),
-        ('MM', 'Money Market')
+        ('MM', 'Value Account')
     )
 
     REGIONS = (
@@ -948,7 +948,6 @@ class Account(BaseContainer):
     account_name: str = models.CharField(max_length=128, null=True, blank=True, unique=True,
                                           help_text='The name as imported')
     managed: bool = models.BooleanField(default=True)
-    user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
     portfolio = models.ForeignKey(Portfolio, blank=True, null=True, on_delete=models.SET_NULL)
 
     # These Values are updated to allow for a quick loading of portfolio_list

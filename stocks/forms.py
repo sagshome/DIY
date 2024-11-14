@@ -223,5 +223,5 @@ class UploadFileForm(forms.Form):
         cleaned_data = super().clean()
         csv_type = cleaned_data.get("csv_type")
 
-        if csv_type not in ('QuestTrade', 'Manulife', 'Wealth'):
+        if csv_type not in ('QuestTrade', 'Manulife', 'Wealth', 'Default'):
             self.add_error('csv_type', f"CSV Type {csv_type} is not currently valid")

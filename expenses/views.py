@@ -269,6 +269,16 @@ def upload_expenses(request):
     form = UploadFileForm()
     return render(request, "expenses/uploadfile.html", {"form": form})
 
+@login_required
+def export_expense_page(request):
+    """
+    Export equity / transaction data for the logged-in user.
+    The format is suitable for reloading into the application using the 'default' format.
+    """
+    return render(request, "expenses/export.html", {
+            'expenses': Item.objects.filter(user=request.user, ignore=False, income=False).count(),
+            'income': Item.objects.filter(user=request.user, ignore=False, income=True).count(),
+            'hidden': Item.objects.filter(user=request.user, ignore=True).count()})
 
 @login_required
 def export_expenses(request):

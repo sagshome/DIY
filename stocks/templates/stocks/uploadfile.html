@@ -1,7 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Upload Transactions{% endblock title %}
+
+
 {% block content %}
+    <script>
+        $(document).ready(function() {
+
+        document.getElementById("submit-btn").addEventListener("click", function() {
+            // event.preventDefault()
+            var spinner_text = document.getElementById("spinner-text");
+            spinner_text.style.display = "block";
+            var t = setInterval(function() {
+                var ele = document.getElementById('spinner-text');
+                ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
+                }, 1000);
+    });
+        });
+</script>
     <h2 class="w3-margin">Upload Transactions</h2>
+
+
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="w3-row w3-red">
@@ -23,7 +41,9 @@
                 </tr>
             {% endfor %}
         </table>
-        <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Import CSV</button> This may take a moment. Please be patient.
+        <button id="submit-btn" style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Import CSV</button>
+        <span id="spinner-text" style="display: none;" class="spinner">Loading - This may take a moment. Please be patient.</span>
+
     </form>
 
     {% if custom_error %}

@@ -38,5 +38,7 @@ urlpatterns = [
     path(r'transaction/<pk>/delete/', views.TransactionDeleteView.as_view(), name='transaction_delete'),
 
     path(r'upload/', views.upload_file, name='portfolio_upload'),
+    path(r'export/', views.export_stocks, name='stocks_export'),
+    path(r'export/download/', views.export_stocks_download, name='stocks_download')
 
 ]

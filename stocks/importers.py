@@ -25,6 +25,8 @@ JUNK = 13
 DIV = 14
 TRANSFER_IN = 15
 TRANSFER_OUT = 16
+VALUE = 17
+DIV_VALUE = 18
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ class StockImporter:
     Pull the CSV file into a pd structure, so we can sort it.   Sorting is required, so we can calculate the dividends
     based on the amount of shares owned.
     """
+    # or HEADERS['default'].keys()
     default_pd_columns = ['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency',
                           'Quantity', 'Price', 'Amount']
 
@@ -120,14 +123,19 @@ class StockImporter:
                 elif xa_action == FEES:
                     Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=FEES, quantity=quantity, price=price).save()
 
-                elif xa_action == DIV:
+                elif xa_action in [DIV, DIV_VALUE, VALUE]:
                     equity = self.equity_lookup(symbol, self.pd_description(prow), region)
                     if not equity.searchable:
-                        value = amount / equity_totals[account.account_name][equity.key]
-                        if value != 0:  # CIBC stock split.  Best to handled it manually because dividends are screwy
-                            EquityEvent.get_or_create(equity=equity, real_date=this_date, value=value, event_type='Dividend', source=DataSource.UPLOAD.value)
-                        if price != 0:
+                        if xa_action == VALUE:
                             EquityValue.get_or_create(equity=equity, real_date=this_date, price=price, source=DataSource.UPLOAD.value)
+                        elif xa_action == DIV_VALUE:
+                            EquityEvent.get_or_create(equity=equity, real_date=this_date, value=value, event_type='Dividend', source=DataSource.UPLOAD.value)
+                        else:
+                            value = amount / equity_totals[account.account_name][equity.key]
+                            if value != 0:  # CIBC stock split.  Best to handled it manually because dividends are screwy
+                                EquityEvent.get_or_create(equity=equity, real_date=this_date, value=value, event_type='Dividend', source=DataSource.UPLOAD.value)
+                            if price != 0:
+                                EquityValue.get_or_create(equity=equity, real_date=this_date, price=price, source=DataSource.UPLOAD.value)
                 else:  # Things that deal with equities
                     if symbol:
                         equity = self.get_or_create_equity(symbol, name, currency, region, False)
@@ -266,7 +274,12 @@ class StockImporter:
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
-        return Transaction.TRANSACTION_MAP[csv_value]
+        if csv_value == 'EQ_VALUE':
+            return VALUE
+        elif csv_value == 'DIV_VALUE':
+            return DIV_VALUE
+        else:
+            return Transaction.TRANSACTION_MAP[csv_value]
 
     def csv_description(self, row) -> str:
         return row[self.mappings['Description']]

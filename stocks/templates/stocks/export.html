@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Download Investments{% endblock title %}
+
+
+{% block content %}
+    <script>
+        function set_spinner() {
+            var spinner_text = document.getElementById("spinner-text");
+            spinner_text.style.display = "block";
+        }
+        function clear_spinner() {
+            var spinner_text = document.getElementById("spinner-text");
+            spinner_text.style.display = "none";
+        }
+    </script>
+    <h2 class="w3-margin">Download Investments</h2>
+        <p class="w3-margin">Select the Download button to receive a csv file that contains all the data we have on your accounts.  This data can be reimported safely, or
+        you can use it for your own enjoyment.<br><br>
+        Your accounts currently hold {{transactions}} transactions.</p>
+        <div class="w3-margin">
+            <p><a href="{% url 'stocks_download' %}"><button onclick="set_spinner()" class="w3-button-medium w3-round-large w3-orange"> Download </button></a>
+                <span id="spinner-text" style="display: none;" class="spinner">Exporting - This may take a moment. Please be patient.</span>
+            </p>
+        </div>
+
+
+
+    <div class="w3-margin">
+        <p><a href="{% url 'portfolio_list' %}"><button  style="width:125px" class="w3-button-medium w3-round-large w3-margin-top w3-green">Account List</button></a>
+        Return to the account list</p>
+    </div>
+
+
+{% endblock content %}
