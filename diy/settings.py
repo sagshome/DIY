@@ -20,6 +20,7 @@ try:
 except KeyError:
     DEBUG = False
 
+DEBUG = True
 try:
     DIY_LOCALDB = os.environ['DIY_LOCALDB']
     DIY_LOCALDB = DIY_LOCALDB == 'True'
@@ -96,7 +97,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} {module}:{lineno} {message}",
+            "format": "{levelname} {asctime} {module}:{lineno} {message}",
             "style": "{",
         },
     },

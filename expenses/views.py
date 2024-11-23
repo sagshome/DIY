@@ -8,15 +8,15 @@ from json import dumps
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
 from django.forms import modelformset_factory
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView, FormView, ListView
 
-from base.models import COLORS
-from base.utils import DIYImportException
+from base.models import COLORS, PALETTE
+from base.utils import DIYImportException, DateUtil
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank, PersonalCSV
 from expenses.forms import *
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
@@ -167,6 +167,7 @@ def expense_main(request):
                                       'search_end_date': default_end,
                                       'show_list': 'Hide'})
 
+    total = 0
     if request.method == "POST":
         search_form = SearchForm(request.POST)
         formset = ItemFormSet(request.POST)
@@ -178,6 +179,8 @@ def expense_main(request):
             formset.save()
             formset = ItemFormSet(queryset=Item.objects.filter(
                 id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
+        else:
+            pass
 
     else:
         super_set = Item.objects.filter(
@@ -186,7 +189,7 @@ def expense_main(request):
         formset = ItemFormSet(queryset=Item.objects.filter(
             id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
 
-    unassigned = Item.unassigned()
+    unassigned = Item.unassigned(user=request.user)
     if unassigned.count() != 0:
         warnings = f'{unassigned.count()} Expense Items have not been processed.'
 
@@ -211,7 +214,7 @@ class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
 
 @login_required
 def assign_expenses(request):
-    Item.apply_templates()
+    Item.apply_templates(user=request.user)
     max_size = 50
 
     search_form = SearchForm(initial={'search_ignore': 'No',
@@ -262,12 +265,13 @@ def upload_expenses(request):
                     importer = PersonalCSV(reader, request.user, form.cleaned_data["csv_type"])
             except DIYImportException as e:
                 return render(request, "expenses/uploadfile.html", {"form": form, "custom_error": str(e)})
-            if Item.unassigned().count() > 0:
+            if Item.unassigned(user=request.user).count() > 0:
                 return HttpResponseRedirect(reverse('expenses_assign'))
             return HttpResponseRedirect(reverse('expense_main'))
 
     form = UploadFileForm()
     return render(request, "expenses/uploadfile.html", {"form": form})
+
 
 @login_required
 def export_expense_page(request):
@@ -287,14 +291,17 @@ def export_expenses(request):
         headers={"Content-Disposition": 'attachment; filename="expense_export.csv"'},
     )
     writer = csv.writer(response)
-    writer.writerow(['Date', 'Description', 'Amount', 'Category', 'Subcategory', 'Details', 'Notes'])
+    writer.writerow(['Date', 'Transaction', 'Amount', 'Category', 'Subcategory', 'Hidden', 'Details', 'Notes'])
 
+    logger.debug('starting dump')
     for item in Item.objects.filter(user=request.user).exclude(split__isnull=False).exclude(amortized__isnull=False):
         cname = item.category.name if item.category else None
         sname = item.subcategory.name if item.subcategory else None
-        writer.writerow([item.date, item.description, item.amount, cname, sname, item.details, item.notes])
-
+        hide = 'true' if item.ignore else 'false'
+        writer.writerow([item.date, item.description, item.amount, cname, sname, hide, item.details, item.notes])
+    logger.debug('ending dump')
     return response
+
 
 def load_subcategories(request):
     category = request.GET.get("category")
@@ -339,8 +346,16 @@ def load_categories_search(request):
 
 @login_required
 def expense_pie(request):
+    """
+    Return the json data that will be used to build a pie chart
+    - If we are showing all Categories,  then the pie segments will be based on the categories if we have selected a specific category,  then the
+      segments will be based on subcategories.
+    - If we
+
+    """
     data = []
     labels = []
+    colours = []
     super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
     show_sub = False if request.GET['search_category'] == '- ALL -' or request.GET['search_category'] == 'Income' else True
     show_income = request.GET.get("income")
@@ -392,9 +407,7 @@ def expense_bar(request):
         next_date = next_date + relativedelta.relativedelta(months=1)
 
     if show_sub:
-        raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
-                                                                                                             'sum',
-                                                                                                             'subcategory__name')
+        raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month', 'sum', 'subcategory__name')
     else:
         raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
                                                                                                              'sum',
@@ -422,3 +435,58 @@ def expense_bar(request):
             print(f'Failed on:{element}')
 
     return JsonResponse({'datasets': datasets, 'labels': months, 'colors': COLORS})
+
+
+@login_required
+def cash_flow_chart(request):
+    """
+    Build the chart data required for the timespan with the following data
+    1.  Income
+    2.  Expenses
+    """
+
+    user = request.user
+    date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
+
+    income = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date, category__name='Income')
+    expense = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date).exclude(category__name='Income')
+
+    key = 'period'
+    if date_util.is_quarter:
+        income_set = income.annotate(period=TruncQuarter('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        expense_set = expense.annotate(period=TruncQuarter('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+    elif date_util.is_year:
+        income_set = income.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        expense_set = expense.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+    elif date_util.is_month:
+        income_set = income.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        expense_set = expense.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+    else:
+        key = 'date'
+        income_set = income.values('date').annotate(total=Sum('amount')).order_by('date')
+        expense_set = expense.values('date').annotate(total=Sum('amount')).order_by('date')
+
+    # Data is in a list of [{'period': date, 'total': Decimal()}...] - A bit messy so lets make it a real dictionary
+    dates = date_util.dates({'income': 0, 'expenses': 0})
+    for element in income_set:
+        dates[element[key]['income']] = element['total']
+    for element in expense_set:
+        dates[element[key]['expenses']] = element['total']
+
+    # Lets get the data back to lists
+    labels = []
+    expenses = []
+    income = []
+    for key in dates.keys():
+        labels.append(date_util.date_to_label(key))
+        expenses.append(dates[key]['expenses'])
+        income.append(dates[key]['income'])
+
+    chart_data = {'labels': labels,
+                  'datasets': [
+                      {'label': 'Expenses', 'fill': False, 'data': expenses, 'boarderColor': PALETTE['coral'],  'backgroundColor': PALETTE['coral'], 'tension': 0.1},
+                      {'label': 'Income', 'fill': False, 'data': income, 'boarderColor': PALETTE['olive'],  'backgroundColor': PALETTE['olive']}
+                      ]
+                  }
+
+    return JsonResponse(chart_data)

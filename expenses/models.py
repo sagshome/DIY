@@ -22,9 +22,47 @@ DEFAULT_CATEGORIES = [('- ALL -', '- ALL -'), ('- NONE -', '- NONE -')]
 class Category(models.Model):
     """
     Top level classification for expense categorization
+    Income: 'Green' #2ECC71
+    Other: Grey
+    Personal Care: Yellow
+    Transportation: Blue
+    Recreation: Orange
+    HealthCare
+    Housing
+    Utilities:
+    Food: Green
+
+    #2ECC71 (Green)
+    #FF6F61 (Coral Red)
+    #6B8E23 (Olive Drab)
+    #4A90E2 (Sky Blue)
+    #50E3C2 (Turquoise)
+    #F5A623 (Golden Yellow)
+    #9013FE (Purple)
+    #D0021B (Red)
+    #8B572A (Chestnut Brown)
+
+    Color Overview:
+    #FF6F61 (Coral Red) and #6B8E23 (Olive Drab) are complementary because they are on opposite sides of the color wheel, creating a striking contrast.
+    #4A90E2 (Sky Blue) and #F5A623 (Golden Yellow) provide a warm-cool color pairing, which is visually dynamic but not jarring.
+    #50E3C2 (Turquoise) complements #9013FE (Purple), providing a balance of cool hues with a slight pop of vivid color.
+    #D0021B (Red) and #8B572A (Chestnut Brown) create a grounded, earthy combination that feels organic and balanced.
+
+
+    Food: This category includes food purchased from stores, restaurants, and institutions, such as groceries, meals, and snacks.
+    Shelter: This category includes housing costs, such as rent, mortgage interest, property taxes, and maintenance.
+    Household operations, furnishings and equipment: This category includes costs for household supplies, appliances, and services, such as cleaning, laundry, and pest control.
+    Clothing and footwear: This category includes costs for clothing, shoes, and accessories.
+    Transportation: This category includes costs for vehicles, gasoline, maintenance, insurance, and public transportation.
+    Health and personal care: This category includes costs for medical services, prescription drugs, and personal care items, such as toiletries and cosmetics.
+    Recreation, education and reading: This category includes costs for entertainment, hobbies, and educational services, such as movies, concerts, and books.
+    Alcoholic beverages, tobacco products and recreational cannabis: This category includes costs for beer, wine, spirits, tobacco products, and recreational cannabis.
+
+
     """
     name = models.CharField(unique=True, max_length=32, null=False, blank=False, verbose_name="Expense Category")
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+
 
     def __str__(self):
         return self.name
@@ -287,6 +325,7 @@ class Item(models.Model):
         self.ignore = False
         self.save()
 
+
     def apply_template(self, template: Template = None) -> bool:
         """
         Clear out template values and reapply,   return false if we no longer match the template
@@ -309,13 +348,13 @@ class Item(models.Model):
         return matched
 
     @classmethod
-    def apply_templates(cls):
+    def apply_templates(cls, user):
         """
         For each item that has not been processed,  try all the templates to see if the item should be automatically
         categorized (or ignored).   The contains is 'greedy' so do those last.   Also use a count to order this list
         for efficiencies
         """
-        items = Item.unassigned()
+        items = Item.unassigned(user)
         starts_ends = list(Template.objects.filter(Q(type='starts') | Q(type='ends')).order_by('count').values())
         contains = list(Template.objects.filter(type='contains').order_by('count').values())
 
@@ -362,8 +401,8 @@ class Item(models.Model):
             self.template = None
 
     @classmethod
-    def unassigned(cls):
-        return Item.objects.filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
+    def unassigned(cls, user):
+        return Item.objects.filter(user=user).filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
 
     @classmethod
     def update_templates(cls):
@@ -382,16 +421,17 @@ class Item(models.Model):
         '''
         This is kludged up to support Income searches
         '''
-        income_search = True if 'income' in search_dict and search_dict['income'] == 'true' else False
+        income_search = True if ('income' in search_dict and search_dict['income'] == 'true' or
+                                 'search_category' in search_dict and search_dict['search_category'] == 'Income') else False
         income_category = True if 'search_category' in search_dict and search_dict['search_category'] == 'Income' else False
-        income_item = Category.objects.get(name='Income')
         if 'search_description' in search_dict and search_dict['search_description']:
-            item_filter = item_filter.filter(description__icontains=search_dict['search_description'])
+            item_filter = item_filter.filter(Q(description__icontains=search_dict['search_description']) |
+                                             Q(notes__icontains=search_dict['search_description']))
         if 'search_category' in search_dict:
             if income_search:
-                item_filter = item_filter.filter(category=income_item)
+                item_filter = item_filter.filter(category__name='Income')
             else:
-                item_filter = item_filter.exclude(category=income_item)
+                item_filter = item_filter.exclude(category__name='Income')
                 category = search_dict['search_category']
                 if category == '- NONE -':
                     item_filter = item_filter.filter(category__isnull=True)

@@ -31,12 +31,10 @@ DIV_VALUE = 18
 logger = logging.getLogger(__name__)
 
 HEADERS = {
-    'default': {
         'Date': 'Date', 'AccountName': 'AccountName', 'AccountKey': 'AccountKey', 'Symbol': 'Symbol',
         'Description': 'Description', 'XAType': 'XAType', 'Currency': 'Currency',  'Quantity': 'Quantity',
         'Price': 'Price', 'Amount': 'Amount'
     }
-}
 
 SPLIT_MESSAGE = 'Stock split detected,  only the admin can update prior dividends.   They have been contacted'
 
@@ -183,6 +181,7 @@ class StockImporter:
             if (not self.accounts[account].last_import) or (last_import and (self.accounts[account].last_import < last_import)):
                 self.accounts[account].last_import = last_import
                 self.accounts[account].save()  # Will update last import if anything was done,  if not then not harm.
+
             for equity in self.accounts[account].equities:
                 if self.user.is_superuser or self.user.profile.av_api_key:
                     key = self.user.profile.av_api_key if self.user.profile.av_api_key else AV_API_KEY
@@ -279,7 +278,7 @@ class StockImporter:
         elif csv_value == 'DIV_VALUE':
             return DIV_VALUE
         else:
-            return Transaction.TRANSACTION_MAP[csv_value]
+            return Transaction.transaction_value(csv_value)
 
     def csv_description(self, row) -> str:
         return row[self.mappings['Description']]
@@ -380,7 +379,7 @@ class StockImporter:
         if not EquityAlias.objects.filter(symbol=lookup, name=name, region=region).exists():
             EquityAlias.objects.create(symbol=lookup, name=name, equity=equity, region=region)
 
-        equity.update_external_equity_data(force=False)   # This will only happen once a day.
+        # equity.update_external_equity_data(force=False)   # This will only happen once a day.
         self.equities[lookup] = equity
         return self.equities[lookup]
 

@@ -8,13 +8,21 @@ Needed for Launch
 5) Main Page - revamp
 6) Bulk Edit
 7) export Investments
+8) import Investments / Stocks
 8) Fix CRON
 9) Understand Stock Types
    a) Stocks/ETFs  <- I can look these up
    b) Mutual Funds  <- I can input and or import transactions/values
    10)   How do these differ from presentation - imports/exports 
       c) Values  <- I have no idea what I own,  I just know the value each month
+11) Detect external IP address change and then fix domain name
+    12) result = requests.get('https://api.ipify.org?format=json')
+    13) nslookup www.itsonlyourmoney.com | grep Address | tail -1 | awk '{print $2}
 
+
+Thinks to look into
+* django-import-export
+* 
 The collection of things in DIY are utilities I wrote for myself.   The instruction below may help you (more likely just me) 
 get things up and running.
 

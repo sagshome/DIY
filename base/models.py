@@ -24,6 +24,22 @@ COLORS = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46
           '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080',
           '#ffffff', '#000000']
 
+PALETTE = {'green': '#2ECC71',
+           'coral': '#FF6F61',
+           'olive': '#6B8E23 ',
+           'blue': '#4A90E2',
+           'turquoise': '#50E3C2',
+           'yellow': '#F5A623',
+           'purple': '#9013FE',
+           'red': '#D0021B',
+           'brown': '#8B572A'
+           }
+
+# FF6F61 (Coral Red) and #6B8E23 (Olive Drab) are complementary because they are on opposite sides of the color wheel, creating a striking contrast.
+# 4A90E2 (Sky Blue) and #F5A623 (Golden Yellow) provide a warm-cool color pairing, which is visually dynamic but not jarring.
+# 50E3C2 (Turquoise) complements #9013FE (Purple), providing a balance of cool hues with a slight pop of vivid color.
+# D0021B (Red) and #8B572A (Chestnut Brown) create a grounded, earthy combination that feels organic and balanced.
+
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -62,6 +78,7 @@ class URL(models.Model):
                     reason = 'Connection Timeout'
                 except ConnectionError:
                     reason = 'Connection Error'
+                cls.pause(name)
                 url._active = False
                 url._last_fail = datetime.now()
                 url.save()
@@ -81,8 +98,19 @@ class URL(models.Model):
             self._active = True
             self.save()
             return True
+        logger.debug("URL %s is paused since %s" % (self.name, self._last_fail))
         return False
 
+    @classmethod
+    def pause(cls, name):
+        try:
+            url = cls.objects.get(name=name)
+            if not url._active:
+                url._active = False
+                url._last_fail = datetime.now()
+                url.save()
+        except cls.DoesNotExist:
+            logger.warning('Trying to pause invalid url named:' % name)
 
 '''
 @receiver(post_save, sender=User)

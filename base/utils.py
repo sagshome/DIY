@@ -10,6 +10,76 @@ class DIYImportException(Exception):
     pass
 
 
+class DateUtil:
+    '''
+    A class to set step and start date based on period and span
+    This keeps our code DRY
+
+    Basic utility date to label
+    '''
+
+    def __init__(self, period: str = 'QTR', span: int = 3):
+        self.period = period if period else 'QTR'
+        self.span = span if span else 3
+        self.today = datetime.now().date().replace(day=1)
+
+        if period == 'YEAR':
+            self.step = 12
+            self.start_date = self.today.replace(year=self.today.year - (self.span + 1)).replace(month=12)  # Nov/2024 -> Dec/2021
+        elif period == 'MONTH':
+            self.start_date = self.today.replace(year=self.today.year - self.span)  # Nov/2024 -> Nov 2022
+            self.step = 1
+        else:  # QTR
+            self.step = 3
+            start_date = self.today.replace(year=(self.today.year - self.span))
+            if self.today.month < 4:
+                self.start_date = start_date.replace(month=3)
+            elif self.today.month < 7:
+                self.start_date = start_date.replace(month=6)
+            elif self.today.month < 10:
+                self.start_date = start_date.replace(month=9)
+            else:
+                self.start_date = start_date.replace(month=12)
+
+    @property
+    def is_month(self):
+        return self.period == 'MONTH'
+
+    @property
+    def is_quarter(self):
+        return self.period == 'QTR'
+
+    @property
+    def is_year(self):
+        return self.period == 'YEAR'
+
+    def dates(self, init_dict=None):
+        next_date = self.start_date
+        dates = {}
+        while next_date <= self.today:
+            dates[next_date] = {} if not init_dict else init_dict.copy()
+            next_date = next_date + relativedelta(months=self.step)
+        return dates
+
+    def date_to_label(self, label_date: date) -> str:
+        if self.period == 'Year':
+            value = str(label_date.year)
+        elif self.period == 'Month':
+            value = label_date.strftime('%Y-%b')
+        elif self.period == 'QTR':
+            if label_date.month < 4:
+                value = 'Q1-' + str(label_date.year)
+            elif label_date.month < 7:
+                value = 'Q2-' + str(label_date.year)
+            elif label_date.month < 10:
+                value = 'Q3-' + str(label_date.year)
+            else:
+                value = 'Q4-' + str(label_date.year)
+        else:  # I guess this is by the day
+            value = label_date.strftime('%d-%b-%Y')
+        return value
+
+
 def normalize_date(this_date) -> datetime.date:
     """
     Make every date the start of the next month.    The alpahvantage website is based on the last trading day each month

@@ -6,7 +6,7 @@ from typing import Dict
 
 from django.contrib.auth.models import User
 from base.utils import DIYImportException
-from .models import Item
+from .models import Item, Category, SubCategory
 
 logger = logging.getLogger(__name__)
 
@@ -22,42 +22,52 @@ class ExpenseImporter:
     """
 
     def __init__(self, reader: csv.reader, user: User, headers: Dict[str, str], source: str):
+        logger.debug('Starting Import')
         self.source = source
         self.headers = headers  # A dictionary map for csv_columns to pd_columns
         self.mappings = self.get_headers(reader)
-        self.cache = {}
+        self.warnings = []
+        self.categories = None
         NO_DETAILS = '~~NO DETAILS~~'
+        process_categories = 'Category' in self.headers
+        items = []
         for row in reader:
             xa_date: date = self.csv_date(row)
             if xa_date:  # Skip blank lines
                 description: str = self.csv_transaction(row)
                 amount: float = self.csv_amount(row)
                 details: str = self.csv_details(row)
-                if not details:
-                    details = NO_DETAILS
-                if Item.objects.filter(date=xa_date, description=description, amount=amount).exists():
-                    logger.warning('Duplicate row: Date %s %s %s' % (date, description, amount))
+                if Item.objects.filter(user=user, date=xa_date, description=description, amount=amount).exists():
+                    self.warnings.append('Duplicate row: Date %s %s %s' % (date, description, amount))
                 else:
-                    # Store this data so we can add later
-                    if xa_date not in self.cache:
-                        self.cache[xa_date] = {}
-                    if amount not in self.cache[xa_date]:
-                        self.cache[xa_date][amount] = {}
-                    if description not in self.cache[xa_date]:
-                        self.cache[xa_date][amount][description] = {}
-                    if details not in self.cache[xa_date][amount][description]:
-                        self.cache[xa_date][amount][description][details] = 0
-                    self.cache[xa_date][amount][description][details] += 1
+                    ignore = False
+                    category = subcategory = None
+                    if self.csv_ignore(row):
+                        ignore = True
+                    else:
+                        category = self.csv_category(row)
+                        subcategory = self.csv_subcategory(row, category)
+                    items.append((xa_date, amount, description, details, category, subcategory, ignore))
 
         # We have eliminated anything already in the DB,  so go ahead and add these records
-        for c_date in self.cache.keys():
-            for c_amount in self.cache[c_date].keys():
-                for c_description in self.cache[c_date][c_amount]:
-                    for c_detail in self.cache[c_date][c_amount][c_description]:
-                        for record in range(self.cache[c_date][c_amount][c_description][c_detail]):
-                            this_detail = None if c_detail == NO_DETAILS else c_detail
-                            Item.objects.create(date=c_date, user=user, description=c_description, amount=c_amount,
-                                                details=this_detail, source=self.source)
+        logger.debug('Building Records')
+        objects = []
+        for item in items:
+            objects.append(Item(date=item[0], amount=item[1], description=item[2], details=item[3], category=item[4], subcategory=item[5], ignore=item[6],
+                                source=self.source, user=user))
+        logger.debug('Importing')
+        Item.objects.bulk_create(objects, batch_size=100)
+        logger.debug('Imported')
+    @staticmethod
+    def get_category_data():
+        categories = {}
+        for item in SubCategory.objects.all():
+            if item.category.name not in categories:
+                categories[item.category.name] = {}
+                categories[item.category.name]['object'] = item.category
+                categories[item.category.name]['subcat'] = {}
+            categories[item.category.name]['subcat'][item.name] = item
+        return categories
 
     def get_headers(self, csv_reader):
         if set(DEFAULT.keys()) - set(self.headers.keys()):
@@ -67,7 +77,10 @@ class ExpenseImporter:
         header = next(csv_reader)
         return_dict = {}
         for column in self.headers:
-            return_dict[column] = header.index(self.headers[column])
+            try:
+                return_dict[column] = header.index(self.headers[column])
+            except ValueError:
+                logger.info('Non critical Column:%s is missing from data' % column)
         return return_dict
 
     def csv_date(self, row) -> date:
@@ -108,6 +121,30 @@ class ExpenseImporter:
             logger.debug('No Amount on row %s' % row)
         return 0
 
+    def csv_ignore(self, row) -> bool:
+        if 'Hidden' in self.mappings:
+            if row[self.mappings['Hidden']] == 'true':
+                return True
+        return False
+
+    def csv_category(self, row) -> Category:
+        if 'Category' in self.mappings:
+            if not self.categories:
+                self.categories = self.get_category_data()
+            value = row[self.mappings['Category']]
+            if value in self.categories:
+                return self.categories[value]['object']
+        return None
+
+    def csv_subcategory(self, row, category):
+        if 'Subcategory' in self.mappings:
+            if category:
+                value = row[self.mappings['Subcategory']]
+                if category.name in self.categories:
+                    if value in self.categories[category.name]['subcat']:
+                        return self.categories[category.name]['subcat'][value]
+        return None
+
 
 class Generic(ExpenseImporter):
     """
@@ -116,7 +153,15 @@ class Generic(ExpenseImporter):
     :return:
     """
     def __init__(self, file_name: csv.reader, user: User, source: str):
-        super().__init__(file_name, user, DEFAULT, source)
+        super().__init__(file_name, user,{
+        'Date': 'Date',
+        'Transaction': 'Transaction',
+        'Amount': 'Amount',
+        'Category': 'Category',
+        'Subcategory': 'Subcategory',
+        'Hidden': 'Hidden',
+        'Detail': 'Details',
+    } , source)
 
 
 class PersonalCSV(ExpenseImporter):

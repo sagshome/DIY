@@ -1,5 +1,5 @@
 # todo:  I need a add a transaction (buy, sell, redeem, fund, dividend - etc..)
-
+import asyncio
 import csv
 import logging
 import os
@@ -19,6 +19,8 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet, Sum, Avg, Q
+from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
+
 from django.core.mail import EmailMultiAlternatives, EmailMessage
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
@@ -28,12 +30,13 @@ from django.views.generic.dates import DateMixin
 from django.http import JsonResponse
 
 
+
 from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio
 from .forms import AccountAddForm, AccountForm, TransactionForm, AccountCopyForm, UploadFileForm, ManualUpdateEquityForm, EquityForm, AddEquityForm, PortfolioForm, AccountCloseForm
 from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
-from base.utils import DIYImportException, normalize_today, normalize_date
+from base.utils import DIYImportException, normalize_today, normalize_date, DateUtil
 from .tasks import daily_update
-from base.models import Profile, COLORS
+from base.models import Profile, COLORS, PALETTE
 
 logger = logging.getLogger(__name__)
 
@@ -517,7 +520,7 @@ def export_stocks_download(request):
         headers={"Content-Disposition": 'attachment; filename="stock_exported.csv"'},
     )
     writer = csv.writer(response)
-    writer.writerow(['Date', 'AccountName', 'AccountKey', 'Symbol', 'Description', 'XAType', 'Currency', 'Quantity', 'Price', 'Amount'])
+    writer.writerow(['Date', 'AccountName', 'AccountKey', 'Symbol', 'Region', 'Description', 'XAType', 'Currency', 'Quantity', 'Price', 'Amount'])
 
     accounts = Account.objects.filter(user=request.user)
     equities = []
@@ -525,7 +528,8 @@ def export_stocks_download(request):
         for t in account.transactions:
             if t.equity:
                 currency = t.equity.currency
-                symbol = t.equity.symbol + '.TRT' if t.equity.region == 'Canada' else t.equity.symbol
+                symbol = t.equity.symbol
+                region = t.equity.region
                 description = t.equity.name
                 if t.equity not in equities:
                     equities.append(t.equity)
@@ -533,18 +537,20 @@ def export_stocks_download(request):
                 currency = t.account.currency
                 symbol = None
                 description = None
+                region = None
 
             writer.writerow([t.real_date.strftime('%Y-%m-%d %H:%M:%S %p'),
-                             t.account.name, t.account.account_name, symbol, description, t.action_str, currency, t.quantity, t.price, t.value])
+                             t.account.name, t.account.account_name, symbol, region, description, t.action_str, currency, t.quantity, t.price, t.value])
 
-        for element in account.e_pd.loc[account.e_pd['Dividends'] != 0].to_records():
-            this_date = to_datetime(element[1]).strftime('%Y-%m-%d %H:%M:%S %p')
-            symbol = element[2]
-            amount = element[6] / element[3]
-            writer.writerow([this_date,  t.account.name, t.account.account_name, symbol, None, 'DIV_VALUE', None, None, None, amount])
+        # todo: Figure out the currency, this is a root problem for the e_pd as well
+        # for element in account.e_pd.loc[account.e_pd['Dividends'] != 0].to_records():
+        #    this_date = to_datetime(element[1]).strftime('%Y-%m-%d %H:%M:%S %p')
+        #    symbol = element[2]
+        #    amount = element[6] / element[3]
+        #    writer.writerow([this_date,  t.account.name, t.account.account_name, symbol, None, 'DIV_VALUE', None, None, None, amount])
 
-    for v in EquityValue.objects.filter(equity__in=equities):
-        writer.writerow([v.real_date.strftime('%Y-%m-%d %H:%M:%S %p'), None, None, v.equity.symbol, None, 'EQ_VALUE', None, None, v.price, None])
+    # for v in EquityValue.objects.filter(equity__in=equities):
+    #    writer.writerow([v.real_date.strftime('%Y-%m-%d %H:%M:%S %p'), None, None, v.equity.key, None, 'EQ_VALUE', v.equity.currency, None, v.price, None])
     return response
 
 
@@ -555,7 +561,10 @@ def export_stocks(request):
     The format is suitable for reloading into the application using the 'default' format.
     """
     return render(request, "stocks/export.html", {
-            'expenses': Transaction.objects.filter(user=request.user).count()})
+            'transactions': Transaction.objects.filter(user=request.user).count(),
+            'equities': Transaction.objects.filter(user=request.user, equity__isnull=False).values_list('equity').distinct().count(),
+            'funds': Transaction.objects.filter(user=request.user, equity__isnull=True).count()
+            })
 
 
 @login_required
@@ -1063,6 +1072,48 @@ def cost_value_chart(request):
         if equity_id:
             chart_data['datasets'].append(
                 {'label': 'Value w/ Dividends', 'fill': False, 'data': df['adjusted_value'].tolist(), 'borderColor': colors[3], 'backgroundColor': colors[3]})
+
+    return JsonResponse(chart_data)
+
+
+@login_required
+def wealth_summary_chart(request):
+    """
+    Build the chart data required for the timespan with the following data
+    1.  Cost
+    2.  CPI Cost
+    3.  Value
+    4.  Dividends
+    5.  Comparison Value
+    """
+
+    user = request.user
+    date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
+    dates = date_util.dates({'cost': 0, 'cpi_cost': 0, 'value': 0, 'dividends': 0, 'comp_value': 0})
+
+    accounts = Account.objects.filter(user=user)
+    for account in accounts:
+        for key in dates.keys():
+            this_cost = account.get_pattr('Funds', key) - account.get_pattr('Redeemed', key)
+            this_value = account.get_eattr('Value', key)
+            dates[key]['cost'] += this_cost
+            dates[key]['value'] += this_value
+
+    # Lets get the data back to lists
+    labels = []
+    cost = []
+    value = []
+    for key in dates.keys():
+        labels.append(date_util.date_to_label(key))
+        cost.append(dates[key]['cost'])
+        value.append(dates[key]['value'])
+
+    chart_data = {'labels': labels,
+                  'datasets': [
+                      {'label': 'Cost', 'fill': False, 'data': cost, 'boarderColor': PALETTE['coral'],  'backgroundColor': PALETTE['coral'], 'tension': 0.1},
+                      {'label': 'Value', 'fill': False, 'data': value, 'boarderColor': PALETTE['olive'],  'backgroundColor': PALETTE['olive']}
+                      ]
+                  }
 
     return JsonResponse(chart_data)
 

@@ -4,57 +4,118 @@
 {% block content %}
 <p>Welcome {{ request.user }}</p>
 <div class="w3-container w3-cell-row">
-    <div class="w3-cell w3-mobile" style="width: 50%;"><canvas id="myChart"></canvas></div>
-
-    <div class="w3-cell w3-margin w3-mobile" style="width: 50%;">
-            <canvas id="barChart" class="w3-card-2"></canvas>
-            <p>IncomeChart</p>
+    <div class="w3-cell w3-mobile w3-half">
+        <canvas id="cashChart"></canvas>
     </div>
-</div>
-<div class="w3-container w3-cell-row">
-    <div class="w3-green w3-cell w3-mobile w3-cell-middle">
-        <p>Investments</p>
-    </div>
-    <div class="w3-orange w3-cell w3-mobile w3-cell-middle">
-        <p>Extra Tasks</p>
+    <div class="w3-cell w3-mobile w3-half" >
+        <canvas id="wealthChart"></canvas>
     </div>
 </div>
 <script>
-    var data = JSON.parse("{{item_search_criteria|escapejs}}");
-
     $(document).ready(function() {
-      $.ajax({
-        url: '/expenses/ajax/expense-pie',
-        data: data,
-        success: function (data) {
-          new Chart("myChart", {
-            type: "pie",
-            data: {
-                labels: data['labels'],
-                datasets: [{
-                  data: data['data'],
-                  backgroundColor: data['colors'],
-                }]
-            },
-            options: {
-                title: {
-                  display: true,
-                  text: "Expenses - past 12 months"
-                },
-                animation: {
-                    animateScale: false,
-                    animateRotate: false
-                },
-                legend: {
-                    display: true,
-                    position: 'right',
-                    align: 'center'
-                },
-
-            }
+        $.ajax({
+            url: "{% url 'wealth_chart' %}",
+            data: {},
+            success: function (data) {
+                new Chart("wealthChart", {
+                type: "line",
+                data: data,
+                options: {
+                    title: {
+                      display: true,
+                      text: "Wealth - Cost vs Value"
+                    },
+                    responsive: true,  // Make the chart responsive to screen resizing
+                    scales: {
+                        y: {
+                            beginAtZero: true  // Start Y-axis from zero
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',  // Position the legend at the top
+                            labels: {
+                                font: {
+                                    size: 14  // Font size for the legend
+                                }
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,  // Enable tooltips when hovering over the chart
+                            backgroundColor: 'rgba(0, 0, 0, 0.7)',  // Tooltip background color
+                            titleColor: 'white',  // Title text color in the tooltip
+                            bodyColor: 'white'  // Body text color in the tooltip
+                        }
+                    },
+                    elements: {
+                        line: {
+                            borderWidth: 4  // Line width
+                        },
+                        point: {
+                            radius: 5,  // Point size on the line
+                        }
+                    }
+                }
           });
+        },
+            error: function(data) {
+                console('Error occured');
+            }
+        });
+        new Chart("cashChart", {
+          type: 'line',
+          data: {{cash_data | safe}},
+          options: {
+            title: {
+                display: true,
+                text: "Quarterly Cash Flow"
+            },
+            responsive: true,  // Make the chart responsive to screen resizing
+            scales: {
+                y: {
+                    beginAtZero: true  // Start Y-axis from zero
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',  // Position the legend at the top
+                    labels: {
+                        font: {
+                            size: 14  // Font size for the legend
+                        }
+                    }
+                },
+                tooltip: {
+                    enabled: true,  // Enable tooltips when hovering over the chart
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',  // Tooltip background color
+                    titleColor: 'white',  // Title text color in the tooltip
+                    bodyColor: 'white'  // Body text color in the tooltip
+                }
+            },
+            elements: {
+                line: {
+                    borderWidth: 4  // Line width
+                },
+                point: {
+                    radius: 5,  // Point size on the line
+                }
+            }
         }
-      });
+        });
     });
 </script>
 {% endblock content %}
+
+{% block help_content %}
+<p>
+    <b>It's Only Our Money</b> is a tongue in cheek response to a very important question.   Knowing what you money is doing is critical - cash flow at the
+    start of your economic journey and wealth at the end.   This application helps you visualize your money.   However,  it is only as good as the data you
+    provide.
+</p>
+<h4>Quarterly Cash Flow</h4>
+How much Income vs Expense over each quarter.   The CASH page provides greater detail and allows you to add, and alter your data
+<h4>Wealth - Cost vs Value</h4>
+This page, over the past three quarters how your investments are doing.   The Wealth page will show a finer breakdown as well as allow you to manager
+your data.
+
+{% endblock %}

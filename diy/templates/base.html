@@ -61,9 +61,8 @@
 
         </div>
       </div>
-
       <div class="w3-dropdown-hover">
-        <button class="w3-padding-large w3-button w3-black" title="Investments">INVESTMENTS <i class="fa fa-caret-down"></i></button>
+        <button class="w3-padding-large w3-button w3-black" title="Investments">WEALTH <i class="fa fa-caret-down"></i></button>
         <div class="w3-dropdown-content w3-bar-block w3-card-4">
           <a href="{% url 'portfolio_list' %}" class="w3-bar-item w3-button w3-padding-large">Main Page</a>
           <a href="{% url 'transaction_add' %}" class="w3-bar-item w3-button w3-padding-large">New Transaction</a>
@@ -96,14 +95,12 @@
         <div>
           {% block help_content %}
           <p>
-            DIY services are a personal hobby.   They provide a way to track investments and expenses.  If you have any
-            querstions please contact me at <a href="D1Yapp.ca@gmail.com">D1Yapp.ca@gmail.com</a>.
+            IooM = It's Only Our Money is a personal hobby.   It provides a way to track cash (Income vs Expenses) and wealth (Investments).
+            If you have any questions please contact me at <a href="D1Yapp.ca@gmail.com">D1Yapp.ca@gmail.com</a>.
           </p>
           <p>
             Please specific help on each page.
           </p>
-
-
           {% endblock %}
           </div>
           <div>
@@ -119,7 +116,7 @@
   </div>
   {% block footer %}
   <div class="w3-botton w3-container w3-grey">
-      <container class="w3-container w3-center"><p>© 2024 Scott Sargent</p></container>
+      <container class="w3-container w3-center"><p>© 2024 Scott Sargent<br>Rainy Day Development</p></container>
   </div>
   {% endblock footer %}
 </body>

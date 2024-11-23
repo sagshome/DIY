@@ -2,6 +2,54 @@
 {% load static %}
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
+    function setValues(button, cat, sub) {
+        // ShortCuts must be in the table just before Category and Subcategory
+        let my_cell = $(button).closest('td');
+        let cat_cell = my_cell.next('td');
+        let cat_id = cat_cell.children()[0].getAttribute('id');
+        let sub_id = cat_cell.next('td').children()[0].getAttribute('id');
+
+        for (var option of document.getElementById(cat_id).options) {
+            if (option.text === cat) {
+                option.selected = true;
+                break;
+            }
+        }
+
+        for (var option of document.getElementById(sub_id).options) {
+            if (option.text === sub) {
+                option.selected = true;
+                break;
+            }
+        }
+    }
+
+    $(document).ready(function() {
+        $('.diy-category').each(function(index, element) {  // Invalidate subcategory when category changed
+            document.getElementById(this.id).addEventListener("change", function() {
+                var row_id = this.id.slice(8, this.id.length - 9);  // Just the number part
+                var category_id = document.getElementById("id_form-" + row_id + "-category")
+                var subcategory_id = document.getElementById("id_form-" + row_id + "-subcategory")
+                var category = $(category_id).val()
+                $.ajax({
+                    url: '{% url 'ajax-load-subcategories' %}',
+                    data: {category: category},
+                    success: function(data) {
+                        $(subcategory_id).html(data);
+                        console.log(data);
+                        },
+                    error: function(ts) {
+                        console.log(ts.responseText)
+                    }
+                })  // ajax
+            })  // add Event
+        });  // for each
+    });  // document ready
+
+</script>
+
 <h2>Update Expenses - Unassigned Count:&nbsp;{{count}}</h2>
 
 <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
@@ -75,54 +123,7 @@
 
 </form><br><br>
 {% endblock %}
-{% block script %}
-<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-<script>
-    function setValues(button, cat, sub) {
-        // ShortCuts must be in the table just before Category and Subcategory
-        let my_cell = $(button).closest('td');
-        let cat_cell = my_cell.next('td');
-        let cat_id = cat_cell.children()[0].getAttribute('id');
-        let sub_id = cat_cell.next('td').children()[0].getAttribute('id');
-
-        for (var option of document.getElementById(cat_id).options) {
-            if (option.text === cat) {
-                option.selected = true;
-                break;
-            }
-        }
-
-        for (var option of document.getElementById(sub_id).options) {
-            if (option.text === sub) {
-                option.selected = true;
-                break;
-            }
-        }
-    }
-
-    $(document).ready(function() {
-        $('.diy-category').each(function(index, element) {  // Invalidate subcategory when category changed
-            document.getElementById(this.id).addEventListener("change", function() {
-                var row_id = this.id.slice(8, this.id.length - 9);  // Just the number part
-                var category_id = document.getElementById("id_form-" + row_id + "-category")
-                var subcategory_id = document.getElementById("id_form-" + row_id + "-subcategory")
-                var category = $(category_id).val()
-                $.ajax({
-                    url: '{% url 'ajax-load-subcategories' %}',
-                    data: {category: category},
-                    success: function(data) {
-                        $(subcategory_id).html(data);
-                        console.log(data);
-                        },
-                    error: function(ts) {
-                        console.log(ts.responseText)
-                    }
-                })  // ajax
-            })  // add Event
-        });  // for each
-    });  // document ready
-
-</script>
+{% block localscript %}
 {% endblock %}
 
 {% block help_content %}

@@ -435,7 +435,11 @@ class Equity(models.Model):
                     self.last_updated = now
                     self.save(update=False)
                 else:
-                    logger.warning('Invalid Response: %s' % data)
+                    if 'Information' in data and data['Information'].startswith('Thank you for using'):
+                        logger.warning("Too many calls to AVURL")
+                        URL.pause("AVURL")
+                    else:
+                        logger.warning('Invalid Response: %s' % data)
 
     def update(self, force: bool = False, key: str = None):
         """
@@ -624,6 +628,8 @@ class EquityEvent(models.Model):
                     obj.value = kwargs['value']
                     obj.real_date = real_date
                     obj.save()
+            except cls.MultipleObjectsReturned:
+                logger.error('Multiple records for %s %s %s' % (kwargs['equity'], norm_date, kwargs['event_type']))
             except cls.DoesNotExist:
                 kwargs['date'] = norm_date
                 obj = cls.objects.create(**kwargs)
@@ -804,7 +810,7 @@ class AccountSummary:
         self.epd = equity_pd
         self.currency = currency
 
-    ACCOUNT_COL = ['Date', 'Funds', 'Redeemed']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
+    ACCOUNT_COL = ['Date', 'Funds', 'Redeemed', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
 
     @property
     def pd(self) -> DataFrame:
@@ -868,18 +874,12 @@ class AccountEquitySummary:
         equity_values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
         dividends = dict(EquityEvent.objects.filter(date__gte=first, equity=equity, event_type='Dividend').values_list('date', 'value'))
         moneys = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action__in=[Transaction.FEES, Transaction.INTEREST]).values_list('date', 'value'))
-        redivs = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action=Transaction.REDIV).values_list('date', 'quantity'))
+        redivs: dict[date, float] = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action=Transaction.REDIV).values_list('date', 'quantity'))
 
         shares = cost = price = dividend = total_dividends = 0
         for entry in equity_values:  # This is over every month you owned this equity.
             cf = currency_factor(entry.date, equity.currency, self.currency)
-            # for debugging - I don't think I can hit this
-            # shares += redivs[entry.date] if entry.date in redivs and self.managed else 0
-            if self.managed:
-                shares += redivs[entry.date] if entry.date in redivs else 0
-            else:
-                if entry.date in redivs:
-                    raise Exception('Unexpected combo')  # If im not managed,  who did the rediv?
+            shares += redivs[entry.date] if entry.date in redivs else 0
             if entry.date in trade_dates:  # We did something on this normalized day
                 trade = trades.filter(date=entry.date).aggregate(Sum('quantity'), Sum('value'))
                 if trade['quantity__sum']:
@@ -887,10 +887,10 @@ class AccountEquitySummary:
                 if trade['value__sum']:
                     cost += trade['value__sum'] * cf
 
-            if self.managed:
-                dividend = moneys[entry.date] * cf if entry.date in moneys else 0
-            else:
-                dividend = dividends[entry.date] * cf * shares if entry.date in dividends else 0
+            #if self.managed:
+            #    dividend = moneys[entry.date] * cf if entry.date in moneys else 0
+            #else:
+            dividend = dividends[entry.date] * cf * shares if entry.date in dividends else 0
             total_dividends += dividend
             value = entry.price * shares * cf
 
@@ -898,9 +898,9 @@ class AccountEquitySummary:
                 logger.debug('%s:%s - %s Negative value %s' % (self.name, equity, entry.date, value))
 
             if shares > 1:
-                df.loc[len(df.index)] = [entry.date, equity.symbol, shares, cost, entry.price, dividend, total_dividends, value]
+                df.loc[len(df.index)] = [entry.date, equity.key, shares, cost, entry.price, dividend, total_dividends, value]
             else:
-                df.loc[len(df.index)] = [entry.date, equity.symbol, 0, cost, entry.price, 0, total_dividends, value]
+                df.loc[len(df.index)] = [entry.date, equity.key, 0, cost, entry.price, 0, total_dividends, value]
 
         return df
 
@@ -941,11 +941,15 @@ class Account(BaseContainer):
     Currency - Base currency of the account,  can be CAN or USD
 
     """
+
+    class Meta:
+        unique_together = (('account_name', 'user'),)
+
     ACCOUNT_TYPES = (('Investment', 'Investment'),
                      ('Holding', 'Holding'))
     account_type = models.TextField(max_length=12, choices=ACCOUNT_TYPES, default='Investment')
 
-    account_name: str = models.CharField(max_length=128, null=True, blank=True, unique=True,
+    account_name: str = models.CharField(max_length=128, null=True, blank=True,
                                           help_text='The name as imported')
     managed: bool = models.BooleanField(default=True)
     portfolio = models.ForeignKey(Portfolio, blank=True, null=True, on_delete=models.SET_NULL)

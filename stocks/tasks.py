@@ -25,6 +25,3 @@ def daily_update():
         account.update_static_values()
 
 
-def stock_export():
-    export_file = 'foo'
-
