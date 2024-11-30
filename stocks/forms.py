@@ -12,8 +12,8 @@ def popover_html(label, content):
 
 class EquityForm(forms.Form):
     choices = [(None, '--------')]
-    for equity in Equity.objects.all().order_by('symbol'):
-       choices.append((equity.id, f'{equity.symbol} - {equity.region} ({equity.name})'))
+    #for equity in Equity.objects.all().order_by('symbol'):
+    #  choices.append((equity.id, f'{equity.symbol} - {equity.region} ({equity.name})'))
     equity = forms.ChoiceField(choices=choices)
 
 

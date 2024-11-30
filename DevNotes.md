@@ -1,3 +1,9 @@
+docker run --name redis-container -p 6379:6379 -d redis
+docker exec -it redis-container redis-cli
+PING  
+  -> PONG
+
+
 ## Profiles ##
 * Extend the User model
 
@@ -14,6 +20,13 @@
     * User status is active = True
 * Change Password
 * Change Profile
+
+Set up Celery: For executing tasks asynchronously.
+Configure Redis as the Broker: You’re already using Redis for caching, so we’ll use it as Celery’s broker.
+Add Celery Beat: For scheduling periodic tasks.
+
+Write and Run Tasks: Implement on-demand and scheduled tasks.
+Integrate with Docker Compose: Ensure the setup works seamlessly in your deployment environment.
 
 
 

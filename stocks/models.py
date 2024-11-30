@@ -8,9 +8,8 @@ day of the month is normalized to the first date of the month.
 #     old one.
 
 import logging
-
 import pandas as pd
-import requests
+import pickle
 
 from enum import Enum
 from typing import List, Dict
@@ -19,19 +18,21 @@ from time import sleep
 from pandas import DataFrame
 from requests.exceptions import ConnectionError
 
+from django.conf import settings
 from django.contrib.auth.models import User
-from django.urls import reverse
+from django.core.cache import cache
 from django.db import models
 from django.db.models import QuerySet, Sum, Avg
-from django.conf import settings
 from django.utils.functional import cached_property
+from django.urls import reverse
 
 from base.models import URL
-from base.utils import normalize_date, normalize_today, next_date
+from base.utils import normalize_date, normalize_today, next_date, cache_dataframe, clear_cached_dataframe,  get_cached_dataframe
 
 logger = logging.getLogger(__name__)
 
 AV_API_KEY = settings.ALPHAVANTAGEAPI_KEY
+
 
 
 class DataSource(Enum):
@@ -691,6 +692,18 @@ class BaseContainer(models.Model):
         else:
             return 0
 
+    @property
+    def p_key(self):
+        return f'{self.__class__.__name__}:{self.id}:Container'
+
+    @property
+    def e_key(self):
+        return f'{self.__class__.__name__}:{self.id}:Components'
+
+    def reset(self):
+        clear_cached_dataframe(self.e_key)
+        clear_cached_dataframe(self.p_key)
+
     @cached_property
     def p_pd(self) -> DataFrame:
         raise NotImplementedError
@@ -785,26 +798,42 @@ class Portfolio(BaseContainer):
 
     @cached_property
     def p_pd(self) -> DataFrame:
+        new = get_cached_dataframe(self.p_key)
+        try:
+            if not new.any:
+                return new
+        except AttributeError:
+            pass  # get may return None
+
         alist = []
         new = pd.DataFrame(columns=ACCOUNT_COL)
         for account in self.account_set.all():
             alist.append(account.p_pd)
         if len(alist):
             new = pd.concat(alist).groupby('Date').sum().reset_index()
+        cache_dataframe(self.p_key, new)
         return new
 
     @cached_property
     def e_pd(self) -> DataFrame:
+        new = get_cached_dataframe(self.e_key)
+        try:
+            if not new.any:
+                return new
+        except AttributeError:
+            pass   # get may return None
         new = pd.DataFrame(columns=EQUITY_COL)
         for account in self.account_set.all():
             new = pd.concat([new, account.e_pd], axis=0)
         #return new.groupby(['Date', 'Equity']).sum(['Shares', 'TotalDividends'])
+        cache_dataframe(self.e_key, new)
         return new
 
 
 class AccountSummary:
 
-    def __init__(self, name: str, xas: QuerySet, equity_pd: pd, currency: str, managed: bool = False):
+    def __init__(self, key, name: str, xas: QuerySet, equity_pd: pd, currency: str, managed: bool = False):
+        self.cache_key = key
         self.name = name
         self.xas = xas
         self.epd = equity_pd
@@ -814,6 +843,12 @@ class AccountSummary:
 
     @property
     def pd(self) -> DataFrame:
+        new = get_cached_dataframe(self.cache_key)
+        try:
+            if not new.any:
+                return new
+        except AttributeError:
+            pass   # get may return None
 
         new = pd.DataFrame(columns=ACCOUNT_COL)
         if not self.xas:  # Account is new/empty
@@ -839,6 +874,7 @@ class AccountSummary:
             this_date = next_date(this_date)
 
         new['Date'] = pd.to_datetime(new['Date'])
+        cache_dataframe(self.cache_key, new)
         return new
 
 
@@ -848,8 +884,9 @@ class AccountEquitySummary:
     not reference raw account or transaction data.   This is done so that we can compare / create speculative data
     """
 
-    def __init__(self, name: str, xas: QuerySet, currency: str, managed: bool = False,
+    def __init__(self, key, name: str, xas: QuerySet, currency: str, managed: bool = False,
                  fake_equity: Equity = None, real_equity: Equity = None):
+        self.cache_key = key
         self.name = name
         self.xas = xas
         self.currency = currency
@@ -904,13 +941,19 @@ class AccountEquitySummary:
 
         return df
 
-
     @property
     def pd(self) -> pd:
         '''
         Historic data for each equity in a account
         :return:  panda.Dataframe
         '''
+        new = get_cached_dataframe(self.cache_key)
+        try:
+            if new.any:
+                return new
+        except AttributeError:
+            pass  # Get may return None
+
         now = datetime.now()
         new = pd.DataFrame(columns=EQUITY_COL)
         inflation_rates: Dict[date, float] = dict(Inflation.objects.all().values_list('date', 'inflation'))
@@ -931,6 +974,7 @@ class AccountEquitySummary:
         new['AvgCost'] = new['Cost'] / new['Shares']
         new['Date'] = pd.to_datetime(new['Date'])
         logger.warning('Created Equity DataFrame for %s in %s' % (self.name, (datetime.now() - now).seconds))
+        cache_dataframe(self.cache_key, new)
         return new
 
 
@@ -969,6 +1013,11 @@ class Account(BaseContainer):
     class Meta:
         unique_together = (('account_name', 'user'),)
 
+    def reset(self):
+        super(Account, self).reset()
+        if self.portfolio:
+            self.porfolio.reset()
+
     @property
     def start(self):
         return self._start
@@ -1004,7 +1053,7 @@ class Account(BaseContainer):
     @cached_property
     def e_pd(self) -> DataFrame:
         # self.pd.loc[self.pd['Date'] == normalize_today()].sort_values(['Equity'])
-        return AccountEquitySummary(str(self.name), self.transactions, self.currency, managed=self.managed).pd
+        return AccountEquitySummary(self.e_key, str(self.name), self.transactions, self.currency, managed=self.managed).pd
 
     @cached_property
     def p_pd(self) -> DataFrame:
@@ -1012,10 +1061,10 @@ class Account(BaseContainer):
         Regardless of the equities,  how is the account doing based on money in,  money out
         :return:
         '''
-        return AccountSummary(str(self.name), self.transactions, self.e_pd, self.currency, managed=self.managed).pd
+        return AccountSummary(self.p_key, str(self.name), self.transactions, self.e_pd, self.currency, managed=self.managed).pd
 
     def switch(self, new_equity: Equity, original: Equity = None) -> DataFrame:
-        return AccountEquitySummary(str(self.name),
+        return AccountEquitySummary(self.e_key, str(self.name),
                                     self.transactions,
                                     self.currency,
                                     managed=self.managed,
@@ -1035,12 +1084,6 @@ class Account(BaseContainer):
 
     @property
     def transactions(self) -> QuerySet['Transaction']:
-        """
-        Cache and return a
-        'equity1' : [xa1, xa2,...],
-        'equity2' : [xa1,]
-        :return:
-        """
         return Transaction.objects.filter(account=self)
 
     def trade_dates(self, equity) -> List[date]:
@@ -1088,6 +1131,17 @@ class Account(BaseContainer):
         elif len(self.e_pd) != 0:
             self._start = self.e_pd['Date'].min()
         self.save()
+
+    def update_values(self, start: date = None, equity: Equity = None):
+        """
+        Update the summary values
+        """
+        acct_values = {}
+        equity_values = {}
+        for item in AccountSummary.objects.filter(account=self).order_by('date').values():
+            acct_values[item[date]] = item
+        for eq_item in AccountSummary.objects.filter(acct_summary_id=item['id']).order_by('date').values():
+            pass
 
 
 class Transaction(models.Model):
@@ -1176,6 +1230,8 @@ class Transaction(models.Model):
 
     def save(self, *args, **kwargs):
 
+        clear = True if 'standalone' in kwargs else False
+
         self.date = normalize_date(self.real_date) if self.real_date else None
         reported_price = 0 if not self.price else self.price
 
@@ -1216,3 +1272,8 @@ class Transaction(models.Model):
                     ev.save()
             except EquityValue.DoesNotExist:
                 EquityValue.objects.create(source=DataSource.UPLOAD.value, equity=self.equity, price=self.price, real_date=self.real_date, date=self.date)
+
+            for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=self.equity).values_list('account', flat=True).distinct()):
+                account.reset()
+
+        self.account.reset()

@@ -471,6 +471,8 @@ def upload_file(request):
                     else:  # Must be generic
                         importer = StockImporter(form.cleaned_data['new_account_currency'], reader, request.user, HEADERS, managed=False)
                     importer.process()
+                    for account in Account.objects.filter(user=request.user):
+                        account.reset()  # Maybe overkill but how often do we import files
                     if len(importer.warnings) != 0:
                         return render(request, "stocks/uploadfile.html",
                                       {"form": form, 'custom_warnings': importer.warnings})
@@ -481,31 +483,6 @@ def upload_file(request):
     else:
         form = UploadFileForm()
     return render(request, "stocks/uploadfile.html", {"form": form})
-
-
-@login_required
-def edit_transaction(request, pk):
-    xa: Transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
-
-    if request.method == 'POST':
-        form = TransactionForm(request.POST, initial={'user': request.user})
-        if form.is_valid():
-            action = form.cleaned_data['xa_action']
-            if action == Transaction.FUND or Transaction.REDEEM:
-                xa.date = form.cleaned_data['date']
-                xa.price = 0
-                xa.quantity = 0
-                xa.value = form.cleaned_data['value']
-                xa.xa_action = form.cleaned_data['xa_action']
-                xa.account = form.cleaned_data['account']
-            else:
-                xa.date = form.cleaned_data['date']
-                xa.price = form.cleaned_data['price']
-                xa.quantity = form.cleaned_data['quantity']
-                xa.value = 0
-                xa.xa_action = form.cleaned_data['xa_action']
-                xa.account = form.cleaned_data['account']
-            xa.save()
 
 
 @login_required
@@ -626,6 +603,7 @@ def add_transaction(request):
                                                 'real_date': new.real_date,
                                                 'xa_action': new.xa_action})
             else:
+                new.account.reset()
                 return HttpResponseRedirect(reverse('account_details', kwargs={'pk': new.account.id}))
     else:  # Initial get
         form = TransactionForm(initial={'user': request.user})
@@ -655,11 +633,15 @@ def account_equity_date_update(request, p_pk, e_pk, date_str):
                 quantity = form.cleaned_data['shares'] - shares
                 action = Transaction.BUY if quantity > 0 else Transaction.SELL
                 Transaction.objects.create(account=account, equity=equity, xa_action=action, real_date=this_date, quantity=quantity, estimated=True)
+                account.reset()
+
             if form.cleaned_data['price'] and form.cleaned_data['price'] != price:
                 ev = EquityValue.objects.get(equity=equity, date=this_date)
                 ev.price = form.cleaned_data['price']
                 ev.source = DataSource.USER.value
                 ev.save()
+                for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=equity).values_list('account', flat=True).distinct()):
+                    account.reset()
             return HttpResponseRedirect(reverse('account_table', kwargs={'pk': account.id}))
         else:
             pass
@@ -712,6 +694,8 @@ def equity_update(request,  key):
 
     equity = get_object_or_404(Equity, symbol=key)
     equity.update(key=profile.av_api_key)
+    for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=equity).values_list('account', flat=True).distinct()):
+        account.reset()
     return HttpResponse(status=200)
 
 
@@ -1093,7 +1077,9 @@ def wealth_summary_chart(request):
 
     accounts = Account.objects.filter(user=user)
     for account in accounts:
+        logger.debug('Processing %s:%s' % (account.id, account))
         for key in dates.keys():
+            logger.debug('Processing date %s' % key)
             this_cost = account.get_pattr('Funds', key) - account.get_pattr('Redeemed', key)
             this_value = account.get_eattr('Value', key)
             dates[key]['cost'] += this_cost

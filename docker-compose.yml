@@ -1,0 +1,124 @@
+version: '3'
+services:
+  mysql:
+    image: mysql
+    container_name: ioom_mysql
+    hostname: database.itsonlyourmoney.com
+    env_file:
+      - diy/production.env
+    networks:
+      ioom_network:
+        ipv4_address: 172.20.0.10
+    volumes:
+      - /mnt/shared/database/DIY:/var/lib/mysql
+    ports:
+      - "43306:3306"
+    expose:
+      - "3306"
+    restart: always
+
+  django:
+    env_file:
+      - diy/production.env
+    build:
+      dockerfile: build/app-Dockerfile
+    container_name: ioom_app
+    hostname: ioom.itsonlyourmoney.com
+    depends_on:
+      - mysql
+    networks:
+      ioom_network:
+        ipv4_address: 172.20.0.15
+    expose:
+      - "8000"  # Expose port for internal communication
+    restart: always
+
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    build:
+      dockerfile: build/nginx-Dockerfile
+    container_name: ioom_nginx
+    hostname: nginx.itsonlyourmoney.com
+    volumes:
+      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
+      - /mnt/shared/project/diy/certbot/www:/var/www/certbot
+    depends_on:
+      # - certbot
+      - django
+    networks:
+      ioom_network:
+        ipv4_address: 172.20.0.20
+    restart: always
+
+  certbot:
+    image: certbot/certbot
+    container_name: ioom_certbot
+    volumes:
+      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
+      - /mnt/shared/project/diy/certbot/www:/var/www/certbot
+    command: certonly --webroot --webroot-path=/var/www/certbot --email scott.sargent61@gmail.com --agree-tos --non-interactive --expand --domains www.itsonlyourmoney.com --domains mail.itsonlyourmoney.com
+
+  redis:
+    # Since this is not visible outside the docker network.   No need to expose the port
+    image: redis:latest
+    container_name: ioom_redis
+    hostname: redis.itsonlyourmoney.com
+    networks:
+      ioom_network:
+        ipv4_address: 172.20.0.30
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  celery:
+    build:
+      dockerfile: build/celery-Dockerfile
+    container_name: ioom_celery
+    hostname: celery.itsonlyourmoney.com
+    networks:
+      ioom_network:
+        ipv4_address: 172.20.0.31
+    command: celery -A diy worker --loglevel=debug
+    volumes:
+      - .:/app
+    env_file:
+      - diy/production.env
+    depends_on:
+      - redis
+      - django
+      - mysql
+
+  beat:
+    build:
+      dockerfile: build/celery-Dockerfile
+    container_name: ioom_beat
+    hostname: beat.itsonlyourmoney.com
+    networks:
+      ioom_network:
+        ipv4_address: 172.20.0.32
+    command: celery -A diy beat --loglevel=debug
+    volumes:
+      - .:/app
+    env_file:
+      - diy/production.env
+    depends_on:
+      - redis
+      - django
+      - mysql
+volumes:
+  redis_data:
+
+networks:
+  ioom_network:
+    ipam:
+    # Specify driver options
+      driver: default
+      config:
+        - subnet: "172.20.0.0/16"
+
+
+
+

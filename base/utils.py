@@ -1,9 +1,15 @@
+import logging
+import pickle
 import platform
 import tempfile
 
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from pathlib import Path
+
+from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 
 class DIYImportException(Exception):
@@ -78,6 +84,43 @@ class DateUtil:
         else:  # I guess this is by the day
             value = label_date.strftime('%d-%b-%Y')
         return value
+
+def cache_dataframe(key, dataframe, timeout=3600):
+    """
+    Cache a Pandas DataFrame.
+
+    Args:
+        key (str): The cache key.
+        dataframe (pd.DataFrame): The DataFrame to cache.
+        timeout (int): Cache expiration time in seconds (default: 1 hour).
+    """
+    # Serialize the DataFrame to a binary format
+    pickled_data = pickle.dumps(dataframe)
+    cache.set(key, pickled_data, timeout)
+
+
+def clear_cached_dataframe(key):
+    cache.delete(key)
+
+
+def get_cached_dataframe(key):
+    """
+    Retrieve a Pandas DataFrame from the cache.
+
+    Args:
+        key (str): The cache key.
+
+    Returns:
+        pd.DataFrame or None: The cached DataFrame, or None if not found.
+    """
+    # Retrieve the binary data from the cache
+    pickled_data = cache.get(key)
+    if pickled_data:
+        logger.debug('Returned cache for %s' % key)
+        cache.set(key, pickled_data, 3600)
+        # Deserialize the binary data back into a DataFrame
+        return pickle.loads(pickled_data)
+    return None
 
 
 def normalize_date(this_date) -> datetime.date:

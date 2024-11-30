@@ -90,7 +90,7 @@ This is unix based.  I am sure you can figure it out.
     docker run --name diy_app    --restart unless-stopped --network diy_network --ip 172.20.0.15 --env-file diy/diy.env -d diy-app
     docker run --name diy_cron   --restart unless-stopped --network diy_network --ip 172.20.0.25 --env-file diy/diy.env -d diy-cron
     docker run --name diy_nginx  --restart unless-stopped --network diy_network --ip 172.20.0.20 -p 80:80 -d diy-nginx
-
+    docker run --name diy_redis  --restart unless-stopped --network diy_network --ip 172.20.0.30 -p 6379:6379 -d redis
 
 ### Your DONE !
 Not too hard I hope.

@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR / 'diy' / 'diy.env')
+# In production,  a production.env file is used to set variable via docker compose
+load_dotenv(BASE_DIR / 'diy' / 'local.env')
 
 try:
     DEBUG = os.environ['DIY_DEBUG']
@@ -20,7 +21,6 @@ try:
 except KeyError:
     DEBUG = False
 
-DEBUG = True
 try:
     DIY_LOCALDB = os.environ['DIY_LOCALDB']
     DIY_LOCALDB = DIY_LOCALDB == 'True'
@@ -60,7 +60,6 @@ SECRET_KEY = os.environ['SECRET_KEY']
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587
 EMAIL_HOST_USER = os.environ['DIY_EMAIL_USER']
@@ -79,7 +78,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django_extensions'
+    'django_extensions',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -165,9 +165,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
 USE_I18N = True
-USE_TZ = False
+
+#Time Zone
+USE_TZ = True  
+TIME_ZONE = 'America/New_York'
 
 
 # Static files (CSS, JavaScript, Images)
@@ -185,3 +187,23 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REDIS_HOST = '172.20.0.30'  # Use 'localhost' if running on the same machine
+REDIS_PORT = 6379         # Default Redis port exposed by Docker
+REDIS_DB = 0             # Redis database index
+REDIS_PASSWORD = None    # Redis password (if you set one)
+
+CELERY_BROKER_URL = 'redis://172.20.0.30:6379/0'  # Use Redis as the message broker
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULTS_BACKEND = CELERY_BROKER_URL
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# 'BACKEND': 'django_redis.cache.RedisCache',
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+    }
+}
