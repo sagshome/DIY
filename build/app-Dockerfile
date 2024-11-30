@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY manage.py /app
 COPY base /app/base
 COPY diy /app/diy
+# This local.env file is used for non-production run - all ENV settings are in the production.env file
+RUN rm /app/diy/local.env
 COPY stocks /app/stocks
 COPY expenses /app/expenses
 EXPOSE 8001
