@@ -10,7 +10,7 @@ urlpatterns = [
     path(r'api/cost_value/', views.cost_value_chart, name='cost_value_chart'),
     path(r'api/compare_chart/', views.compare_equity_chart, name='compare_equity_chart'),
     path('api/wealth', views.wealth_summary_chart, name='wealth_chart'),
-
+    path('api/wealth_pie', views.wealth_summary_pie, name='wealth_pie'),
 
     path(r'equity/add', views.add_equity, name='add_equity'),
     path(r'equity/<key>/update/', views.equity_update, name='equity_update'),

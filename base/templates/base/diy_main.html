@@ -11,6 +11,12 @@
         <canvas id="wealthChart"></canvas>
     </div>
 </div>
+<div class="w3-container w3-cell-row">
+    <div class="w3-cell w3-mobile w3-half" >
+        <canvas id="wealthPie"></canvas>
+    </div>
+</div>
+
 <script>
     $(document).ready(function() {
         $.ajax({
@@ -62,6 +68,39 @@
                 console('Error occured');
             }
         });
+        $.ajax({
+            url: "{% url 'wealth_pie' %}",
+            success: function (data) {
+                new Chart("wealthPie", {
+                    type: "pie",
+                    data: {
+                      labels: data['labels'],
+                      datasets: [{
+                          data: data['data'],
+                          backgroundColor: data['colors'],
+                      }]
+                    },
+                    options: {
+                       responsive: false,
+                       maintainAspectRatio: false,
+                       title: {
+                         display: true,
+                         text: 'Wealth Value by Portfolio/Account'
+                       },
+                       animation: {
+                         animateScale: true,
+                           animateRotate: true
+                       },
+                       legend: {
+                         display: true,
+                         position: 'right',
+                         align: 'center'
+                       }  // legend
+                    }  // options
+                })  // chart
+            } // success
+        });  // ajax
+
         new Chart("cashChart", {
           type: 'line',
           data: {{cash_data | safe}},

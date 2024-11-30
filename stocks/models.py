@@ -1015,7 +1015,7 @@ class Account(BaseContainer):
     def reset(self):
         super(Account, self).reset()
         if self.portfolio:
-            self.porfolio.reset()
+            self.portfolio.reset()
 
     @property
     def start(self):
