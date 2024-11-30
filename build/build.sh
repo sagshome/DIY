@@ -19,7 +19,7 @@ echo 'Starting Services'
 docker network create --subnet=172.20.0.0/16 diy_network 2> /dev/null
 docker start diy_db
 sleep 5
-# docker run --name diy_db  --restart unless-stopped --network diy_network --ip 172.20.0.10 --env-file diy/diy.env -d mysql
+# docker run --name diy_db  --restart unless-stopped --network diy_network --ip 172.20.0.10 --env-file diy/local.env -d mysql
 docker run --name diy_app    --restart unless-stopped --network diy_network --ip 172.20.0.15 --env-file diy/diy.env -d diy-app
 docker run --name diy_nginx  --restart unless-stopped --network diy_network --ip 172.20.0.20 -p 80:80 -d diy-nginx
 

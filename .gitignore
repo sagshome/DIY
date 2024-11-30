@@ -1,5 +1,6 @@
 /db.sqlite3
 /diy/diy.env
+/diy/local.env
 /build/package.json
 /build/package-lock.json
 /.coverage

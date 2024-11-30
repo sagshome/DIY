@@ -2,7 +2,7 @@
 Django settings for diy project.
 
 - Customization including mandatory are taken from ENVIRONMENT variables (passed in a ENV file for docker)
-  or they are read from local_settings.py file (easier for development) - see the diy/diy.env file for required values
+  or they are read from local_settings.py file (easier for development) - see the diy/local.env file for required values
 """
 import os
 import sys
@@ -20,6 +20,12 @@ try:
     DEBUG = DEBUG == 'True'
 except KeyError:
     DEBUG = False
+
+try:
+    NO_CACHE = os.environ['NO_CACHE']
+    NO_CACHE = NO_CACHE == 'True'
+except KeyError:
+    NO_CACHE = False
 
 try:
     DIY_LOCALDB = os.environ['DIY_LOCALDB']

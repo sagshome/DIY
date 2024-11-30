@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 AV_API_KEY = settings.ALPHAVANTAGEAPI_KEY
 
 
-
 class DataSource(Enum):
     ADMIN = 10  # !
     ADJUSTED = 20 # F

@@ -7,6 +7,7 @@ from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
+from django.conf import settings
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ class DateUtil:
             value = label_date.strftime('%d-%b-%Y')
         return value
 
+
 def cache_dataframe(key, dataframe, timeout=3600):
     """
     Cache a Pandas DataFrame.
@@ -95,12 +97,14 @@ def cache_dataframe(key, dataframe, timeout=3600):
         timeout (int): Cache expiration time in seconds (default: 1 hour).
     """
     # Serialize the DataFrame to a binary format
-    pickled_data = pickle.dumps(dataframe)
-    cache.set(key, pickled_data, timeout)
+    if not settings.NO_CACHE:
+        pickled_data = pickle.dumps(dataframe)
+        cache.set(key, pickled_data, timeout)
 
 
 def clear_cached_dataframe(key):
-    cache.delete(key)
+    if not settings.NO_CACHE:
+        cache.delete(key)
 
 
 def get_cached_dataframe(key):
@@ -114,12 +118,13 @@ def get_cached_dataframe(key):
         pd.DataFrame or None: The cached DataFrame, or None if not found.
     """
     # Retrieve the binary data from the cache
-    pickled_data = cache.get(key)
-    if pickled_data:
-        logger.debug('Returned cache for %s' % key)
-        cache.set(key, pickled_data, 3600)
-        # Deserialize the binary data back into a DataFrame
-        return pickle.loads(pickled_data)
+    if not settings.NO_CACHE:
+        pickled_data = cache.get(key)
+        if pickled_data:
+            logger.debug('Returned cache for %s' % key)
+            cache.set(key, pickled_data, 3600)
+            # Deserialize the binary data back into a DataFrame
+            return pickle.loads(pickled_data)
     return None
 
 
