@@ -14,6 +14,24 @@ from django.utils.encoding import force_bytes
 from base.models import Profile, CURRENCIES
 
 
+class MainForm(forms.Form):
+    PERIODS = (
+        ('MONTH', 'Months'),
+        ('QTR', 'Quarters'),
+        ('YEAR', 'Years'),
+    )
+    period = forms.ChoiceField(choices=PERIODS)
+    years = forms.IntegerField(required=False, max_value=10)
+    show_trends = forms.ChoiceField(required=False, choices=[('Show', 'Yes'), ('Hide', 'No')])
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Adjusted to make W3C.CSS look nicer
+        self.fields["period"].widget.attrs['style'] = 'height:28.5px;'
+        self.fields["years"].widget.attrs['style'] = 'width:50px;height:28.5px;'
+        self.fields["show_trends"].widget.attrs['style'] = 'height:28.5px;'
+
 class UserForm(forms.ModelForm):
     class Meta:
         model = User

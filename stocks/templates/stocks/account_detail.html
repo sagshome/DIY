@@ -2,8 +2,6 @@
 {% block title %}Portfolio Details{% endblock %}
 {% load stocks_tags %}
 {% block content %}
-
-
 <script>
     $(document).ready(function() {
       $.ajax({
@@ -53,21 +51,10 @@
 <p>Total Funding is: ${{funded|floatformat:'0g'}}, Total Redeemed is: ${{redeemed|floatformat:'0g'}} {% calc_return funded redeemed %}</p>
 
 <div class="w3-row">
-    <div style="height:350px;" class="w3-half w3-container">
+    <div style="height:350px;" class="w3-container">
         <canvas id="lineChart" class="w3-card-2"></canvas>
     </div>
-    <div class="w3-half w3-container">
-        <div id="documentation" class="w3-hide-small w3-container">
-            The <b>Return vs Cost</b> chart displays <br>
-            <ul>
-                <li>Inflated Cost - How much your invested money would be worth when inflaction is factored in</li>
-                <li>Effective Cost - After collecting dividends and selling stocks, how much did this really cost you (without inflation)</li>
-                <li>Value - The value of the stocks in the portfolio</li>
-            </ul>
-        </div>
-    </div>
 </div>
-
 
 <div class="w3-bar w3-hide-small">
     <div class="w3-bar-item">

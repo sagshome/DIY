@@ -106,8 +106,6 @@
         $(document).ready(function() {
             expense_chart('bar', 'barChart', 'Stacked - Expenses over time', false);
             expense_chart('pie', 'pieChart', 'Breakdown - by Category', false)
-            expense_chart('bar', 'incomeBar', 'Stacked - Income over time', true);
-            expense_chart('pie', 'incomePie', 'Breakdown - by Category', true)
         });
     </script>
 {% endblock main_scripts %}
@@ -136,20 +134,6 @@
                 <div class="w3-cell">
                     <div style="height:310px;">
                         <canvas id="barChart" class="w3-card-2"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="w3-cell-row w3-margin">
-                <div class="w3-cell">
-                    <div style="height:310px;" >
-                        <canvas id="incomePie" class="w3-card-2"></canvas>
-                        <p>Total: ${{total | floatformat:2}}</p>
-                    </div>
-
-                </div>
-                <div class="w3-cell">
-                    <div style="height:310px;">
-                        <canvas id="incomeBar" class="w3-card-2"></canvas>
                     </div>
                 </div>
             </div>

@@ -1103,14 +1103,20 @@ def wealth_summary_chart(request):
 
     return JsonResponse(chart_data)
 
+
 @login_required
 def wealth_summary_pie(request):
     data = []
     labels = []
+    option_links = []
     for account in Account.objects.filter(user=request.user, portfolio__isnull=True, _end__isnull=True):
-        data.append(account.value)
+        value = account.value if account.value > 0 else 0
+        data.append(value)
+        option_links.append(reverse('account_details', kwargs={'pk': account.id}))
         labels.append(account.name)
     for portfolio in Portfolio.objects.filter(user=request.user):
-        data.append(portfolio.value)
+        value = portfolio.value if portfolio.value > 0 else 0
+        data.append(value)
+        option_links.append(reverse('portfolio_details', kwargs={'pk': portfolio.id}))
         labels.append(portfolio.name)
-    return JsonResponse({'data': data, 'labels': labels, 'colors': COLORS})
+    return JsonResponse({'data': data, 'labels': labels, 'options_links': option_links, 'colors': COLORS})

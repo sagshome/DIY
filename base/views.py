@@ -27,75 +27,31 @@ from django.contrib.auth import login as auth_login
 from django.views.generic.base import TemplateView
 
 from expenses.models import Item
+from base.forms import MainForm
 
 
 @login_required
 def diy_main(request):
-    today = datetime.now()
-    from_date = today.replace(year=today.year-3, day=1)
-    income = Item.objects.filter(user=request.user, ignore=False, date__gte=from_date, category__name='Income')
-    expense = Item.objects.filter(user=request.user, ignore=False, date__gte=from_date).exclude(category__name='Income')
 
-    expense_total = expense.aggregate(Sum('amount'))['amount__sum']
-    income_total = income.aggregate(Sum('amount'))['amount__sum']
+    span = 3
+    period = 'QTR'
+    trends = 'Hide'
 
-    income_set = income.annotate(qtr=TruncQuarter('date')).values('qtr').annotate(total=Sum('amount')).order_by('qtr')
-    expense_set = expense.annotate(qtr=TruncQuarter('date')).values('qtr').annotate(total=Sum('amount')).order_by('qtr')
+    if request.method == 'POST':
+        form = MainForm(request.POST)
+        if form.is_valid():
+            span = form.cleaned_data['years'] if form.cleaned_data['years'] else 3
+            period = form.cleaned_data['period']
+            trends = 'Show' if form.cleaned_data['show_trends'] else 'Hide'
+    else:
+        form = MainForm(initial={'years': span, 'period': period, 'show_trends': 'Hide'})
 
-    # Data is in a list of [{'qtr': date, 'total': Decimal()}...] - A bit messy so lets make it a real dictionary
-    income_dict = {}
-    expense_dict = {}
-    dates = []
-    for element in income_set:
-        dates.append(element['qtr'])
-        income_dict[element['qtr']] = element['total']
-    for element in expense_set:
-        dates.append(element['qtr'])
-        expense_dict[element['qtr']] = element['total']
+    return render(request, "base/diy_main.html",{'form': form, 'span': span, 'period': period, 'trends': trends})
 
-    dates = sorted(list(set(dates)))   # A lot of work to ensure a unique sorted list!
-
-    income_data = [0 for i in range(len(dates))]
-    expense_data = [0 for i in range(len(dates))]
-    labels = []
-    datasets = []
-    index = 0
-    for next_date in dates:
-        if next_date.month == 1:
-            labels.append('Q1-' + str(next_date.year))
-        elif next_date.month == 4:
-            labels.append('Q2-' + str(next_date.year))
-        elif next_date.month == 7:
-            labels.append('Q3-' + str(next_date.year))
-        elif next_date.month == 10:
-            labels.append('Q4-' + str(next_date.year))
-        else:
-            labels.append(str(next_date.month) + '-' + str(next_date.year))
-
-        if next_date in income_dict:
-            income_data[index] = float(income_dict[next_date])
-        if next_date in expense_dict:
-            expense_data[index] = float(expense_dict[next_date])
-        index += 1
-
-        datasets = [{'label': 'Income',
-                     'borderColor': PALETTE['olive'], #2ECC71',
-                     'data': income_data,
-                    },
-                    {'label': 'Expenses',
-                     'borderColor': PALETTE['coral'], #FF6F61',
-                     'data': expense_data,
-                    }]
-    cash_data = {'datasets': datasets, 'labels': labels}  #, 'colors': ['#2ECC71', '#FF6F61']}
-
-    return render(request, "base/diy_main.html",{
-        'expense_total': expense_total,
-        'income_total': income_total,
-        'cash_data': cash_data
-    })
 
 def sites_up(request):
     return JsonResponse({'up': True})
+
 
 class NewAccountView(PasswordResetView):
     """

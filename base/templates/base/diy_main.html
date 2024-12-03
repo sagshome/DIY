@@ -2,76 +2,46 @@
 {% load static %}
 
 {% block content %}
-<p>Welcome {{ request.user }}</p>
+    <p>Welcome {{ request.user }}</p>
+    <form method="post" id="itemForm" novalidate>
+        {% csrf_token %}
+
+        {% if form.errors %}
+            <div class="w3-panel w3-red">
+                {{form.errors}}
+            </div>
+        {% endif %}
+
+        <div class="w3-bar">
+            <div class="w3-bar-item w3-input w3-hide-small">
+                Period:<br>{{form.period}}
+            </div>
+            <div class="w3-bar-item w3-input">
+                Years:<br>{{form.years}}
+            </div>
+            <div class="w3-bar-item w3-input">
+                Show Trends:<br>{{form.show_trends}}
+            </div>
+
+            <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
+        </div>
+    </form>
+
 <div class="w3-container w3-cell-row">
     <div class="w3-cell w3-mobile w3-half">
         <canvas id="cashChart"></canvas>
     </div>
-    <div class="w3-cell w3-mobile w3-half" >
-        <canvas id="wealthChart"></canvas>
-    </div>
-</div>
-<div class="w3-container w3-cell-row">
-    <div class="w3-cell w3-mobile w3-half" >
+        <div class="w3-cell w3-mobile w3-half" >
         <canvas id="wealthPie"></canvas>
     </div>
-</div>
 
+</div>
 <script>
     $(document).ready(function() {
         $.ajax({
-            url: "{% url 'wealth_chart' %}",
-            data: {},
-            success: function (data) {
-                new Chart("wealthChart", {
-                type: "line",
-                data: data,
-                options: {
-                    title: {
-                      display: true,
-                      text: "Wealth - Cost vs Value"
-                    },
-                    responsive: true,  // Make the chart responsive to screen resizing
-                    scales: {
-                        y: {
-                            beginAtZero: true  // Start Y-axis from zero
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'top',  // Position the legend at the top
-                            labels: {
-                                font: {
-                                    size: 14  // Font size for the legend
-                                }
-                            }
-                        },
-                        tooltip: {
-                            enabled: true,  // Enable tooltips when hovering over the chart
-                            backgroundColor: 'rgba(0, 0, 0, 0.7)',  // Tooltip background color
-                            titleColor: 'white',  // Title text color in the tooltip
-                            bodyColor: 'white'  // Body text color in the tooltip
-                        }
-                    },
-                    elements: {
-                        line: {
-                            borderWidth: 4  // Line width
-                        },
-                        point: {
-                            radius: 5,  // Point size on the line
-                        }
-                    }
-                }
-          });
-        },
-            error: function(data) {
-                console('Error occured');
-            }
-        });
-        $.ajax({
             url: "{% url 'wealth_pie' %}",
             success: function (data) {
-                new Chart("wealthPie", {
+                new Chart(wealthPie, {
                     type: "pie",
                     data: {
                       labels: data['labels'],
@@ -81,7 +51,16 @@
                       }]
                     },
                     options: {
-                       responsive: false,
+                        onClick: (event, elements) => {
+                          if (elements.length > 0) {
+                            const clickedElementIndex = elements[0]._index; // Get the clicked slice index
+                            const url = data.options_links[clickedElementIndex]; // Get the corresponding URL
+                            if (url) {
+                              window.location.href = url; // Navigate to the URL
+                            }
+                          }
+                       },
+                       responsive: true,
                        maintainAspectRatio: false,
                        title: {
                          display: true,
@@ -101,46 +80,60 @@
             } // success
         });  // ajax
 
-        new Chart("cashChart", {
-          type: 'line',
-          data: {{cash_data | safe}},
-          options: {
-            title: {
-                display: true,
-                text: "Quarterly Cash Flow"
-            },
-            responsive: true,  // Make the chart responsive to screen resizing
-            scales: {
-                y: {
-                    beginAtZero: true  // Start Y-axis from zero
-                }
-            },
-            plugins: {
-                legend: {
-                    position: 'top',  // Position the legend at the top
-                    labels: {
-                        font: {
-                            size: 14  // Font size for the legend
-                        }
+        var width = window.innerWidth
+        var trends = "{{ trends }}"
+        var period = "{{ period }}"
+        var span = "{{ span }}"
+        $.ajax({
+            url: "{% url 'cash_flow_data' %}",
+            data: {span: span, period: period, trends: trends},  // 3 years of data
+            success: function (data) {
+            new Chart("cashChart", {
+              type: 'line',
+              data: {
+                labels: data['labels'],
+                datasets: data['datasets']
+              },
+              options: {
+                title: {
+                    display: true,
+                    text: "Cash Flow"
+                },
+                responsive: true,  // Make the chart responsive to screen resizing
+                scales: {
+                    y: {
+                        beginAtZero: true  // Start Y-axis from zero
                     }
                 },
-                tooltip: {
-                    enabled: true,  // Enable tooltips when hovering over the chart
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',  // Tooltip background color
-                    titleColor: 'white',  // Title text color in the tooltip
-                    bodyColor: 'white'  // Body text color in the tooltip
-                }
-            },
-            elements: {
-                line: {
-                    borderWidth: 4  // Line width
+                plugins: {
+                    legend: {
+                        position: 'top',  // Position the legend at the top
+                        labels: {
+                            font: {
+                                size: 14  // Font size for the legend
+                            }
+                        }
+                    },
+                    tooltip: {
+                        enabled: true,  // Enable tooltips when hovering over the chart
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',  // Tooltip background color
+                        titleColor: 'white',  // Title text color in the tooltip
+                        bodyColor: 'white'  // Body text color in the tooltip
+                    }
                 },
-                point: {
-                    radius: 5,  // Point size on the line
+                elements: {
+                    line: {
+                        borderWidth: 4  // Line width
+                    },
+                    point: {
+                        radius: 5,  // Point size on the line
+                    }
                 }
             }
-        }
-        });
+            });
+                        } // success
+        });  // ajax
+        //};
     });
 </script>
 {% endblock content %}

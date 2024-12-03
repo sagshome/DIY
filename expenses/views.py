@@ -1,10 +1,11 @@
 import csv
 import logging
+import numpy as np
 
 from datetime import datetime
 from dateutil import relativedelta
 from json import dumps
-
+from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q, Sum
@@ -445,9 +446,8 @@ def cash_flow_chart(request):
     2.  Expenses
     """
 
-    user = request.user
     date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
-
+    show_trends = True if request.GET.get('trends') == 'Show' else False
     income = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date, category__name='Income')
     expense = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date).exclude(category__name='Income')
 
@@ -469,9 +469,9 @@ def cash_flow_chart(request):
     # Data is in a list of [{'period': date, 'total': Decimal()}...] - A bit messy so lets make it a real dictionary
     dates = date_util.dates({'income': 0, 'expenses': 0})
     for element in income_set:
-        dates[element[key]['income']] = element['total']
+        dates[element[key]]['income'] = float(element['total'])
     for element in expense_set:
-        dates[element[key]['expenses']] = element['total']
+        dates[element[key]]['expenses'] = float(element['total'])
 
     # Lets get the data back to lists
     labels = []
@@ -482,11 +482,18 @@ def cash_flow_chart(request):
         expenses.append(dates[key]['expenses'])
         income.append(dates[key]['income'])
 
-    chart_data = {'labels': labels,
-                  'datasets': [
-                      {'label': 'Expenses', 'fill': False, 'data': expenses, 'boarderColor': PALETTE['coral'],  'backgroundColor': PALETTE['coral'], 'tension': 0.1},
-                      {'label': 'Income', 'fill': False, 'data': income, 'boarderColor': PALETTE['olive'],  'backgroundColor': PALETTE['olive']}
-                      ]
-                  }
+    data_sets = [
+        {'label': 'Expenses',  'fill': False, 'data': expenses, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1},
+        {'label': 'Income', 'fill': False, 'data': income, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'tension': 0.1}]
 
-    return JsonResponse(chart_data)
+    if show_trends:
+        x_indices = np.arange(len(dates))
+        slope, intercept = np.polyfit(x_indices, expenses, 1)
+        # Calculate trend line points
+        expense_trend = [slope * x + intercept for x in x_indices]
+        slope, intercept = np.polyfit(x_indices, income, 1)
+        income_trend = [slope * x + intercept for x in x_indices]
+        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': expense_trend, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'borderDash': [5, 5]})
+        data_sets.append({'label': 'Income-Trend', 'fill': False, 'data': income_trend, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'borderDash': [5, 5]})
+
+    return JsonResponse({'labels': labels, 'datasets': data_sets})

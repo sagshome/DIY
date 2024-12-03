@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="{% static 'favicon.ico' %}">
   <link rel="stylesheet" href="{% static 'w3-css/w3.css' %}">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
   <style>
     body {font-family: "Lato", sans-serif}
     .mySlides {display: none}
@@ -33,7 +33,6 @@
         x.className = x.className.replace(" w3-show", "");
       }
     }
-
     function toggle_help() {
        var help_page = document.getElementById('DIYHelpContent');
        if (help_page.style.display == 'none') {
@@ -42,7 +41,6 @@
         help_page.style.display='none';
        }
     }
-
   </script>
   {% endblock navscript %}
   {% block navbar %}
@@ -58,7 +56,6 @@
           <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Show Templates</a>
           <a href="{% url 'expenses_upload' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import</a>
           <a href="{% url 'expenses_export' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Export</a>
-
         </div>
       </div>
       <div class="w3-dropdown-hover">
@@ -74,7 +71,6 @@
         </div>
       </div>
       <button onclick=toggle_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>
-
       <div class="w3-right">
         {% if request.user.is_authenticated %}
           <form title="log out" action="{% url 'logout' %}" method="post">
@@ -84,7 +80,6 @@
         {% endif %}
       </div>
     </div>
-
   </div>
   {% endblock navbar %}
 
@@ -96,7 +91,7 @@
           {% block help_content %}
           <p>
             IooM = It's Only Our Money is a personal hobby.   It provides a way to track cash (Income vs Expenses) and wealth (Investments).
-            If you have any questions please contact me at <a href="D1Yapp.ca@gmail.com">D1Yapp.ca@gmail.com</a>.
+            If you have any questions please contact me at <a href="itsonlyourmoney@gmail.com">ItsOnlyOurMoney@gmail.com</a>.
           </p>
           <p>
             Please specific help on each page.

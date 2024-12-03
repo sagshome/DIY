@@ -27,12 +27,16 @@ class DateUtil:
 
     def __init__(self, period: str = 'QTR', span: int = 3):
         self.period = period if period else 'QTR'
-        self.span = span if span else 3
+        try:
+            self.span = int(span)
+        except ValueError:
+            logger.error('Invalid SPAN value: %s' % span)
+            self.span = 3
         self.today = datetime.now().date().replace(day=1)
 
         if period == 'YEAR':
             self.step = 12
-            self.start_date = self.today.replace(year=self.today.year - (self.span + 1)).replace(month=12)  # Nov/2024 -> Dec/2021
+            self.start_date = self.today.replace(year=self.today.year - (self.span + 1)).replace(month=1)  # Nov/2024 -> Dec/2021
         elif period == 'MONTH':
             self.start_date = self.today.replace(year=self.today.year - self.span)  # Nov/2024 -> Nov 2022
             self.step = 1
@@ -40,13 +44,13 @@ class DateUtil:
             self.step = 3
             start_date = self.today.replace(year=(self.today.year - self.span))
             if self.today.month < 4:
-                self.start_date = start_date.replace(month=3)
+                self.start_date = start_date.replace(month=1)
             elif self.today.month < 7:
-                self.start_date = start_date.replace(month=6)
+                self.start_date = start_date.replace(month=4)
             elif self.today.month < 10:
-                self.start_date = start_date.replace(month=9)
+                self.start_date = start_date.replace(month=7)
             else:
-                self.start_date = start_date.replace(month=12)
+                self.start_date = start_date.replace(month=10)
 
     @property
     def is_month(self):
@@ -69,9 +73,9 @@ class DateUtil:
         return dates
 
     def date_to_label(self, label_date: date) -> str:
-        if self.period == 'Year':
+        if self.period == 'YEAR':
             value = str(label_date.year)
-        elif self.period == 'Month':
+        elif self.period == 'MONTH':
             value = label_date.strftime('%Y-%b')
         elif self.period == 'QTR':
             if label_date.month < 4:
