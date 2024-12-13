@@ -11,6 +11,7 @@ from dateutil import relativedelta
 import plotly.io as pio
 import plotly.graph_objects as go
 
+import numpy as np
 import pandas as pd
 from pandas import DataFrame, to_datetime
 
@@ -31,7 +32,7 @@ from django.http import JsonResponse
 
 
 
-from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio
+from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio, BaseContainer
 from .forms import AccountAddForm, AccountForm, TransactionForm, AccountCopyForm, UploadFileForm, ManualUpdateEquityForm, EquityForm, AddEquityForm, PortfolioForm, AccountCloseForm
 from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
 from base.utils import DIYImportException, normalize_today, normalize_date, DateUtil
@@ -59,8 +60,16 @@ class AccountView(LoginRequiredMixin, ListView):
             context['can_update'] = True if profile.av_api_key else False
         except Profile.DoesNotExist:
             context['can_update'] = False
-        context['portfolio_list'] = Portfolio.objects.filter(user=self.request.user)
-        context['account_list'] = Account.objects.filter(user=self.request.user, portfolio__isnull=True)
+
+        account_list_data = []
+        for portfolio in Portfolio.objects.filter(user=self.request.user):
+            account_list_data.append(portfolio.summary)
+        for account in Account.objects.filter(user=self.request.user, portfolio__isnull=True):
+            account_list_data.append(account.summary)
+
+        account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
+
+        context['account_list_data'] = account_list_data
         return context
 
 
@@ -221,9 +230,25 @@ class PortfolioTableView(LoginRequiredMixin, DetailView):
                 }
 
 
-class PortfolioDetailView(LoginRequiredMixin, DetailView):
-    model = Portfolio
+class ContainerDetailView(LoginRequiredMixin, DetailView):
+
     template_name = 'stocks/account_detail.html'
+
+    @staticmethod
+    def equity_data(myobj: BaseContainer):
+        this_date = np.datetime64(normalize_today())
+        equity_data = myobj.e_pd.loc[myobj.e_pd['Date'] == this_date].groupby(['Date', 'Equity']).agg(
+            {'Shares': 'sum', 'Cost': 'sum', 'Price': 'max', 'Dividends': 'max',
+             'TotalDividends': 'sum', 'Value': 'sum', 'AvgCost': 'max',
+             'RelGain': 'sum', 'UnRelGain': 'sum', 'RelGainPct': 'mean', 'UnRelGainPct': 'mean'}).reset_index()
+
+        equity_data.replace(np.nan, 0, inplace=True)
+        equity_data.sort_values(by=['Value'], inplace=True, ascending=False)
+        return equity_data
+
+
+class PortfolioDetailView(ContainerDetailView):
+    model = Portfolio
 
     def get_object(self):
         return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
@@ -238,6 +263,7 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         p: Portfolio = context['portfolio']
 
+
         funded = p.transactions.filter(xa_action=Transaction.FUND)
         redeemed = p.transactions.filter(xa_action=Transaction.REDEEM)
         if funded.count() == 0:
@@ -248,18 +274,27 @@ class PortfolioDetailView(LoginRequiredMixin, DetailView):
             redeemed = 0
         else:
             redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
+
+        account_list_data = []
+        for account in Account.objects.filter(user=self.request.user, portfolio=p):
+            account_list_data.append(account.summary)
+
+        account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
+
+        context['account_list_data'] = account_list_data
+
         return {'object': p,
                 'object_type': 'Portfolio',
-                'account_list': p.account_set.all().order_by('-_start'),
+                'account_list_data': account_list_data,
                 'xas': p.transactions.order_by('-real_date', 'xa_action'),
+                'can_update': False,
                 'funded': funded,
                 'redeemed': abs(redeemed),
+                'equity_list_data': json.loads(self.equity_data(p).to_json(orient='records'))
                 }
 
-
-class AccountDetailView(LoginRequiredMixin, DetailView):
+class AccountDetailView(ContainerDetailView):
     model = Account
-    template_name = 'stocks/account_detail.html'
 
     def get_object(self):
         return super().get_object(queryset=Account.objects.filter(user=self.request.user))
@@ -274,10 +309,10 @@ class AccountDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         profile = Profile.objects.get(user=self.request.user)
         can_update = True if profile.av_api_key else False
-        p: Account = context['account']
+        account: Account = context['account']
 
-        funded = p.transactions.filter(xa_action=Transaction.FUND)
-        redeemed = p.transactions.filter(xa_action=Transaction.REDEEM)
+        funded = account.transactions.filter(xa_action=Transaction.FUND)
+        redeemed = account.transactions.filter(xa_action=Transaction.REDEEM)
         if funded.count() == 0:
             funded = 0
         else:
@@ -286,13 +321,14 @@ class AccountDetailView(LoginRequiredMixin, DetailView):
             redeemed = 0
         else:
             redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
-        return {'object': p,
+
+        return {'object': account,
                 'object_type': 'Account',
-                'children': None,
-                'xas': p.transactions.order_by('-real_date', 'xa_action'),
+                'xas': account.transactions.order_by('-real_date', 'xa_action'),
                 'can_update': can_update,
                 'funded': funded,
                 'redeemed': redeemed,
+                'equity_list_data': json.loads(self.equity_data(account).to_json(orient='records'))
                 }
 
 
@@ -801,7 +837,7 @@ def account_equity_details(request, container_type, pk, symbol):
     total_dividends = 0
     form = EquityForm()
     data = []
-    new_df = account.e_pd.sort_values(by='Date').loc[account.e_pd['Equity'] == equity.symbol]
+    new_df = account.e_pd.sort_values(by='Date').loc[account.e_pd['Equity'] == equity.key]
     new_df.sort_values(by='Date', ascending=False, inplace=True, kind='quicksort')
     for element in new_df.to_records():
         extra_data = ''
@@ -1029,7 +1065,7 @@ def cost_value_chart(request):
             JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
         if not my_object:
             JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-        df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == equity.symbol) & (my_object.e_pd['Shares'] != 0)]
+        df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == equity.key) & (my_object.e_pd['Shares'] != 0)]
         df['adjusted_value'] = df['Value'] + df['TotalDividends']
         label1 = 'Cost'
 
@@ -1059,6 +1095,45 @@ def cost_value_chart(request):
 
     return JsonResponse(chart_data)
 
+
+@login_required
+def portfolio_acc_summary(request):
+    user = request.user
+    colors = COLORS.copy()
+    ci = 0
+
+    start = Account.objects.filter(user=user).earliest('_start')._start.strftime('%Y-%m-%d')
+    end = normalize_today().strftime('%Y-%m-%d')
+    date_range = pd.date_range(start=start, end=end, freq='MS')
+    month_df = pd.DataFrame({'Date': date_range, 'Value': 0})
+
+    labels = [this_date.strftime('%Y-%b') for this_date in month_df['Date'].to_list()]
+
+    datasets = []
+    for account in Account.objects.filter(user=user, portfolio__isnull=True):
+        color = colors[ci]
+        ci += 1
+        datasets.append({
+            'label': account.name,
+            'fill': False,
+            'data': pd.concat([month_df,  account.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+            'boarderColor': color,  'backgroundColor': color,
+            'stack': 1,
+        })
+
+    for portfolio in Portfolio.objects.filter(user=user):
+        color = colors[ci]
+        ci += 1
+
+        datasets.append({
+            'label': portfolio.name,
+            'fill': False,
+            'data': pd.concat([month_df,  portfolio.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+            'boarderColor': color,  'backgroundColor': color,
+            'stack': 1,
+        })
+
+    return JsonResponse({'labels': labels, 'datasets': datasets})
 
 @login_required
 def wealth_summary_chart(request):
@@ -1115,7 +1190,7 @@ def wealth_summary_pie(request):
         option_links.append(reverse('account_details', kwargs={'pk': account.id}))
         labels.append(account.name)
     for portfolio in Portfolio.objects.filter(user=request.user):
-        value = portfolio.value if portfolio.value > 0 else 0
+        value = portfolio.value if portfolio.value and portfolio.value > 0 else 0
         data.append(value)
         option_links.append(reverse('portfolio_details', kwargs={'pk': portfolio.id}))
         labels.append(portfolio.name)

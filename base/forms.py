@@ -32,6 +32,7 @@ class MainForm(forms.Form):
         self.fields["years"].widget.attrs['style'] = 'width:50px;height:28.5px;'
         self.fields["show_trends"].widget.attrs['style'] = 'height:28.5px;'
 
+
 class UserForm(forms.ModelForm):
     class Meta:
         model = User

@@ -3,59 +3,61 @@
 {% load stocks_tags %}
 
 {% block content %}
-{% block local_script %}
-    <script>
-        function update(id) {
-            var xhttp = new XMLHttpRequest();
-            var tag_id = "update-" + id
-            xhttp.onreadystatechange = function() {
-              if (this.readyState == 4 && this.status == 200 || this.status == 404) {
-                setTimeout(function(){
-                  document.getElementById(tag_id).innerHTML = 'Update';
-                }, 2000);
-                window.location.href = window.location.href;
-              } else {
-                document.getElementById(tag_id).innerHTML = 'Loading...';
-              }
-            };
-            xhttp.open("get", "/stocks/account/"+id+"/update/", true);
-            xhttp.setRequestHeader("Content-type", "application/json");
-            xhttp.send();
+<script>
+    $(document).ready(function() {
+        $.ajax({
+            url: "{% url 'wealth_summary' %}",
+            success: function (data) {
+                new Chart("lineChart", {
+                    type: "bar",
+                    data: {
+                        labels: data['labels'],
+                        datasets: data['datasets'],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        title: {
+                            display: true,
+                            text: 'Account Accumulation Chart'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'right',
+                            align: 'center'
+                        },
+                    },
+                    scales: {
+                        xAxes: [{
+                            stacked: true // this should be set to make the bars stacked
+                        }],
+                    }
+                });
+            },
+        error: function(data) {
+            alert('Error occured');
         }
-    </script>
-{% endblock local_script %}
-  <h2>Portfolio/Account List</h2>
-    <table class="w3-table w3-striped">
-        {% include 'stocks/account_header.html' %}
-        {% for portfolio in portfolio_list %}
-            <tr>
-                <td class="w3-container">{{portfolio}}</a></td>
-                <td class="w3-container w3-center">
-                    <a href="{% url 'portfolio_details' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart </button></a>
-                    <a href="{% url 'portfolio_table' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table </button></a>
-                </td>
-                <td class="w3-container w3-center w3-hide-small">{% month_year portfolio 'start' %}</td>
-                <td class="w3-container w3-center w3-hide-small">
-                    {% if account.end %}
-                        {% month_year account 'end' %}
-                    {% endif %}
-                </td>
-                <td class="w3-container w3-hide-small">${{portfolio.cost|floatformat:'0g'}}</td>
-                <td class="w3-container">${{portfolio.value|floatformat:'0g'}}</td>
-                <td class="w3-container">${{portfolio.growth|floatformat:'0g'}}</td>
-                <td class="w3-container">${{portfolio.dividends|floatformat:'0g'}}</td>
-                <td class="w3-container w3-center">
-                    <a class="w3-hide-small" href="{% url 'portfolio_edit' portfolio.id %}"><button class="w3-button-medium w3-round-large w3-green"> Edit </button></a>
-                    <a class="w3-hide-small" href="{% url 'portfolio_delete' portfolio.id %}"><button class="w3-margin-left w3-button-medium w3-round-large w3-button-medium w3-round-large w3-red">Delete</button></a>
-                </td>
-            </tr>
-       {% endfor %}
-        {% if account_list %}
-        {% include 'stocks/account_list.html' %}
-        {% endif %}
-    </table>
-    <a href="{% url 'portfolio_add' %}"><button class="w3-margin w3-button-large w3-round-xlarge w3-green">New Portfolio</button></a>
-    <a href="{% url 'account_add' %}"><button class="w3-margin w3-button-large w3-round-xlarge w3-green">New Account</button></a>
+
+        });
+    });
+</script>
+<h2>Portfolio/Account List</h2>
+<div class="w3-row">
+    <canvas id="lineChart" height=300 style="border:1px solid" >
+        A line chart showing Cost vs Value over time in months.
+    </canvas>
+</div>
+
+<div class="w3-row">
+    <div class="w3-container">
+        {% include 'stocks/account_summary_list.html' %}
+    </div>
+    <div class="w3-bar w3-margin-left w3-margin-bottom w3-hide-small">
+        <a href="{% url 'portfolio_add' %}"><button class="w3-margin-right w3-button-small w3-round-large diy-long diy-button  diy-green">New Portfolio</button></a>
+        <a href="{% url 'account_add' %}"><button class="w3-button-small w3-round-large diy-long diy-button diy-green">New Account</button></a>
+    </div>
+</div>
+
 {% endblock content %}
 {% block help_content %}
 <p>

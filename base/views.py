@@ -28,6 +28,7 @@ from django.views.generic.base import TemplateView
 
 from expenses.models import Item
 from base.forms import MainForm
+from stocks.tasks import add_to_cache
 
 
 @login_required
@@ -45,7 +46,8 @@ def diy_main(request):
             trends = 'Show' if form.cleaned_data['show_trends'] else 'Hide'
     else:
         form = MainForm(initial={'years': span, 'period': period, 'show_trends': 'Hide'})
-
+        if request.user:
+            add_to_cache.delay(request.user.id)  # Update the redis cache for the accounts owned by this user.
     return render(request, "base/diy_main.html",{'form': form, 'span': span, 'period': period, 'trends': trends})
 
 

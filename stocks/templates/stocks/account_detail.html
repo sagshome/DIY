@@ -46,70 +46,47 @@
       });
     });
 </script>
-
-<h2 class="w3-margin">{{object_type}} Details for {{object.name}}</h2>
-<p>Total Funding is: ${{funded|floatformat:'0g'}}, Total Redeemed is: ${{redeemed|floatformat:'0g'}} {% calc_return funded redeemed %}</p>
-
 <div class="w3-row">
-    <div style="height:350px;" class="w3-container">
-        <canvas id="lineChart" class="w3-card-2"></canvas>
-    </div>
+    <p>Total Funding for <b>{{object_type}}: {{object.name}}</b> is: ${{funded|floatformat:'0g'}},
+        Total Redeemed is: ${{redeemed|floatformat:'0g'}} {% calc_return funded redeemed %}</p>
 </div>
-
 <div class="w3-bar w3-hide-small">
-    <div class="w3-bar-item">
-        <a href="{% url 'portfolio_list' %}"><button class="w3-button-medium w3-round-large w3-orange"> Home </button></a>
-    </div>
-
-    <div class="w3-bar-item">
-        {% if object_type == 'Account' %}
-            <a href="{% url 'account_table' object.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View </button></a>
-        {% else %}
-            <a href="{% url 'portfolio_table' object.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View </button></a>
+    {% if object_type == 'Account' %}
+        {% if object.portfolio %}
+            <a href="{% url 'portfolio_details' object.portfolio.id %}">
+                <button class="w3-margin-right w3-button-small w3-round-large diy-button diy-yellow">Portfolio</button></a>
         {% endif %}
-    </div>
+        <a href="{% url 'account_table' object.id %}">
+            <button class="w3-button-small w3-round-large diy-button diy-green">Tables</button></a>
+    {% endif %}
+
+    {% if object_type == 'Account' %}
+        <a href="{% url 'account_edit' object.id %}">
+            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-yellow">Edit</button></a>
+        <a href="{% url 'account_close' object.id %}">
+            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-orange">Close</button></a>
+        <a href="{% url 'account_delete' object.id %}">
+            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
+    {% else %}
+        <a href="{% url 'portfolio_edit' object.id %}">
+            <button class="diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
+        <a href="{% url 'portfolio_delete' object.id %}">
+            <button class="w3-margin-left w3-button-small w3-margin-left w3-round-large diy-button diy-red">Delete</button></a>
+    {% endif %}
 </div>
 
-{% if account_list  %}
-    <h2>Account(s) List</h2>
-    <div class="w3-row>">
-        <table class="w3-table w3-striped w3-boarder">
-            {% include 'stocks/account_header.html' %}
-            {% include 'stocks/account_list.html' %}
-        </table>
-    </div>
-{% endif %}
 <div class="w3-row">
-    <div class="w3-half w3-container">
-        <table class="w3-table w3-striped">
-            <caption class="w3-wide w3-padding-16">Equity Summary (Present Day Value)</caption>
-            <thead class="w3-margin-bottom" style="background:#eee;">
-                <th>Equity</th>
-                <th class="w3-right-align">Shares</th>
-                <th class="w3-right-align">Cost</th>
-                <th class="w3-right-align">Value</th>
-                <th class="w3-right-align">Dividends</th>
-            </thead>
+    <canvas id="lineChart" height=300 style="border:1px solid" >
+        A line chart showing Cost vs Value over time in months.
+    </canvas>
+</div>
+<div class="w3-container">
+    {% include 'stocks/account_summary_list.html' %}
+</div>
 
-            {% for e in object.equity_keys %}
-            <tr>
-                <td class="indent">
-                    {% if object_type == 'Account' %}
-                        <a href="{% url 'account_equity_details' object_type object.id e %}">{{e}}</a>
-                    {% else %}
-                        {{e}}
-                    {% endif %}
-                </td>
-                <td class="w3-right-align">{% equity_value object e "Shares" "{:.1f}" %}</td>
-                <td class="w3-right-align">${% equity_value object e "Cost" "{:.0f}" %}</td>
-                <td class="w3-right-align">${% equity_value object e "Value" "{:.0f}" %}</td>
-                <td class="w3-right-align">${% equity_value object e "TotalDividends" "{:.0f}" %}</td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
-    <div class="w3-half w3-container">
-        {% include 'stocks/transaction_list.html' %}
+<div class="w3-row">
+    <div class="w3-container">
+        {% include 'stocks/equity_summary_list.html' %}
     </div>
 </div>
 {% endblock content %}

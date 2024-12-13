@@ -1,0 +1,86 @@
+
+<div>
+    {% if account_list_data %}
+        <table class="w3-table w3-striped">
+            <caption class="w3-wide w3-padding-16">Portfolio / Account  Summary (Present Day Value)</caption>
+            <thead class="w3-margin-bottom" style="background:#eee;">
+                <tr>
+                    <th class="w3-container w3-small w3-left-align">Name</th>
+                    <th class="w3-container w3-small w3-right-align">Total Cost</th>
+                    <th class="w3-container w3-small w3-right-align w3-hide-small">Effective<br>Cost</th>
+                    <th class="w3-container w3-small w3-right-align">Value</th>
+                    <th class="w3-container w3-small w3-right-align w3-hide-small">Total<br>Dividends</th>
+                    <th class="w3-container w3-small w3-right-align">Realized<br>Gain</th>
+                    <th class="w3-container w3-small w3-right-align w3-hide-medium w3-hide-small">Realized<br>Percent</th>
+                    <th class="w3-container w3-small w3-right-align w3-hide-small">Unrealized<br>Gain</th>
+                    <th class="w3-container w3-small w3-right-align w3-hide-medium w3-hide-small">Unrealized<br>Percent</th>
+                    <th class="w3-container w3-small w3-center w3-hide-small">Actions</th>
+                </tr>
+            </thead>
+            {% for item in account_list_data %}
+                <tr>
+                    <td class="w3-left-align w3-small ">
+                        {% if item.Type == 'Portfolio' %}
+                            <a class='d1y-blue' href="{% url 'portfolio_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                        {% else %}
+                            <a class="d1y-blue" href="{% url 'account_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                        {% endif %}
+                    </td>
+                    <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small w3-hide-small">-</td>
+                    {% if item.Value == 0 %}
+                        <td></td>
+                    {% else %}
+                        <td class="w3-right-align w3-small">${{ item.Value | floatformat:'0g'}}</td>
+                    {% endif %}
+                    {% if item.TotalDividends == 0 %}
+                        <td class="w3-hide-small"></td>
+                    {% else %}
+                        <td class="w3-right-align w3-small w3-hide-small">${{ item.TotalDividends | floatformat:'0g'}}</td>
+                    {% endif %}
+                    {% if item.RelGain == 0 %}
+                        <td class="w3-right-align w3-small"></td>
+                    {% elif item.RelGain > 0 %}
+                        <td class="w3-right-align w3-small">${{item.RelGain | floatformat:'0g'}}</td>
+                    {% else %}
+                        <td class="w3-right-align w3-small w3-text-red">${{item.RelGain | floatformat:'0g'}}</td>
+                    {% endif %}
+                    {% if item.RelGainPct == 0 %}
+                        <td class="w3-right-align w3-hide-medium w3-hide-small w3-small"></td>
+                    {% elif item.RelGainPct > 0 %}
+                        <td class="w3-right-align w3-hide-medium w3-hide-small w3-small">{{item.RelGainPct | floatformat:'2g'}}%</td>
+                    {% else %}
+                        <td class="w3-right-align w3-hide-medium w3-hide-small w3-small w3-text-red">{{item.RelGainPct | floatformat:'2g'}}%</td>
+                    {% endif %}
+                    {% if item.UnRelGain == 0 %}
+                        <td class="w3-right-align w3-hide-small w3-small"></td>
+                    {% elif item.UnRelGain > 0 %}
+                        <td class="w3-right-align w3-hide-small w3-small">${{item.UnRelGain | floatformat:'0g'}}</td>
+                    {% else %}
+                        <td class="w3-right-align w3-hide-small w3-small w3-text-red">${{item.UnRelGain | floatformat:'0g'}}</td>
+                    {% endif %}
+                    {% if item.UnRelGainPct == 0 %}
+                        <td class="w3-right-align w3-hide-medium w3-hide-small w3-small"></td>
+                    {% elif item.UnRelGainPct > 0 %}
+                        <td class="w3-right-align w3-hide-medium w3-hide-small w3-small">{{item.UnRelGainPct | floatformat:'2g'}}%</td>
+                    {% else %}
+                        <td class="w3-right-align w3-hide-medium w3-hide-small w3-text-red">{{item.UnRelGainPct | floatformat:'2g'}}%</td>
+                    {% endif %}
+                    <td class="w3-right-align w3-small ">
+                        {% if item.Type == 'Portfolio' %}
+                            <a class="w3-hide-small" href="{% url 'portfolio_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
+                            <a class="w3-hide-small" href="{% url 'portfolio_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
+                        {% else %}
+                        <a class="w3-hide-small" href="{% url 'account_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
+                        <a class="w3-hide-small" href="{% url 'account_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <div class="w3-row w3-yellow">
+                <p>No Portfolio / Account Summary data found</p>
+        </div>
+    {% endif %}
+</div>

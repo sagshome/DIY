@@ -12,19 +12,18 @@
             </div>
         {% endif %}
 
-        <div class="w3-bar">
-            <div class="w3-bar-item w3-input w3-hide-small">
+            <div class="w3-container w3-cell w3-cell-bottom">
                 Period:<br>{{form.period}}
             </div>
-            <div class="w3-bar-item w3-input">
+            <div class="w3-container w3-cell w3-cell-bottom">
                 Years:<br>{{form.years}}
             </div>
-            <div class="w3-bar-item w3-input">
+            <div class="w3-container w3-cell w3-cell-bottom">
                 Show Trends:<br>{{form.show_trends}}
             </div>
-
-            <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
-        </div>
+            <div class="w3-container w3-cell w3-cell-bottom">
+                <button style="width:100px" class="w3-button-small w3-round-large subtle diy-button diy-green" type="submit">Submit</button>
+            </div>
     </form>
 
 <div class="w3-container w3-cell-row">
@@ -34,47 +33,73 @@
         <div class="w3-cell w3-mobile w3-half" >
         <canvas id="wealthPie"></canvas>
     </div>
-
 </div>
 <script>
+    // Setup data for CallBack
+    const wealthCanvas = document.getElementById('wealthPie');
+    const wealthCtx = wealthCanvas.getContext('2d');
+    let wealthData = undefined
+    let wealthChart = undefined
+
+    wealthCanvas.onclick = (evt) => {
+        const res = wealthChart.getElementsAtEventForMode(
+            evt,
+            'nearest',
+            {intersect: true},
+            true
+        );
+
+        // If didn't click on a bar, `res` will be an empty array
+        if (res.length === 0) {
+            return;
+        }
+
+        const url = wealthData.options_links[res[0].index];
+        window.location.href = url; // Navigate to the URL
+    }
+
     $(document).ready(function() {
         $.ajax({
             url: "{% url 'wealth_pie' %}",
             success: function (data) {
-                new Chart(wealthPie, {
+                wealthData = data;
+                wealthChart = new Chart(wealthCtx, {
                     type: "pie",
                     data: {
-                      labels: data['labels'],
-                      datasets: [{
-                          data: data['data'],
-                          backgroundColor: data['colors'],
-                      }]
+                        labels: wealthData['labels'],
+                        datasets: [{
+                            data: wealthData['data'],
+                            backgroundColor: wealthData['colors'],
+                        }]
                     },
                     options: {
                         onClick: (event, elements) => {
-                          if (elements.length > 0) {
-                            const clickedElementIndex = elements[0]._index; // Get the clicked slice index
-                            const url = data.options_links[clickedElementIndex]; // Get the corresponding URL
-                            if (url) {
-                              window.location.href = url; // Navigate to the URL
+                            if (elements.length > 0) {
+                                const clickedElementIndex = elements[0]._index; // Get the clicked slice index
+                                const url = data.options_links[clickedElementIndex]; // Get the corresponding URL
+                                if (url) {
+                                    window.location.href = url; // Navigate to the URL
+                                }
                             }
-                          }
-                       },
-                       responsive: true,
-                       maintainAspectRatio: false,
-                       title: {
-                         display: true,
-                         text: 'Wealth Value by Portfolio/Account'
-                       },
-                       animation: {
-                         animateScale: true,
-                           animateRotate: true
-                       },
-                       legend: {
-                         display: true,
-                         position: 'right',
-                         align: 'center'
-                       }  // legend
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Wealth Value by Portfolio/Account'
+                            },
+                            legend: {
+                                display: false,
+                                position: 'right',
+                                align: 'center'
+                            }  // legend
+                        },
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            animateScale: true,
+                            animateRotate: true
+                        },
+
                     }  // options
                 })  // chart
             } // success
@@ -107,11 +132,10 @@
                 },
                 plugins: {
                     legend: {
+                        display: true,
                         position: 'top',  // Position the legend at the top
                         labels: {
-                            font: {
-                                size: 14  // Font size for the legend
-                            }
+                            boxHeight: 5,
                         }
                     },
                     tooltip: {
@@ -135,6 +159,7 @@
         });  // ajax
         //};
     });
+
 </script>
 {% endblock content %}
 

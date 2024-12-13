@@ -1,6 +1,72 @@
 
 body {
-    background-color: Wheat;
+    background-color: white;
+    font-size: 16px;
+    margin: 20px;
+}
+
+
+/* For small devices (width less than 768px, e.g., phones) */
+@media (max-width: 1200px) {
+  body {
+    font-size: 14px;
+    margin: 10px;
+  }
+}
+
+/* For very small devices (width less than 480px, e.g., smaller phones) */
+@media (max-width: 601px) {
+  body {
+    font-size: 12px;
+    margin: 5px;
+  }
+}
+
+.parent {
+    display: flex;
+    flex-direction: row;
+
+  /* other styles */
+}
+
+button.diy-button {
+    background-color: transparent; /* no background color */
+    border: 1px solid lightgrey; /* thin green border */
+    border-radius: 5px; /* optional, for rounded corners */
+    height: 30px;
+    width: 75px;
+}
+
+a {
+    color: blue;
+    text-decoration: none;
+}
+button.diy-long {
+    width: 200px;
+}
+
+button.diy-green:hover {
+    background-color: green; /* change background to transparent on hover */
+    color: white; /* change text color to green on hover */
+}
+
+button.diy-orange:hover {
+    background-color: orange; /* change background to transparent on hover */
+}
+
+button.diy-red:hover {
+    background-color: red; /* change background to transparent on hover */
+    color: white; /* change text color to green on hover */
+}
+
+button.diy-yellow:hover {
+    background-color: yellow; /* change background to transparent on hover */
+}
+
+
+button.diy-blue:hover {
+    background-color: blue; /* change background to transparent on hover */
+    color: white; /* change text color to green on hover */
 }
 
 .indent {

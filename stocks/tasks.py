@@ -12,15 +12,19 @@ logger = logging.getLogger(__name__)
 def print_time():
     logger.debug("Current time is:%s" % datetime.now())
 
+
 @shared_task
 def add(x, y):
     logger.debug("adding:%s + %s" % (x , y))
     return x + y
 
+
 @shared_task
 def periodic_hello():
     print("Hello, this is a periodic task!")
 
+
+@shared_task
 def daily_update():
     # Your cleanup logic here
     if settings.ALPHAVANTAGEAPI_KEY:
@@ -32,11 +36,19 @@ def daily_update():
             else:
                 total_calls += 1
                 equity.update(key=settings.ALPHAVANTAGEAPI_KEY)
-            equity.fill_equity_value_holes()
+
+    for equity in Equity.objects.all():
+        equity.fill_equity_value_holes()
     Inflation.update()
     ExchangeRate.update()
 
     for account in Account.objects.all():
         account.update_static_values()
 
+
+@shared_task
+def add_to_cache(user_id):
+    logger.debug("Processing accounts for %s" % user_id)
+    for account in Account.objects.filter(user_id=user_id):
+        _ = account.p_pd  # Just to the math which will cache the results
 

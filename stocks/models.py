@@ -9,18 +9,16 @@ day of the month is normalized to the first date of the month.
 
 import logging
 import pandas as pd
-import pickle
+import numpy as np
 
 from enum import Enum
 from typing import List, Dict
 from datetime import datetime, date
 from time import sleep
 from pandas import DataFrame
-from requests.exceptions import ConnectionError
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.cache import cache
 from django.db import models
 from django.db.models import QuerySet, Sum, Avg
 from django.utils.functional import cached_property
@@ -82,12 +80,19 @@ Inflation WebSite: https://www150.statcan.gc.ca/t1/tbl1/en/cv.action?pid=1810000
 # my_currency = 'CAD'  # todo: Should be set via a user profile
 EQUITY_COL = ['Date', 'Equity',  # One record for each date we held the equity  todo: stop making records when equity is sold out
               'Shares',  # The number of shares we hold on this date.  It can not be less than 1 (should be 0 but float value screw that up)
-              'Cost',  # We paid for the shares.  todo: on reivested dividends shares go up but not the cost. that may be wrong but I think it works for me
+              'Cost',  # We paid for the shares, less what we got back
               'Price',  # The price on that date
-              'Dividends',  # Cash dividends recorded in the ledgers for managed,  actual dividends for non managed equities
+              'Dividends',  # Cash dividends recorded in the ledgers for managed equities
               'TotalDividends',  # A running accumulation for Dividends
-              'Value'  # A running accumulation of Value converted into the currency of the account
-              ]  # Calculated - Value,  AvgCost
+              'Value',  # The value on that date
+              'TBuy',  # The total of all spends, including REDIVS,  not used in equities but used in rollups for accounts and profiles
+              'TSell',  # The total of all sells, not used in equities but used in rollups for accounts and profiles
+              'RelGain',  # This is the money extracted via sales and dividends on non managed accounts
+              'UnRelGain',  # The value of Value - TBuy + TSell
+              'RelGainPct',  # RelGain * 100 / Tbuy = Tsell
+              'UnRelGainPct',  # Value
+              'AvgCost'  # Monthly tracking of Average cost per share
+              ]
 # todo:  How do I do shares/Cost/Price for things that are transferred in/out.
 
 ACCOUNT_COL = ['Date', 'Funds', 'Redeemed']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
@@ -711,6 +716,27 @@ class BaseContainer(models.Model):
     def e_pd(self) -> DataFrame:
         raise NotImplementedError
 
+    @property
+    def summary(self) -> dict:
+        """
+        Return a dictionary of the current values of this account
+        """
+        this_date = np.datetime64(normalize_today())
+        summary = self.e_pd.loc[self.e_pd['Date'] == this_date].agg(
+            {'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum', 'RelGain': 'sum', 'UnRelGain': 'sum',
+             'TBuy': 'sum', 'TSell': 'sum'}).to_dict()
+        summary['Holdings'] = self.equities.distinct().count()
+        summary['Name'] = self.name
+        summary['Start'] = self.start
+        summary['End'] = self.end
+        if summary['Value'] == 0:  # Closed Account
+            summary['UnRelGainPct'] = 0
+            summary['RelGainPct'] = summary['RelGain'] * 100 / summary['TBuy'] if summary['TBuy'] else 0
+        else:
+            summary['RelGainPct'] = (summary['RelGain']) * 100 / summary['Cost'] if summary['Cost'] else 0  # todo: what if cost is 0 since we made some much
+            summary['UnRelGainPct'] = summary['UnRelGain'] * 100 / summary['Cost'] if summary['Cost'] else 0
+        return summary
+
     def get_eattr(self, key, query_date=normalize_today(), symbol=None):
         query_date = pd.Timestamp(query_date)
         try:
@@ -730,6 +756,14 @@ class BaseContainer(models.Model):
 
 
 class Portfolio(BaseContainer):
+    """
+    new = df.groupby(['Date', 'Equity']).agg({'Shares': 'sum',  'Cost': 'sum', 'Price': 'max' , 'Dividends': 'max', 'TotalDividends': 'sum', 'Value': 'sum', 'AvgCost': 'max'}).reset_index()
+    new = df.loc[df['Date'] == '2024-12-1'].groupby(['Date', 'Equity']).agg({'Shares': 'sum',  'Cost': 'sum', 'Price': 'max' , 'Dividends': 'max', 'TotalDividends': 'sum', 'Value': 'sum', 'AvgCost': 'max'}).reset_index()
+    new = df.groupby('Date').agg({'Value': 'sum', 'Cost': 'sum'})
+    new.index.to_list()
+    new['Value'].to_list()
+    new.round(2)
+    """
 
     class Meta:
         unique_together = (('name', 'user'),)
@@ -781,9 +815,10 @@ class Portfolio(BaseContainer):
 
     @property
     def equity_keys(self):
-        return list(
-            Transaction.objects.filter(xa_action__in=Transaction.SHARE_TRANSACTIONS, account__in=Account.objects.filter(portfolio=self)). \
-                values_list('equity__symbol', flat=True).distinct().order_by('equity__symbol'))
+        values = []
+        for equity in Equity.objects.filter(id__in=Transaction.objects.filter(xa_action__in=Transaction.SHARE_TRANSACTIONS, account__in=Account.objects.filter(portfolio=self)).values_list('equity__id', flat=True).distinct()):
+            values.append(equity.key)
+        return values
 
     @property
     def transactions(self) -> QuerySet['Transaction']:
@@ -819,14 +854,30 @@ class Portfolio(BaseContainer):
         try:
             if not new.any:
                 return new
-        except AttributeError:
+        except AttributeError as e:
             pass   # get may return None
+        first = True
         new = pd.DataFrame(columns=EQUITY_COL)
         for account in self.account_set.all():
-            new = pd.concat([new, account.e_pd], axis=0)
-        #return new.groupby(['Date', 'Equity']).sum(['Shares', 'TotalDividends'])
+            if first:
+                if not account.e_pd.empty and not account.e_pd.isna().all().all():
+                    new = account.e_pd
+                    first = False
+            else:
+                if not account.e_pd.empty and not account.e_pd.isna().all().all():
+                    new = pd.concat([new, account.e_pd], axis=0)
+                else:
+                    logger.debug('Something fishing with account id %s' % account.id)
+            pass
         cache_dataframe(self.e_key, new)
         return new
+
+    @property
+    def summary(self) -> dict:
+        summary = super().summary
+        summary['Type'] = 'Portfolio'
+        summary['Id'] = self.id
+        return summary
 
 
 class AccountSummary:
@@ -847,6 +898,7 @@ class AccountSummary:
             if not new.any:
                 return new
         except AttributeError:
+            logger.debug('Not cached %s' % self.cache_key)
             pass   # get may return None
 
         new = pd.DataFrame(columns=ACCOUNT_COL)
@@ -879,7 +931,7 @@ class AccountSummary:
 
 class AccountEquitySummary:
     """
-    Non-DB class that will calculate the historic information regarding equities in a  account.    We purposefully do
+    Non-DB class that will calculate the historic information regarding equities in an account.    We purposefully do
     not reference raw account or transaction data.   This is done so that we can compare / create speculative data
     """
 
@@ -896,7 +948,7 @@ class AccountEquitySummary:
 
     def process_equity(self, equity: Equity, df: DataFrame) -> DataFrame:
         """ New """
-        dividends: Dict[date, float]  # for NonManaged
+        dividends: Dict[date, float]
         moneys: Dict[date, float]
         entry: EquityValue
         trades: QuerySet = self.xas.filter(equity=equity, xa_action__in=Transaction.SHARE_TRANSACTIONS).exclude(xa_action=Transaction.REDIV).order_by('date')
@@ -909,35 +961,65 @@ class AccountEquitySummary:
 
         equity_values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
         dividends = dict(EquityEvent.objects.filter(date__gte=first, equity=equity, event_type='Dividend').values_list('date', 'value'))
-        moneys = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action__in=[Transaction.FEES, Transaction.INTEREST]).values_list('date', 'value'))
+        # moneys = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action__in=[Transaction.FEES, Transaction.INTEREST]).values_list('date', 'value'))
         redivs: dict[date, float] = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action=Transaction.REDIV).values_list('date', 'quantity'))
+        rediv_value: dict[date, float] = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action=Transaction.REDIV).values_list('date', 'currency_value'))
 
-        shares = cost = price = dividend = total_dividends = 0
+        if len(redivs) > 0 and not self.managed:
+            logger.error('Account %s has REDIVS but is not managed - The realized gains may be double counted')
+
+        # warning - we may record dividends (via the API) a month earlier then the REDIV, seems they hold onto our money
+        shares = cost = total_dividends = realized_gain = unrealized_gain = unrelgp = relgp = total_spend = total_redeem = avg_cost = 0
         for entry in equity_values:  # This is over every month you owned this equity.
             cf = currency_factor(entry.date, equity.currency, self.currency)
-            shares += redivs[entry.date] if entry.date in redivs else 0
+            start_cost = cost
+            start_shares = shares
+            # Step 1,  Update shares based on trades
             if entry.date in trade_dates:  # We did something on this normalized day
-                trade = trades.filter(date=entry.date).aggregate(Sum('quantity'), Sum('value'))
-                if trade['quantity__sum']:
-                    shares += trade['quantity__sum']
-                if trade['value__sum']:
-                    cost += trade['value__sum'] * cf
+                for trade in trades.filter(date=entry.date):  # Over each trade on this day
+                    shares += trade.quantity
+                    if trade.currency_value > 0:
+                        total_spend += trade.currency_value
+                    else:
+                        if avg_cost != 0:
+                            realized_gain += (trade.currency_value * -1) - (trade.quantity * - 1 * avg_cost)
+                        else:
+                            realized_gain += (trade.currency_value * -1) - (trade.quantity * -1 * trade.price)
+                        total_redeem += trade.currency_value * -1
+                    cost += trade.currency_value
 
-            #if self.managed:
-            #    dividend = moneys[entry.date] * cf if entry.date in moneys else 0
-            #else:
-            dividend = dividends[entry.date] * cf * shares if entry.date in dividends else 0
-            total_dividends += dividend
-            value = entry.price * shares * cf
-
-            if value < 0:
-                logger.debug('%s:%s - %s Negative value %s' % (self.name, equity, entry.date, value))
-
-            if shares > 1:
-                df.loc[len(df.index)] = [entry.date, equity.key, shares, cost, entry.price, dividend, total_dividends, value]
+            # Step 3, Update Dividends for non-managed
+            if not self.managed:
+                dividend = dividends[entry.date] * cf * shares if entry.date in dividends else 0
+                total_dividends += dividend
+                realized_gain += dividend
             else:
-                df.loc[len(df.index)] = [entry.date, equity.key, 0, cost, entry.price, 0, total_dividends, value]
+                dividend = 0
 
+            # Step 2,  Update shares and buy cost of any reinvested dividends for this month
+            if self.managed and entry.date in redivs:
+                shares += redivs[entry.date]  # update shares
+                total_spend += rediv_value[entry.date]  # We did buy them
+                realized_gain += rediv_value[entry.date]
+                cost += rediv_value[entry.date]
+
+            if shares < 1 and start_shares != 0:  # Do this once
+                if shares:
+                    logger.debug('%s:%s - %s Negative shares %s' % (self.name, equity, entry.date, shares))
+                value = entry.price * start_shares * cf
+                relgp = (start_cost - realized_gain) * 100 / start_cost if start_cost else 0
+                unrealized_gain = total_redeem - total_spend
+                unrelgp = unrealized_gain * 100 / start_cost if start_cost else 0
+                shares = dividend = value = cost = 0
+            else:
+                value = entry.price * shares * cf
+                relgp = 100 - (cost - realized_gain) * 100 / cost if cost else 0
+                unrealized_gain = value - total_spend + total_redeem if value else 0
+                unrelgp = unrealized_gain * 100 / cost if unrealized_gain else 0
+
+            avg_cost = total_spend / shares if shares or shares > 0 else 0  # Update average cost
+
+            df.loc[len(df.index)] = [entry.date, equity.key, shares, cost, entry.price, dividend, total_dividends, value, total_spend, total_redeem, realized_gain, unrealized_gain, relgp, unrelgp, avg_cost]
         return df
 
     @property
@@ -962,7 +1044,6 @@ class AccountEquitySummary:
             return new
 
         for equity in Equity.objects.filter(transaction__in=self.xas).distinct():
-            logger.debug('Processing %s' % equity)
             if self.real_equity:
                 if self.real_equity == equity:
                     self.process_equity(equity, new)
@@ -971,6 +1052,7 @@ class AccountEquitySummary:
 
         # new['Value'] = new['Shares'] * new['Price']
         new['AvgCost'] = new['Cost'] / new['Shares']
+        new.replace([np.inf, -np.inf], 0, inplace=True) # Can not divide by 0 !
         new['Date'] = pd.to_datetime(new['Date'])
         logger.warning('Created Equity DataFrame for %s in %s' % (self.name, (datetime.now() - now).seconds))
         cache_dataframe(self.cache_key, new)
@@ -991,10 +1073,8 @@ class Account(BaseContainer):
     ACCOUNT_TYPES = (('Investment', 'Investment'),
                      ('Holding', 'Holding'))
     account_type = models.TextField(max_length=12, choices=ACCOUNT_TYPES, default='Investment')
-
-    account_name: str = models.CharField(max_length=128, null=True, blank=True,
-                                          help_text='The name as imported')
-    managed: bool = models.BooleanField(default=True)
+    account_name: str = models.CharField(max_length=128, null=True, blank=True, help_text='The name as imported')
+    managed: bool = models.BooleanField(default=True, help_text="Set when Dividends will be reinvested")
     portfolio = models.ForeignKey(Portfolio, blank=True, null=True, on_delete=models.SET_NULL)
 
     # These Values are updated to allow for a quick loading of portfolio_list
@@ -1049,18 +1129,25 @@ class Account(BaseContainer):
     def closed(self) -> bool:
         return self.end is None
 
-    @cached_property
+    @property
     def e_pd(self) -> DataFrame:
         # self.pd.loc[self.pd['Date'] == normalize_today()].sort_values(['Equity'])
         return AccountEquitySummary(self.e_key, str(self.name), self.transactions, self.currency, managed=self.managed).pd
 
-    @cached_property
+    @property
     def p_pd(self) -> DataFrame:
         '''
         Regardless of the equities,  how is the account doing based on money in,  money out
         :return:
         '''
         return AccountSummary(self.p_key, str(self.name), self.transactions, self.e_pd, self.currency, managed=self.managed).pd
+
+    @property
+    def summary(self) -> dict:
+        summary = super().summary
+        summary['Type'] = 'Account'
+        summary['Id'] = self.id
+        return summary
 
     def switch(self, new_equity: Equity, original: Equity = None) -> DataFrame:
         return AccountEquitySummary(self.e_key, str(self.name),
@@ -1077,9 +1164,15 @@ class Account(BaseContainer):
     @property
     def equity_keys(self):
         # return sorted(self.e_pd['Equity'].unique())
+        values = []
+        # Equity.objects.filter()
+        for equity in Equity.objects.filter(id__in=Transaction.objects.filter(xa_action__in=Transaction.SHARE_TRANSACTIONS, account=self).values_list('equity__id', flat=True).distinct()):
+            values.append(equity.key)
+        return values
 
-        return list(Transaction.objects.filter(xa_action__in=Transaction.SHARE_TRANSACTIONS, account=self).values_list('equity__symbol', flat=True).distinct().order_by(
-        'equity__symbol'))
+    @property
+    def symbol_count(self) -> int:
+        return len(self.equities)
 
     @property
     def transactions(self) -> QuerySet['Transaction']:
@@ -1217,8 +1310,7 @@ class Transaction(models.Model):
         except KeyError:
             xa_str = 'DATA CORRUPTION'
 
-        return (f'{self.account}:{self.equity}:{self.date}:{self.price} {self.quantity} {self.value} '
-                f'{xa_str}')  # pragma: no cover
+        return (f'{self.account}:{self.equity}:{self.date.strftime('%Y-%m-%d')}:{xa_str}: {self.price} {self.quantity} {self.value}')  # pragma: no cover
 
     @property
     def is_major(self) -> bool:

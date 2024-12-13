@@ -1,10 +1,11 @@
 import logging
-import pickle
 import platform
+import pandas as pd
 import tempfile
 
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+from io import StringIO
 from pathlib import Path
 
 from django.conf import settings
@@ -102,8 +103,8 @@ def cache_dataframe(key, dataframe, timeout=3600):
     """
     # Serialize the DataFrame to a binary format
     if not settings.NO_CACHE:
-        pickled_data = pickle.dumps(dataframe)
-        cache.set(key, pickled_data, timeout)
+        dataframe = dataframe.reset_index(drop=True)
+        cache.set(key, dataframe.to_json(), timeout)
 
 
 def clear_cached_dataframe(key):
@@ -123,12 +124,14 @@ def get_cached_dataframe(key):
     """
     # Retrieve the binary data from the cache
     if not settings.NO_CACHE:
-        pickled_data = cache.get(key)
-        if pickled_data:
-            logger.debug('Returned cache for %s' % key)
-            cache.set(key, pickled_data, 3600)
-            # Deserialize the binary data back into a DataFrame
-            return pickle.loads(pickled_data)
+        try:
+            json_data = cache.get(key)
+            if json_data:
+                # Deserialize the binary data back into a DataFrame
+                return pd.read_json(StringIO(json_data))
+        except TypeError:
+            logger.debug('Had some strange data with key %s -> clearing the data' % key)
+            clear_cached_dataframe(key)
     return None
 
 
