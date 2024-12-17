@@ -1310,7 +1310,7 @@ class Transaction(models.Model):
         except KeyError:
             xa_str = 'DATA CORRUPTION'
 
-        return (f'{self.account}:{self.equity}:{self.date.strftime('%Y-%m-%d')}:{xa_str}: {self.price} {self.quantity} {self.value}')  # pragma: no cover
+        return f'{self.account}:{self.equity}:{self.date.strftime("%Y-%m-%d")}:{xa_str}: {self.price} {self.quantity} {self.value}'  # pragma: no cover
 
     @property
     def is_major(self) -> bool:

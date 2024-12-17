@@ -43,7 +43,7 @@ def diy_main(request):
         if form.is_valid():
             span = form.cleaned_data['years'] if form.cleaned_data['years'] else 3
             period = form.cleaned_data['period']
-            trends = 'Show' if form.cleaned_data['show_trends'] else 'Hide'
+            trends = 'Show' if form.cleaned_data['show_trends'] == 'Show' else 'Hide'
     else:
         form = MainForm(initial={'years': span, 'period': period, 'show_trends': 'Hide'})
         if request.user:

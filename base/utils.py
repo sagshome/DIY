@@ -22,8 +22,6 @@ class DateUtil:
     '''
     A class to set step and start date based on period and span
     This keeps our code DRY
-
-    Basic utility date to label
     '''
 
     def __init__(self, period: str = 'QTR', span: int = 3):
@@ -53,6 +51,38 @@ class DateUtil:
             else:
                 self.start_date = start_date.replace(month=10)
 
+    @classmethod
+    def label_to_values(cls, label: str):
+        """
+        Based on a label value, return a start and end date
+        """
+        try:  # start of the month
+            start_date = datetime.strptime(label, '%Y-%b').replace(day=1).date()
+            end_date = start_date + relativedelta(day=31)  # Will set to the last day of the month
+        except ValueError:  # start of the year
+            start_date = datetime.strptime(label, '%Y').replace(day=1, month=1).date()
+            end_date = start_date.replace(month=12, day=31)
+        except ValueError:
+            values = label.split('-')
+            if len(values) == 2:
+                try:
+                    year = datetime.strptime(values[1], '%Y').replace(day=1).date()
+                    if values[0] == 'Q1':
+                        start_date = datetime(year, 1, 1)
+                    elif values[0] == 'Q2':
+                        start_date = datetime(year, 4, 1)
+                    elif values[0] == 'Q3':
+                        start_date = datetime(year, 7, 1)
+                    elif values[0] == 'Q4':
+                        start_date = datetime(year, 10, 1)
+                    else:
+                        start_date = end_date = None
+                    if start_date:
+                        end_date = start_date + relativedelta(months=3) - relativedelta(days=1)
+                except ValueError:
+                    start_date = end_date = None
+        return start_date, end_date
+
     @property
     def is_month(self):
         return self.period == 'MONTH'
@@ -74,23 +104,58 @@ class DateUtil:
         return dates
 
     def date_to_label(self, label_date: date) -> str:
-        if self.period == 'YEAR':
-            value = str(label_date.year)
-        elif self.period == 'MONTH':
-            value = label_date.strftime('%Y-%b')
-        elif self.period == 'QTR':
-            if label_date.month < 4:
-                value = 'Q1-' + str(label_date.year)
-            elif label_date.month < 7:
-                value = 'Q2-' + str(label_date.year)
-            elif label_date.month < 10:
-                value = 'Q3-' + str(label_date.year)
-            else:
-                value = 'Q4-' + str(label_date.year)
-        else:  # I guess this is by the day
-            value = label_date.strftime('%d-%b-%Y')
-        return value
+        return date_to_label(label_date, self.period)
 
+
+def date_to_label(label_date: date, period: str) -> str:
+    if period == 'YEAR':
+        value = str(label_date.year)
+    elif period == 'MONTH':
+        value = label_date.strftime('%Y-%b')
+    elif period == 'QTR':
+        if label_date.month < 4:
+            value = 'Q1-' + str(label_date.year)
+        elif label_date.month < 7:
+            value = 'Q2-' + str(label_date.year)
+        elif label_date.month < 10:
+            value = 'Q3-' + str(label_date.year)
+        else:
+            value = 'Q4-' + str(label_date.year)
+    else:  # I guess this is by the day
+        value = label_date.strftime('%d-%b-%Y')
+    return value
+
+def label_to_values(label: str):
+    """
+    Based on a label value, return a start and end date
+    """
+    start_date = end_date = None
+    try:  # start of the month
+        start_date = datetime.strptime(label, '%Y-%b').replace(day=1).date()
+        end_date = start_date + relativedelta(day=31)  # Will set to the last day of the month
+    except ValueError:  # start of the year
+        try:
+            start_date = datetime.strptime(label, '%Y').replace(day=1, month=1).date()
+            end_date = start_date.replace(month=12, day=31)
+        except ValueError:
+            values = label.split('-')
+            if len(values) == 2:
+                try:
+                    year = datetime.strptime(values[1], '%Y').year
+                    if values[0] == 'Q1':
+                        start_date = datetime(year, 1, 1)
+                    elif values[0] == 'Q2':
+                        start_date = datetime(year, 4, 1)
+                    elif values[0] == 'Q3':
+                        start_date = datetime(year, 7, 1)
+                    elif values[0] == 'Q4':
+                        start_date = datetime(year, 10, 1)
+                    if start_date:
+                        start_date = start_date.date()
+                        end_date = start_date + relativedelta(months=3) - relativedelta(days=1)
+                except ValueError:
+                    pass
+    return start_date, end_date
 
 def cache_dataframe(key, dataframe, timeout=3600):
     """

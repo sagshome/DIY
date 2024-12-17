@@ -17,7 +17,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView, FormView, ListView
 
 from base.models import COLORS, PALETTE
-from base.utils import DIYImportException, DateUtil
+from base.utils import DIYImportException, DateUtil, label_to_values, date_to_label
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank, PersonalCSV
 from expenses.forms import *
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
@@ -157,16 +157,35 @@ def expense_main(request):
     This view support both a search to refresh the data and pagination.   If I change the critera,   I need to
     reset the pagintor to page 1.
     """
-
-    warnings = {}
+    search_for = False
     default_end = datetime.now().date()
     default_start = datetime.now().replace(year=datetime.now().year-7).date().replace(day=1)
 
+    if request.GET:
+        if 'span' in request.GET:
+            new_start, new_end = label_to_values(request.GET['span'])
+            if new_start: # Just incase the data was ill formatted ?
+                default_start = new_start
+                default_end = new_end
+
+        if 'category' in request.GET:
+            try:
+                search_for = Category.objects.get(name=request.GET['category'])
+            except Category.DoesNotExist:
+                logger.error('Intial Category does not exist:%s' % request.GET['category'])
+
+    initial = {'search_ignore': 'No',
+               'search_start_date': default_start,
+               'search_end_date': default_end,
+               'show_list': 'Hide'}
+
+    if search_for:
+        initial['search_category'] = search_for.name
+
+
+    warnings = {}
     max_size = 50
-    search_form = SearchForm(initial={'search_ignore': 'No',
-                                      'search_start_date': default_start,
-                                      'search_end_date': default_end,
-                                      'show_list': 'Hide'})
+    search_form = SearchForm(initial=initial)
 
     total = 0
     if request.method == "POST":
@@ -184,11 +203,18 @@ def expense_main(request):
             pass
 
     else:
+
         super_set = Item.objects.filter(
             ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date')
-        total = super_set.aggregate(Sum('amount'))['amount__sum']
-        formset = ItemFormSet(queryset=Item.objects.filter(
-            id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
+        if search_for:
+            super_set = super_set.filter(category=search_for)
+            total = super_set.aggregate(Sum('amount'))['amount__sum']
+            formset = ItemFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
+        else:
+            total = super_set.aggregate(Sum('amount'))['amount__sum']
+            formset = ItemFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
 
     unassigned = Item.unassigned(user=request.user)
     if unassigned.count() != 0:
@@ -358,13 +384,7 @@ def expense_pie(request):
     labels = []
     colours = []
     super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
-    show_sub = False if request.GET['search_category'] == '- ALL -' or request.GET['search_category'] == 'Income' else True
-    show_income = request.GET.get("income")
-    if show_income == 'true':
-        show_sub = True
-    else:
-        super_set = super_set.exclude(category__name='Income')
-
+    show_sub = False if request.GET['search_category'] == '- ALL -' else True
     if show_sub:
         category_list = super_set.order_by('subcategory__name').values_list('subcategory__name', flat=True).distinct()
     else:
@@ -388,22 +408,21 @@ def expense_bar(request):
     Build the chart.js data for a bar chart based on the standard search_filter
     """
     super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
-    show_income = True if request.GET.get("income") == 'true' else False
-    show_sub = False if request.GET['search_category'] == '- ALL -' or request.GET['search_category'] == 'Income' else True
-    if show_income == 'true':
-        show_sub = True
-
+    show_sub = False if request.GET['search_category'] == '- ALL -' else True
     if super_set.count() == 0:
         return JsonResponse({'datasets': [], 'labels': []})
 
     first_date = super_set.earliest('date').date.replace(day=1)
     last_date = super_set.latest('date').date.replace(day=1)
 
+
     months = []
+    labels = []
     month_dict = {}
     next_date = first_date
     while next_date <= last_date:
         months.append(next_date)
+        labels.append(date_to_label(next_date, 'MONTH'))
         month_dict[next_date] = len(months) - 1
         next_date = next_date + relativedelta.relativedelta(months=1)
 
@@ -435,7 +454,7 @@ def expense_bar(request):
         except KeyError:
             print(f'Failed on:{element}')
 
-    return JsonResponse({'datasets': datasets, 'labels': months, 'colors': COLORS})
+    return JsonResponse({'datasets': datasets, 'labels': labels, 'colors': COLORS})
 
 
 @login_required
@@ -445,6 +464,7 @@ def cash_flow_chart(request):
     1.  Income
     2.  Expenses
     """
+
 
     date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
     show_trends = True if request.GET.get('trends') == 'Show' else False

@@ -11,6 +11,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Q, Sum, QuerySet
 
+from base.utils import label_to_values
 # Create your models here.
 
 # This works VERY well
@@ -325,7 +326,6 @@ class Item(models.Model):
         self.ignore = False
         self.save()
 
-
     def apply_template(self, template: Template = None) -> bool:
         """
         Clear out template values and reapply,   return false if we no longer match the template
@@ -421,38 +421,43 @@ class Item(models.Model):
         '''
         This is kludged up to support Income searches
         '''
-        income_search = True if ('income' in search_dict and search_dict['income'] == 'true' or
-                                 'search_category' in search_dict and search_dict['search_category'] == 'Income') else False
-        income_category = True if 'search_category' in search_dict and search_dict['search_category'] == 'Income' else False
+
         if 'search_description' in search_dict and search_dict['search_description']:
             item_filter = item_filter.filter(Q(description__icontains=search_dict['search_description']) |
                                              Q(notes__icontains=search_dict['search_description']))
         if 'search_category' in search_dict:
-            if income_search:
+            if search_dict['search_category'] == 'Income':
                 item_filter = item_filter.filter(category__name='Income')
             else:
                 item_filter = item_filter.exclude(category__name='Income')
                 category = search_dict['search_category']
                 if category == '- NONE -':
                     item_filter = item_filter.filter(category__isnull=True)
-                elif category != '- ALL -' and not income_category:
+                elif category != '- ALL -':
                     item_filter = item_filter.filter(category__name=category)
+
         if 'search_subcategory' in search_dict:
-            if not income_search or income_search and income_category:
-                subcategory = search_dict['search_subcategory']
-                if subcategory == '- NONE -':
-                    item_filter = item_filter.filter(subcategory__isnull=True)
-                elif subcategory != '- ALL -' and not income_category:
-                    item_filter = item_filter.filter(subcategory__name=subcategory)
+            if search_dict['search_subcategory'] == '- NONE -':
+                item_filter = item_filter.filter(subcategory__isnull=True)
+            elif search_dict['search_subcategory'] != '- ALL -':
+                item_filter = item_filter.filter(subcategory__name=search_dict['search_subcategory'])
+
         if 'search_ignore' in search_dict:
             if search_dict['search_ignore'] == 'Yes':
                 item_filter = item_filter.filter(ignore=True)
             elif search_dict['search_ignore'] == 'No':
                 item_filter = item_filter.filter(ignore=False)
+        if 'search_span' in search_dict and search_dict['search_span']:
+            start_date, end_date = label_to_values(search_dict['search_span'])
+            if start_date:
+                item_filter = item_filter.filter(date__gte=search_dict['search_start_date'], date__lte=end_date)
+            else:
+                logger.error('Invalid search_span: %s' % search_dict['search_span'])
         if 'search_start_date' in search_dict and search_dict['search_start_date']:
             item_filter = item_filter.filter(date__gte=search_dict['search_start_date'])
         if 'search_end_date' in search_dict and search_dict['search_end_date']:
             item_filter = item_filter.filter(date__lte=search_dict['search_end_date'])
+
         if 'search_amount' in search_dict and search_dict['search_amount']:  # todo: fix bug if 0
             if search_dict['search_amount_qualifier'] == 'equal':
                 item_filter = item_filter.filter(amount=search_dict['search_amount'])

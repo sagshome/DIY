@@ -3,16 +3,84 @@
 {% load expenses_tags %}
 
 {% block content %}
-{% block main_scripts %}
+<div class="w3-container">
+    {% if warnings %}
+    <div class="w3-row w3-yellow">
+        <p>{{warnings}} - <a href="{% url 'expenses_assign' %}">Assign Expense Categories</a> </p>
+    </div>
+    {% endif %}
+
+    <form method="post" id="itemForm"
+          data-subcategories-url="{% url 'ajax-load-subcategories' %}"
+          novalidate>
+        {% csrf_token %}
+        <div class="w3-row">
+            {% include 'expenses/expenses_search_bar.html' %}
+        </div>
+        <div class="w3-cell-row w3-margin">
+            <div class="w3-cell">
+                <div style="height:310px;" >
+                    <canvas id="pieChart"></canvas>
+                    <p>Total: ${{total | floatformat:'0g'}}</p>
+                </div>
+
+            </div>
+            <div class="w3-cell">
+                <div style="height:310px;">
+                    <canvas id="barChart"></canvas>
+                    <p></p>
+                </div>
+            </div>
+        </div>
+        <div class="w3-row">
+            <div id="expense_list">
+                {% include 'expenses/expenses_list.html' %}
+            </div>
+        </div>
+    </form>
+</div>
+
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 
     <script>
+
+        const barCanvas = document.getElementById('barChart');
+        const barCtx = barCanvas.getContext('2d');
+        let barChart = undefined;
+        let barLabels = undefined;
+        const expense_url = "{% url 'expense_main' %}";
+
+        barCanvas.onclick = (evt) => {
+            let res = barChart.getElementsAtEventForMode(
+                evt,
+                'nearest',
+                {intersect: true},
+                true
+            );
+
+            // If didn't click on a bar, `res` will be an empty array
+            if (res.length === 0) {
+                return;
+            }
+            // res.datasetIndex = 0 = Expenses and 1 = Income
+            time_period = barLabels[res[0].index];
+            search_value = barChart.legend.legendItems[res[0].datasetIndex].text
+            console.log('Span:' + time_period + ' Category:' + search_value)
+            var url = expense_url + '?span=' + time_period + '&category=' + search_value;
+
+            window.location.href = url; // Navigate to the URL
+
+            //const url = wealthData.options_links[res[0].index];
+            //window.location.href = url; // Navigate to the URL
+        }
+
         function bar_chart(search_data, title_text, canvas) {
             $.ajax({
                 url: "{% url 'ajax-expense-bar' %}",
                 data: search_data,
                 success: function (data) {
-                    new Chart(canvas,
+                    barLabels = data['labels'],
+                    barChart = new Chart(canvas,
                         {
                             type: "bar",
                             data: {
@@ -20,17 +88,20 @@
                                 datasets: data['datasets']
                             },
                             options: {
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Expanse Chart'
+                                    },
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        align: 'center'
+                                    }  // legend
+                                },
+
                                 maintainAspectRatio: false,
                                 responsive: true,
-                                title: {
-                                  display: true,
-                                  text: title_text
-                                },
-                                legend: {
-                                    display: true,
-                                    position: 'right',
-                                    align: 'center'
-                                },
                             },
                             scales: {
                                 xAxes: [{
@@ -61,21 +132,25 @@
                                 }]
                             },
                             options: {
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Expense totals by Categroy/SubCategory'
+                                    },
+                                    legend: {
+                                        display: false,
+                                        position: 'right',
+                                        align: 'center'
+                                    }  // legend
+                                },
+
                                 responsive: false,
                                 maintainAspectRatio: false,
-                                title: {
-                                  display: true,
-                                  text: 'foobar'
-                                },
                                 animation: {
                                     animateScale: true,
                                     animateRotate: true
                                 },
-                                legend: {
-                                    display: true,
-                                    position: 'right',
-                                    align: 'center'
-                                }  // legend
+
                             }  // options
                       })  // chart
                 } // success
@@ -93,7 +168,6 @@
                 'search_amount': $("#id_search_amount_qualifier").val(),
                 'search_amount_qualifier': $("#id_search_amount").val(),
                 'search_description': $("#id_search_description").val(),
-                'income': income
               }
 
               if (type == 'bar') {
@@ -108,42 +182,6 @@
             expense_chart('pie', 'pieChart', 'Breakdown - by Category', false)
         });
     </script>
-{% endblock main_scripts %}
-
-    <div class="w3-container">
-        {% if warnings %}
-            <div class="w3-row w3-yellow">
-                <p>{{warnings}} - <a href="{% url 'expenses_assign' %}">Assign Expense Categories</a> </p>
-            </div>
-        {% endif %}
-        <form method="post" id="itemForm"
-              data-subcategories-url="{% url 'ajax-load-subcategories' %}"
-              novalidate>
-            {% csrf_token %}
-            <div class="w3-row">
-                {% include 'expenses/expenses_search_bar.html' %}
-            </div>
-            <div class="w3-cell-row w3-margin">
-                <div class="w3-cell">
-                    <div style="height:310px;" >
-                        <canvas id="pieChart" class="w3-card-2"></canvas>
-                        <p>Total: ${{total | floatformat:2}}</p>
-                    </div>
-
-                </div>
-                <div class="w3-cell">
-                    <div style="height:310px;">
-                        <canvas id="barChart" class="w3-card-2"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="w3-row">
-                <div id="expense_list">
-                    {% include 'expenses/expenses_list.html' %}
-                </div>
-            </div>
-        </form>
-    </div>
 {% endblock %}
 
 {% block help_content %}

@@ -53,10 +53,42 @@
         if (res.length === 0) {
             return;
         }
-
         const url = wealthData.options_links[res[0].index];
         window.location.href = url; // Navigate to the URL
     }
+
+    const cashCanvas = document.getElementById('cashChart');
+    const cashCtx = cashCanvas.getContext('2d');
+    let cashChart = undefined;
+    let cashLabels = undefined;
+    const expense_url = "{% url 'expense_main' %}"
+
+    cashCanvas.onclick = (evt) => {
+        let res = cashChart.getElementsAtEventForMode(
+            evt,
+            'nearest',
+            {intersect: true},
+            true
+        );
+
+        // If didn't click on a bar, `res` will be an empty array
+        if (res.length === 0) {
+            return;
+        }
+        // res.datasetIndex = 0 = Expenses and 1 = Income
+        time_period = cashLabels[res[0].index];
+        search_value = cashChart.legend.legendItems[res[0].datasetIndex].text
+        var url = expense_url + '?span=' + time_period
+        if (search_value === "Income") {
+            url = url + '&category=' + search_value
+        }
+        window.location.href = url; // Navigate to the URL
+
+        //const url = wealthData.options_links[res[0].index];
+        //window.location.href = url; // Navigate to the URL
+    }
+
+
 
     $(document).ready(function() {
         $.ajax({
@@ -113,7 +145,9 @@
             url: "{% url 'cash_flow_data' %}",
             data: {span: span, period: period, trends: trends},  // 3 years of data
             success: function (data) {
-            new Chart("cashChart", {
+                cashLabels = data['labels'],
+                cashChart = new Chart(cashCtx, {
+
               type: 'line',
               data: {
                 labels: data['labels'],
