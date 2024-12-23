@@ -4,6 +4,8 @@ from . import views
 
 # Base is stocks/
 urlpatterns = [
-    path(r'new_user/', views.NewAccountView.as_view(), name='new_account'),
+    path(r'new_user/', views.profile_create, name='new_account'),
+    path(r'profile/', views.profile_edit, name='profile'),
     path(r'main/', views.diy_main, name='diy_main'),
+    path(r'get_states/', views.get_state, name='get_states'),
 ]

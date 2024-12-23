@@ -1,12 +1,21 @@
+
 {% extends "base.html" %}
-{% block title %}DIY Login{% endblock %}
+{% block title %}IOOM{% endblock %}
+{% block navbar%}
+<div class="w3-top">
+    <div class="w3-bar w3-black w3-card">
+        <p class="w3-conainer w3-margin-left">IOOM Account</p>
+    </div>
+</div>
+{% block title %}{{verb}} Profile{% endblock %}
 
 {% block content %}
+    {% include 'base/blahblah.html' %}
+    <div class="w3-container">
     <p class="w3-margin-top">We’ve emailed you instructions for setting your password, you should receive them shortly.
-    Once you have confirmed your email by following the instructions in the email, you will have access to all the
-    DIY applications on our site.   Enjoy!</p>
+    Once you have confirmed your email by following the instructions in the email, you will have access to all the applications on our site.   Enjoy!</p>
 
     <p class="w3-margin-bottom">If you don’t receive an email, please check your spam folder.   If you still do not
     find an email from us,  then use the contact the site admin.</p>
-
+    </div>
 {% endblock %}

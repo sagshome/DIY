@@ -29,6 +29,9 @@ body {
   /* other styles */
 }
 
+.diy_very_long {
+    width: 300px;
+}
 button.diy-button {
     background-color: transparent; /* no background color */
     border: 1px solid lightgrey; /* thin green border */

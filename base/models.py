@@ -2,6 +2,7 @@ import logging
 import requests
 
 from datetime import datetime, timedelta
+from phonenumber_field.modelfields import PhoneNumberField
 from requests.exceptions import ConnectTimeout, ConnectionError
 from requests.models import Response
 
@@ -12,13 +13,13 @@ from django.dispatch import receiver
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
-logger = logging.getLogger(__name__)
-
-
+# We can not import CURRENCIES since it will be a import loop - from stocks.models import CURRENCIES
 CURRENCIES = (
     ('CAD', 'Canadian Dollar'),
     ('USD', 'US Dollar')
 )
+
+logger = logging.getLogger(__name__)
 
 COLORS = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe',
           '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080',
@@ -40,15 +41,21 @@ PALETTE = {'green': '#2ECC71',
 # 50E3C2 (Turquoise) complements #9013FE (Purple), providing a balance of cool hues with a slight pop of vivid color.
 # D0021B (Red) and #8B572A (Chestnut Brown) create a grounded, earthy combination that feels organic and balanced.
 
+COUNTRIES = [('CA', 'Canada'),
+             ('US', 'United States'),]
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    phone_number = PhoneNumberField(blank=False, null=False)
     currency = models.CharField(max_length=3, choices=CURRENCIES, default='CAD')
+    address1 = models.CharField(max_length=100, blank=True, null=True)
+    address2 = models.CharField(max_length=100, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    country = models.CharField(max_length=2, blank=False, null=False)
+    state = models.CharField(max_length=2, blank=True, null=True)
+    postal_code = models.CharField(max_length=20, blank=True, null=True)
     av_api_key = models.CharField(max_length=24, null=True, blank=True)
-    income = models.DecimalField(decimal_places=0, max_digits=9, default=0)
-    # knowledge = forms.ChoiceField(choices=KNOWLEDGE)
-    worth = models.DecimalField(decimal_places=0, max_digits=9, default=0)
-    goals = models.DecimalField(decimal_places=0, max_digits=9, default=0)
+    birth_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return self.user.username

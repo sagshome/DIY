@@ -54,7 +54,7 @@
             return;
         }
         const url = wealthData.options_links[res[0].index];
-        window.location.href = url; // Navigate to the URL
+        window.location.href = wealthData.options_links[res[0].index]; // Navigate to the URL
     }
 
     const cashCanvas = document.getElementById('cashChart');
@@ -137,7 +137,6 @@
             } // success
         });  // ajax
 
-        var width = window.innerWidth
         var trends = "{{ trends }}"
         var period = "{{ period }}"
         var span = "{{ span }}"
@@ -198,6 +197,8 @@
 {% endblock content %}
 
 {% block help_content %}
+{% include 'base/blahblah.html' %}
+
 <p>
     <b>It's Only Our Money</b> is a tongue in cheek response to a very important question.   Knowing what you money is doing is critical - cash flow at the
     start of your economic journey and wealth at the end.   This application helps you visualize your money.   However,  it is only as good as the data you

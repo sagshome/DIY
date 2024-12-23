@@ -1,17 +1,19 @@
 from django import forms
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordResetForm
 from django.core.exceptions import ValidationError
-from django.template import loader
-from django.core.mail import EmailMultiAlternatives
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from phonenumber_field.formfields import PhoneNumberField, SplitPhoneNumberField
+from localflavor.us.forms import USZipCodeField
+from localflavor.ca.forms import CAPostalCodeField
+from base.models import Profile, CURRENCIES, COUNTRIES
+from localflavor.ca.ca_provinces import PROVINCE_CHOICES
+from localflavor.us.us_states import STATE_CHOICES
 
 
-from base.models import Profile, CURRENCIES
 
 
 class MainForm(forms.Form):
@@ -33,107 +35,46 @@ class MainForm(forms.Form):
         self.fields["show_trends"].widget.attrs['style'] = 'height:28.5px;'
 
 
-class UserForm(forms.ModelForm):
-    class Meta:
-        model = User
-        fields = ('first_name', 'last_name')
-
-
-class ProfileForm(forms.ModelForm):
-    class Meta:
-        model = Profile
-        fields = ('currency', 'av_api_key')
-
-
-class UserRequestForm(PasswordResetForm):
+class BaseProfileForm(forms.Form):
     """
-    Build both the base user and the base profile objects.
+    Update Profile (and some user attributes
     """
-    KNOWLEDGE = (
-        (1, 'None'),
-        (2, 'A Little'),
-        (3, 'Medium'),
-        (4, 'Very Comfortable'),
-        (5, 'Expert')
-    )
+
+    email = forms.CharField(required=True, label='Email', help_text='Required')
+    phone = PhoneNumberField(required=True, label='Phone Num.', help_text='Required')
+    birth_date = forms.DateField(required=True, widget=forms.TextInput(attrs={'type': 'date'}), help_text='Required')
+    country = forms.ChoiceField(required=False, choices=COUNTRIES)
+    full_name = forms.CharField(required=False)
+    address_1 = forms.CharField(required=False)
+    address_2 = forms.CharField(required=False)
+    city = forms.CharField(required=False)
+    state = forms.ChoiceField(required=False, choices=PROVINCE_CHOICES+STATE_CHOICES, label='State/Prov.')
+    postal_code = forms.CharField(required=False)
     currency = forms.ChoiceField(choices=CURRENCIES)
-    first_name = forms.CharField(required=True, max_length=150)
-    last_name = forms.CharField(required=True, max_length=150)
     av_api_key = forms.CharField(required=False, max_length=24)
-    income = forms.DecimalField(required=False)
-    # knowledge = forms.ChoiceField(choices=KNOWLEDGE)
-    worth = forms.DecimalField(required=False)
-    goals = forms.DecimalField(required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["income"].widget.attrs['style'] = 'width:100px;'
-        self.fields["currency"].widget.attrs['style'] = 'width:215;'
-        self.fields["worth"].widget.attrs['style'] = 'width:100px;'
-        self.fields["goals"].widget.attrs['style'] = 'width:100px;'
 
-    def save(
-        self,
-        domain_override=None,
-        subject_template_name="registration/new_account_subject.txt",
-        email_template_name="registration/password_reset_email.html",
-        use_https=False,
-        token_generator=default_token_generator,
-        from_email=None,
-        request=None,
-        html_email_template_name=None,
-        extra_email_context=None,
-    ):
-        """
-        Generate a one-use only link for resetting password and send it to the
-        user.
-        """
-        email = self.cleaned_data["email"]
-        user = User.objects.create(username=email,  email=email, is_active=False,
-                                   first_name=self.cleaned_data["first_name"],
-                                   last_name=self.cleaned_data["last_name"])
+        self.fields["email"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["phone"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["birth_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
+        self.fields["full_name"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["address_1"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["address_2"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["city"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["state"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["country"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["currency"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["av_api_key"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["postal_code"].widget.attrs['style'] = 'width:275px;height:28.5px;'
+        self.fields["country"].widget.attrs['class'] = 'diy-country'  # Used in the search javascript
+        self.fields["state"].widget.attrs['class'] = 'diy-state'
 
-        income = forms.DecimalField(required=False)
-        # knowledge = forms.ChoiceField(choices=KNOWLEDGE)
-        worth = forms.DecimalField(required=False)
-        goals = forms.DecimalField(required=False)
 
-        Profile.objects.create(user=user,
-                               currency=self.cleaned_data["currency"],
-                               av_api_key=self.cleaned_data["av_api_key"],
-                               income = self.cleaned_data["income"],
-                               worth = self.cleaned_data["worth"],
-                               goals = self.cleaned_data["goals"]
-                               )
-        if not domain_override:
-            current_site = get_current_site(request)
-            site_name = current_site.name
-            domain = current_site.domain
-        else:
-            site_name = domain = domain_override
+class ProfileForm(BaseProfileForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].widget.attrs['readonly'] = True
+        self.fields["email"].widget.attrs['style'] = 'background-color:Wheat'
 
-        context = {
-            "email": email,
-            "domain": domain,
-            "site_name": site_name,
-            "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-            "user": email,
-            "token": token_generator.make_token(user),
-            "protocol": "https" if use_https else "http",
-            **(extra_email_context or {}),
-        }
-
-        self.send_mail(
-            "registration/new_account_subject.txt",  # Seems like a bug,  that save did not save it
-            email_template_name,
-            context,
-            from_email,
-            email,
-            html_email_template_name=html_email_template_name,
-        )
-
-    def clean_email(self):
-        email = self.cleaned_data['email']
-        if User.objects.filter(username=email).exists():
-            raise ValidationError('This email is already in use,  perhaps you need to reset your password')
-        return email

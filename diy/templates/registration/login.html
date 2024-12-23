@@ -1,36 +1,51 @@
 {% extends "base.html" %}
-{% block title %}DIY Login{% endblock %}
-
-{% block content %}
-   {% if form.errors %}
-        <div class="w3-panel w3-red w3-margin-top">
-        <p>Your username and password didn't match. Please try again.</p>
-        </div>
-    {% endif %}
-    {% if next %}
-        {% if user.is_authenticated %}
-            <p class="w3-margin-top">Your account doesn't have access to this page. To proceed,
-            please log in with an account that has access.</p>
-        {% else %}
-            <p class="w3-margin-top">Please log in to see this page.</p>
-        {% endif %}
-    {% endif %}
-    <form method="post" action="{% url 'login' %}">
-        {% csrf_token %}
-        <table class="w3-margin-top">
-            <tr>
-                <td>Email Address:</td>
-                <td>{{ form.username }}</td>
-            </tr>
-            <tr>
-                <td>{{ form.password.label_tag }}</td>
-                <td>{{ form.password }}
-            </tr>
-        </table>
-        <input type="submit" value="login">
-        <input type="hidden" name="next" value="{{ next }}">
-    </form>
-    <p><a href="{% url 'password_reset' %}">Lost password?</a></p>
-    <p><a href="{% url 'new_account' %}">Request a DIY account?</a></p>
+{% block title %}IOOM{% endblock %}
+{% block navbar%}
+<div class="w3-top">
+    <div class="w3-bar w3-black w3-card">
+        <p class="w3-conainer w3-margin-left">Login Page</p>
+    </div>
+</div>
 
 {% endblock %}
+
+{% block content %}
+    {% include 'base/blahblah.html' %}
+    <div class="w3-cell-row w3-margin">
+        <div class="w3-cell w3-margin w3-mobile">
+            <p>If you just want to look around you may use the email address <b>demo</b>
+                with the password <b>demo</b>.   This accounts fake data is restored nightly</p>
+
+            {% if form.errors %}
+                <div class="w3-panel w3-red w3-margin-top">
+                    <p>Your username and password didn't match. Please try again.</p>
+                </div>
+            {% endif %}
+            {% if next %}
+                {% if user.is_authenticated %}
+                    <p class="w3-margin-top">Your account doesn't have access to this page. To proceed,
+                        please log in with an account that has access.</p>
+                {% else %}
+                    <p class="w3-margin-top">Please log in to see this page.</p>
+                {% endif %}
+            {% endif %}
+            <form method="post" action="{% url 'login' %}">
+                {% csrf_token %}
+                <table class="w3-margin-top">
+                    <tr>
+                        <td>Email Address:</td>
+                        <td>{{ form.username }}</td>
+                    </tr>
+                    <tr>
+                        <td>{{ form.password.label_tag }}</td>
+                        <td>{{ form.password }}
+                    </tr>
+                </table>
+                <input type="submit" value="login">
+                <input type="hidden" name="next" value="{{ next }}">
+            </form>
+            <p><a href="{% url 'password_reset' %}">Lost password?</a></p>
+            <p><a href="{% url 'new_account' %}">Request a DIY account?</a></p>
+    </div>
+    </div>
+    {% endblock %}

@@ -1,19 +1,60 @@
 {% extends "base.html" %}
-{% block title %}DIY New User{% endblock %}
-{% block help_content %}
-<!-- todo:  Is this page even used > -->
-<p>I do not do anything with this info and if I ever do,  I will tell you.</p>
-<p>It is all pretty common information asks,  the only thing out of the ordinary is you can provide your own ALPHA VANTAGE API Key.
-Having your own key will allow you to force a stock price update.   The keys are free but limited to 25 calls a
-day.   Here is the <a href="https://www.alphavantage.co/">Alpha Vantages</a> website</p>
+{% block title %}IOOM{% endblock %}
+{% block navbar%}
+<div class="w3-top">
+  <div class="w3-bar w3-black w3-card">
+    <p class="w3-conainer w3-margin-left">Account</p>
+  </div>
+</div>
 {% endblock %}
+
 {% block content %}
-  <h2 class="w3-margin-top">Create a new DIY User</h2>
+  {% include 'base/blahblah.html' %}
+
+  <div class="w3-container">
+    <h2 class="w3-margin-top">{{verb}} Profile</h2>
+
+    <p>It is all pretty common information asks,  the only thing out of the ordinary is you can provide your own ALPHA VANTAGE API Key.
+    Having your own key will allow you to force a stock price update.   The keys are free but limited to 25 calls a
+    day.   Here is the <a href="https://www.alphavantage.co/">Alpha Vantages</a> website</p>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script>
+      $(document).ready(function() {
+        document.getElementById("id_country").addEventListener("change", function() {
+          var country_id = document.getElementById("id_country")
+          var state_id = document.getElementById("id_state")
+          var country = $(country_id).val()
+
+          $.ajax({
+            url: '{% url "get_states" %}',
+            data: {country: country},
+            success: function(data) {
+              $(state_id).html(data);
+            },
+            error: function(ts) {
+              console.log(ts.responseText)
+            }
+          })  // ajax
+        });  // add event
+      });  // document ready
+    </script>
+
   <form class="w3-margin-bottom" method="post">
     {% csrf_token %}
-    {{ user_form.as_p }}
-    {{ profile_form.as_p }}
-    <button type="submit">Save changes</button>
+    <table>
+      {% for field in form %}
+        <tr>
+          <td>{{field.label_tag}}</td>
+          <td><span title="{{field.help_text}}">{{field}}</span></td>
+          <td>{{field.errors}}</td>
+        </tr>
+      {% endfor %}
+      <tr><td></td><td><button class="w3-button-small w3-round-large diy-button diy-green" type="submit">Save</button>
+        <a href="{{ expense_main }}>"><button class="w3-button-small w3-round-large diy-button diy-red" type="submit">Cancel</button></a></td></tr>
+
+    </table>
   </form>
 
+  </div>
 {% endblock %}
