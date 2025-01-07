@@ -1,0 +1,23 @@
+{% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}
+<html lang="{{ LANGUAGE_CODE|default:'en-us' }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
+<head>
+    <title>{% block title %}IOOM{% endblock %}</title>
+    <!DOCTYPE html>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="stylesheet" href="{% static 'w3-css/w3.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="{% static 'diy.css' %}">
+
+    <style>
+        body {font-family: "Lato", sans-serif}
+        .mySlides {display: none}
+        .w3-container-300 {
+            min-height: 300px; /* or any other value you prefer */
+        }
+    </style>
+</head>
+<body>
+<div class="w3-content " style="max-width:2000px;margin-top:46px">

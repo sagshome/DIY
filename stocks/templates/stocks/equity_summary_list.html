@@ -2,7 +2,7 @@
 <div>
     {% if equity_list_data %}
         <table class="w3-table w3-striped">
-            <caption class="w3-wide w3-padding-16">Equity Summary (Present Day Value)</caption>
+            <caption class="w3-wide w3-padding-16">Equity Summary</caption>
             <thead class="w3-margin-bottom" style="background:#eee;">
                 <tr>
                     <th class="w3-container w3-small w3-left-align">Symbol</th>
@@ -22,7 +22,13 @@
             </thead>
             {% for item in equity_list_data %}
                 <tr>
-                    <td class="w3-left-align w3-small ">{{ item.Equity }}</td>
+                    <td class="w3-left-align w3-small ">
+                        {% if object_type == 'Account' %}
+                            <a href="{% url 'account_equity_details' object_type object.id item.Object_Type item.Object_ID %}">{{ item.Equity }}</a>
+                        {% else %}
+                            {{ item.Equity }}
+                        {% endif %}
+                    </td>
                     <td class="w3-right-align w3-small">
                         {% if item.Shares == 0 %}<em>Closed</em>{% else %}{{ item.Shares | floatformat:'1g'}}{% endif %}
                     </td>

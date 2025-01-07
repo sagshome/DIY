@@ -1,8 +1,9 @@
 ﻿{% extends "base.html" %}
-{% block title %}Tranaction Add{% endblock %}
-
+{% block title %}IOOM Transaction{% endblock %}
 {% block content %}
     <script>
+        const doing_edit =  "{{ view_verb }}" == "Edit";
+        const investment = "{{ account.account_type }}" == "Investment";
         function hideDiv(divId) {
            var div = document.getElementById(divId);
            if (div === null) {
@@ -17,40 +18,62 @@
             if (div === null) {
             }
             else {
-            div.style.display = "";
+            div.style.display = "block";
             }
         }
 
         function show_hide() {
             var action_value = $("#id_xa_action").val();
-            if (action_value == 1 || action_value == 5 || action_value == 8 || action_value == 9 || action_value == 6) {
-                hideDiv('equityRow')
-                hideDiv('priceRow')
-                hideDiv('quantityRow')
-                showDiv('valueRow')
-            } else if (action_value == 2 || action_value == 3 || action_value == 4 || action_value == 7) {
-                showDiv('equityRow')
-                showDiv('priceRow')
-                showDiv('quantityRow')
-                hideDiv('valueRow')
+            if (action_value == 1 || action_value == 5 || action_value == 8 || action_value == 9 || action_value == 6 || action_value == 10 || action_value == 11) {
+                hideDiv('equityRow');
+                hideDiv('priceRow');
+                hideDiv('quantityRow');
+                showDiv('valueRow');
+            } else if ((action_value == 2 || action_value == 3 || action_value == 4 || action_value == 7)) {
+                if (!investment) {
+                    hideDiv('equityRow');
+                    hideDiv('priceRow');
+                    hideDiv('quantityRow');
+                    showDiv('valueRow');
+                } else {
+                    showDiv('equityRow');
+                    showDiv('priceRow');
+                    showDiv('quantityRow');
+                    hideDiv('valueRow');
+                }
             } else {
-                hideDiv('equityRow')
-                hideDiv('priceRow')
-                hideDiv('quantityRow')
-                hideDiv('valueRow')
+                hideDiv('equityRow');
+                hideDiv('priceRow');
+                hideDiv('quantityRow');
+                hideDiv('valueRow');
             }
+        }
+
+        function update_actions() {
+            if (!doing_edit) {
+                $.ajax({                       // initialize an AJAX request
+                    url: '{% url "action_list" %}',
+                    async: false,  // make sure we wait for the update
+                    data: {
+                        'account_id': '{{ account.id }}',
+                    },
+                    success: function (data) {   // `data` is the return of the `load_cities` view function
+                        $("#id_xa_action").html(data);
+                    }
+                });
+                showDiv('actionRow')
+            }
+
         }
         function update_equity() {
 
-            var portfolio_value = $("#id_portfolio").val();
+            var portfolio_value = $("#id_account").val();
             var action_value = $("#id_xa_action").val();
             var date_value = $("#id_real_date").val();
             var url = $("#XAForm").attr("equity-url");
-            hideDiv('equityRow')
-
 
             $.ajax({                       // initialize an AJAX request
-                url: url,
+                url: '{% url 'equity_list' %}',
                 async: false,  // make sure we wait for the update
                 data: {
                     'action': action_value,
@@ -64,25 +87,54 @@
           showDiv('equityRow')
 
         }
+        function update_values() {
+
+            var account_value = '{{ account.id }}';
+            var action_value = $("#id_xa_action").val();
+            var date_value = $("#id_real_date").val();
+            var equity_value = $("#id_equity").val();
+
+            $.ajax({                       // initialize an AJAX request
+                url: '{% url 'xa_values' %}',
+                async: false,  // make sure we wait for the update
+                data: {
+                    'action': action_value,
+                    'account_id': account_value,
+                    'date': date_value,
+                    'equity_id': equity_value,
+                },
+                success: function (data) {
+                    // `data` is the return of the `load_cities` view function
+                    document.getElementById('id_price').value = data['price'];
+                    document.getElementById('id_quantity').value = data['shares'];
+                }
+            });
+            showDiv('equityRow')
+
+        }
+
     </script>
     <script>
         $(document).ready(function() {
-          var action_id = document.getElementById("id_xa_action");
-          action_id.addEventListener("mouseup", show_hide);
+
+          var action_locked = '{{ action_locked }}';
+          if (typeof action_locked === 'undefined') {
+                action_locked = false
+          }
+          if (!action_locked) {
+              update_actions();
+              action_id = document.getElementById("id_xa_action")
+              action_id.addEventListener("mouseup", show_hide);
+              action_id.addEventListener("change", update_equity);
+          }
+          document.getElementById("id_equity").addEventListener("change", update_values);
           show_hide();
-          update_equity();
 
-          document.getElementById("id_portfolio").addEventListener("change", update_equity);
-          // document.getElementById("id_real_date").addEventListener("change", update_equity);
-          document.getElementById("id_xa_action").addEventListener("change", update_equity);
         });
-
-
     </script>
 
-    <h2>Account Transactions</h2>
-
-        <form method="post" id="XAForm" equity-url="{% url 'equity_list' %}" novalidate>
+    <h2>{{account.name}} - {{view_verb}} Transaction</h2>
+        <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
             {% for error in form.non_field_errors %}
                 <div class="w3-row w3-red">
@@ -95,54 +147,55 @@
                     {{ hidden_field }}
                 </div>
             {% endfor %}
-
-            <div class="w3-row w3-margin-bottom">
-                <div class="w3-col w3-container l1">{{ form.account.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.account }}</div>
-                <div class="w3-col w3-container>">{{ form.account.errors }}</div>
-            </div>
-
-            <div class="w3-row w3-margin-bottom">
-                <div class="w3-col w3-container l1">Date:</div>
-                <div class="w3-col w3-container m2">{{ form.real_date }}</div>
-                <div class="w3-col w3-container m2">{{ form.real_date.errors }}</div>
-            </div>
-
-            <div class="diyrow w3-row w3-margin-bottom ">
-                <div class="w3-col w3-container l1">{{ form.xa_action.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.xa_action }}</div>
-                <div class="w3-col w3-container">{{ form.xa_action.errors }}</div>
-            </div>
-
-            <div class="w3-row w3-margin-bottom diyrow" id="equityRow">
-                <div class="w3-col w3-container l1">{{ form.equity.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.equity }}</div>
-                <div class="w3-col w3-container m2">{{ form.equity.errors }}</div>
-            </div>
-            <div class="w3-row w3-margin-bottom diyrow" id="priceRow">
-                <div class="w3-col w3-container l1">{{ form.price.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.price }}</div>
-                <div class="w3-col w3-container m2">{{ form.price.errors }}</div>
-            </div>
-            <div class="w3-row w3-margin-bottom diyrow" id="quantityRow">
-                <div class="w3-col w3-container l1">{{ form.quantity.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.quantity }}</div>
-                <div class="w3-col w3-container m2">{{ form.quantity.errors }}</div>
-            </div>
-            <div class="w3-row w3-margin-bottom diyrow" id="valueRow">
-                <div class="w3-col w3-container l1">{{ form.value.label_tag }}</div>
-                <div class="w3-col w3-container m2">{{ form.value }}</div>
-                <div class="w3-col w3-container m2">{{ form.value.errors }}</div>
-            </div>
+            <table>
+                <tr style="display: block;">
+                    <td class="diy-label">Date:</td>
+                    <td>{{ form.real_date}}</td>
+                    <td>{{ form.real_date.errors }}</td>
+                </tr>
+                <tr id=actionRow style="display: block;">
+                    <td class="diy-label">{{ form.xa_action.label_tag }}</td>
+                    <td>
+                            {{ form.xa_action }}
+                   </td>
+                    <td>{{ form.xa_action.errors }}</td>
+                </tr>
+                <tr id=equityRow style="display: block;">
+                    <td class="diy-label">{{ form.equity.label_tag }}</td>
+                    <td>{{ form.equity}}</td>
+                    <td>{{ form.equity.errors }}</td>
+                </tr>
+                <tr id=priceRow style="display: block;">
+                    <td class="diy-label">{{ form.price.label_tag }}</td>
+                    <td>{{ form.price }}</td>
+                    <td>{{ form.price.errors }}</td>
+                </tr>
+                <tr id=quantityRow style="display: block;">
+                    <td class="diy-label">{{ form.quantity.label_tag }}</td>
+                    <td>{{ form.quantity }}</td>
+                    <td>{{ form.quantity.errors }}</td>
+                </tr>
+                <tr id=valueRow style="display: block;">
+                    <td class="diy-label">{{ form.value.label_tag }}</td>
+                    <td>{{ form.value }}</td>
+                    <td>{{ form.value.errors }}</td>
+                </tr>
+            </table>
 
             <div class="w3-row">
                 <div class="w3-col w3-container m2">
-                    <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Submit">
+                    <input type="submit" class="w3-button-small w3-round-large diy-long diy-button diy-green" name="submit-type" value="Submit">
                 </div>
+                {% if account %}
+                    <div class="w3-col w3-container m2">
+                        <a href="{% url 'account_details' account.id %}">
+                            <button class="w3-button-small w3-round-large diy-long diy-button diy-red" type="button">Cancel</button>
+                        </a>
+                    </div>
+                {% endif %}
                 <div class="w3-col w3-container m2">
-
-                    {% if view_verb != 'Edit' %}
-                        <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit-type" value="Add Another">
+                    {% if view_verb == 'Edit' %}
+                        <input type="submit" class="w3-button-small w3-round-large diy-long diy-button diy-green" name="submit-type" value="Add Another">
                     {% endif %}
                 </div>
             </div>

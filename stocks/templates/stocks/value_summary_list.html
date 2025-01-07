@@ -1,0 +1,25 @@
+<div>
+    <table class="w3-table w3-striped">
+        <caption class="w3-wide w3-padding-16">Cost / Value Table</caption>
+        <thead class="w3-margin-bottom" style="background:#eee;">
+            <tr>
+                <th class="w3-container w3-small w3-left-align">Date</th>
+                <th class="w3-container w3-small w3-right-align ">Total Cost</th>
+                <th class="w3-container w3-small w3-right-align">Total Value</th>
+                <th class="w3-container w3-small w3-right-align">Total Dividends</th>
+                <th class="w3-container w3-small w3-right-align "></th>
+            </tr>
+        </thead>
+        {% for item in summary_data %}
+            <tr>
+                <td class="w3-left-align w3-small ">{{ item.Date }}</td>
+                <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
+                <td class="w3-right-align w3-small">${{ item.Value | floatformat:'0g'}}</td>
+                <td class="w3-right-align w3-small">${{ item.TotalDividends | floatformat:'2g'}}</td>
+                <td>
+                    <a href="{% url 'update_account_date' account.id item.Date%}">
+                    <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Reconcile
+            </tr>
+        {% endfor %}
+    </table>
+</div>

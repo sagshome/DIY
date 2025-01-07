@@ -45,7 +45,7 @@
           <div class="w3-dropdown-hover">
             <button class="w3-padding-large w3-button w3-black" title="Expenses">Cash <i class="fa fa-caret-down"></i></button>
             <div class="w3-dropdown-content w3-bar-block w3-card-4">
-              <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large">Main Page</a>
+              <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large">Cash Home</a>
               <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">New Entry</a>
               <hr class="w3-hide-small">
               <a href="{% url 'expenses_templates' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Show Templates</a>
@@ -56,10 +56,8 @@
           <div class="w3-dropdown-hover">
             <button class="w3-padding-large w3-button w3-black" title="Investments">Wealth <i class="fa fa-caret-down"></i></button>
             <div class="w3-dropdown-content w3-bar-block w3-card-4">
-            <a href="{% url 'portfolio_list' %}" class="w3-bar-item w3-button w3-padding-large">Main Page</a>
-            <a href="{% url 'transaction_add' %}" class="w3-bar-item w3-button w3-padding-large">New Transaction</a>
+            <a href="{% url 'portfolio_home' %}" class="w3-bar-item w3-button w3-padding-large">Wealth Home</a>
             <hr class="w3-hide-small">
-            <a href="{% url 'portfolio_add' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Add a Portoflio</a>
             <a href="{% url 'add_equity' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Request new Equity/Fund</a>
             <a href="{% url 'portfolio_upload' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Import</a>
             <a href="{% url 'stocks_export' %}" class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Export</a>
@@ -116,7 +114,7 @@
   </div>
   {% block footer %}
   <div class="w3-botton w3-container w3-grey">
-      <container class="w3-container w3-center"><p>© 2024 Scott Sargent<br>Rainy Day Development</p></container>
+      <container class="w3-container w3-center"><p>© 2025 <a href="mailto:itsonlyourmoney@gmail.com">Scott Sargent</a><br>Rainy Day Development</p></container>
   </div>
   {% endblock footer %}
 </body>

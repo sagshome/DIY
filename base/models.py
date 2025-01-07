@@ -44,6 +44,7 @@ PALETTE = {'green': '#2ECC71',
 COUNTRIES = [('CA', 'Canada'),
              ('US', 'United States'),]
 
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     phone_number = PhoneNumberField(blank=False, null=False)

@@ -3,25 +3,12 @@ import logging
 from celery import shared_task
 from datetime import datetime
 from django.conf import settings
+from django.contrib.auth.models import User
+from base.models import Profile
+
 from stocks.models import Equity, Inflation, ExchangeRate, Account
 
 logger = logging.getLogger(__name__)
-
-
-@shared_task
-def print_time():
-    logger.debug("Current time is:%s" % datetime.now())
-
-
-@shared_task
-def add(x, y):
-    logger.debug("adding:%s + %s" % (x , y))
-    return x + y
-
-
-@shared_task
-def periodic_hello():
-    print("Hello, this is a periodic task!")
 
 
 @shared_task

@@ -2,6 +2,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from .models import DataSource, Equity, EquityValue, Account, Transaction, Portfolio, CURRENCIES
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
+from django.forms.widgets import HiddenInput
 
 
 def popover_html(label, content):
@@ -17,12 +18,29 @@ class EquityForm(forms.Form):
     equity = forms.ChoiceField(choices=choices)
 
 
-class AccountForm(forms.ModelForm):
+class AccountAddForm(forms.ModelForm):
     class Meta:
         model = Account
-        fields = ('account_name', 'name', 'portfolio', 'currency', 'managed', 'account_type', 'user')
+        fields = ('account_name', 'name', 'account_type', 'currency', 'managed', 'user')
         widgets = {
-            'end': forms.TextInput(attrs={'type': 'date'}),
+            'user': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["name"].label = "Display Name"
+        self.fields["account_name"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+        self.fields["name"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+        self.fields["account_type"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+        self.fields["currency"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+        self.fields["managed"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+
+
+class AccountForm(AccountAddForm):
+    class Meta:
+        model = Account
+        fields = ('account_name', 'name', 'account_type', 'portfolio', 'currency', 'managed', 'user')
+        widgets = {
             'user': forms.HiddenInput(),
         }
 
@@ -32,9 +50,11 @@ class AccountForm(forms.ModelForm):
             self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.filter(user=self.initial['user']))
         else:
             self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.none())
+
         self.fields['portfolio'].required = False
         self.fields["account_name"].widget.attrs['readonly'] = True
-        self.fields["account_name"].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["account_name"].widget.attrs['style'] = 'width:200px;height:28.5px;background-color:Wheat'
+        self.fields["portfolio"].widget.attrs['style'] = 'width:200px;height:28.5px;'
 
 
 class AccountCloseForm(forms.ModelForm):
@@ -87,22 +107,14 @@ class AccountCopyForm(forms.ModelForm):
         }
 
 
-class AccountAddForm(forms.ModelForm):
-    class Meta:
-        model = Account
-        fields = ('account_name', 'name', 'currency', 'managed', 'user')
-        widgets = {
-            'user': forms.HiddenInput(),
-        }
-
-
 class TransactionForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ("user", "account", "xa_action", "equity", "real_date", "price", "quantity", "value")
+        fields = ("user", "xa_action", "account", "equity", "real_date", "price", "quantity", "value")
         widgets = {
             'user': forms.HiddenInput(),
             'xa_action': forms.Select(),
+            'account': forms.HiddenInput(),
             'real_date': forms.TextInput(
                 attrs={'type': 'date',
                        'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
@@ -110,15 +122,6 @@ class TransactionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        valid_actions = [(None, '------'),
-                         (Transaction.FUND, 'Fund'),
-                         (Transaction.BUY, 'Buy'),
-                         (Transaction.REDIV, 'ReInvested Dividends'),
-                         (Transaction.SELL, 'Sell'),
-                         (Transaction.REDEEM, 'Redeem'),
-                         (Transaction.INTEREST, 'Cash/Deposit'),
-                         (Transaction.FEES, 'Sell for FEES')]
-        self.fields['account'] = forms.ModelChoiceField(queryset=Account.objects.filter(user=self.initial['user']))
         self.fields['xa_action'].choices = Transaction.TRANSACTION_TYPE
         self.fields['price'].required = False
         self.fields['value'].required = False
@@ -126,29 +129,67 @@ class TransactionForm(forms.ModelForm):
         self.fields['equity'].queryset = Equity.objects.all().order_by('symbol')
 
     def clean_equity(self):
-        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['equity']:
-            raise ValidationError("Buy, Sell, and ReInvest Dividend actions require an equity value", code="Empty Field")
-        elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and self.cleaned_data['equity']:
-            raise ValidationError("Fund and Redeem actions DO NOT require an equity value", code="Extra Field")
+        account = self.cleaned_data['account']
+        if account.account_type == 'Investment':
+            if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['equity']:
+                raise ValidationError("Buy, Sell, and ReInvest Dividend actions require an equity value", code="Empty Field")
+            elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and self.cleaned_data['equity']:
+                raise ValidationError("Fund and Redeem actions DO NOT require an equity value", code="Extra Field")
         return self.cleaned_data['equity']
 
     def clean_price(self):
-        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['price']:
-            raise ValidationError("Buy and Sell actions require an price", code="Empty Field")
-        else:
-            return self.cleaned_data['price']
+        account = self.cleaned_data['account']
+        if account.account_type == 'Investment':
+            if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL] and not self.cleaned_data['price']:
+                raise ValidationError("Buy and Sell actions require an price", code="Empty Field")
+        return self.cleaned_data['price']
 
     def clean_quantity(self):
-        if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['quantity']:
-            raise ValidationError("This action require an quantity", code="Empty Field")
-        else:
-            return self.cleaned_data['quantity']
+        account = self.cleaned_data['account']
+        if account.account_type == 'Investment':
+            if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['quantity']:
+                raise ValidationError("This action require an quantity", code="Empty Field")
+        return self.cleaned_data['quantity']
 
     def clean_value(self):
-        if self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['value']:
-            raise ValidationError("Fund and Redeem actions require an value", code="Empty Field")
-        else:
-            return self.cleaned_data['value']
+        if self.cleaned_data['value'] is not None:
+            if self.cleaned_data['value'] <= 0:
+                raise ValidationError("Value must be non-zero and positive", code="Incorrect Field")
+        elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES, Transaction.VALUE, Transaction.BALANCE] and not self.cleaned_data['value']:
+            raise ValidationError("This action require an value", code="Empty Field")
+        return self.cleaned_data['value']
+
+
+class TransactionSetValueForm(TransactionForm):
+    class Meta:
+        model = Transaction
+        fields = ("user", "account", "xa_action", "equity", "real_date", "price", "quantity", "value")
+
+        widgets = {
+            'user': forms.HiddenInput(),
+            'xa_action': forms.Select(),
+            'account': forms.HiddenInput(),
+            'equity': forms.HiddenInput(),
+            'real_date': forms.TextInput(
+                attrs={'type': 'date',
+                       'title': 'Select the Date for this transaction,  the date will be normalized to the first of the next month'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['xa_action'].choices = [(self.initial['xa_action'], Transaction.TRANSACTION_MAP[self.initial['xa_action']])]
+        self.fields['xa_action'].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["xa_action"].widget.attrs['readonly'] = True
+
+
+class TransactionEditForm(TransactionForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['real_date'].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["real_date"].widget.attrs['readonly'] = True
+        self.fields['xa_action'].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["xa_action"].widget.attrs['readonly'] = True
 
 
 class ManualUpdateEquityForm(forms.Form):
@@ -225,3 +266,34 @@ class UploadFileForm(forms.Form):
 
         if csv_type not in ('QuestTrade', 'Manulife', 'Wealth', 'Default'):
             self.add_error('csv_type', f"CSV Type {csv_type} is not currently valid")
+
+
+class ReconciliationForm(forms.Form):
+    Equity = forms.CharField(required=True, widget=forms.TextInput())
+    Cost = forms.DecimalField(required=False, decimal_places=2)
+    Value = forms.DecimalField(required=False, decimal_places=2)
+    Shares = forms.DecimalField(required=False, decimal_places=1)
+    Price = forms.DecimalField(required=False, decimal_places=2)
+    Dividends = forms.DecimalField(required=False, decimal_places=2)
+    TotalDividends = forms.DecimalField(required=False, decimal_places=2)
+
+    class Meta:
+        widgets = {
+            'Date': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'initial' in kwargs and 'Equity' in kwargs['initial']:
+            if kwargs['initial']['Equity'].searchable:
+                self.fields["Price"].widget.attrs['readonly'] = True
+                self.fields["Price"].widget.attrs['style'] = 'background-color:Wheat'
+
+        self.fields["Equity"].widget.attrs['style'] = 'width:150px;background-color:Wheat'
+        self.fields["Equity"].widget.attrs['readonly'] = True
+        self.fields["TotalDividends"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
+        self.fields["TotalDividends"].widget.attrs['readonly'] = True
+
+
+ReconciliationFormSet = formset_factory(ReconciliationForm, extra=0)
+

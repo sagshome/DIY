@@ -29,12 +29,27 @@ body {
   /* other styles */
 }
 
+.diy-label {
+    width: 100px;
+    text-align: right;
+}
 .diy_very_long {
     width: 300px;
 }
+
+button.diy-button-auto {
+    background-color: transparent; /* no background color */
+    border: 1px solid lightgrey; /* thin  border */
+    border-radius: 5px; /* optional, for rounded corners */
+    height: 30px;
+}
+
+input.right {
+        text-align-last: right;
+}
 button.diy-button {
     background-color: transparent; /* no background color */
-    border: 1px solid lightgrey; /* thin green border */
+    border: 1px solid lightgrey; /* thin  border */
     border-radius: 5px; /* optional, for rounded corners */
     height: 30px;
     width: 75px;
@@ -44,6 +59,7 @@ a {
     color: blue;
     text-decoration: none;
 }
+
 button.diy-long {
     width: 200px;
 }

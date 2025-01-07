@@ -33,3 +33,26 @@
     <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
   </form>
 {% endblock %}
+{% block help_content %}
+<p>
+    <b>Account</b> are the basis for all wealth management.   They can hold equities,  ETFs, Mutual Funds.  they can be a bank account or even
+    a "Value" account.</p>
+<h2>Attributes</h2>
+<ul>
+    <li><b>Account Name:</b> The unchangeable name for this account.   When account data was imported the name is assigned and will be used on future imports</li>
+    <li><b>Display Name:</b> The value you will see on most displays - You can change this at will</li>
+    <li><b>Account Type:</b> We support 3 kinds of accounts</li>
+    <ol>
+        <li><b>Investment:</b> Accounts hold Mutual Funds,  Equities etc,  each thing contained in an investment account will have shares,
+            prices, dividends and whether updated via API (as in the case of Equities/ETFs or via account uploads or even manually</li>
+        <li><b>Bank:</b> Accounts hold money,  money is added and removed via Funding or Redeeming Transactions.   No provisions are in place for interest</li>
+        <li><b>Value:</b> Accounts hold <i>THINGS</i> I can't track.  They are also Funded and Redeemed via Transactions but any growth reported as a separate Value Transaction.  They
+        are useful for GIC accounts,  Mutual funds that are not well reported.</li>
+
+    </ol>
+    <li><b>Portfolio:</b> The portfolio (if any) that this account is tracked with.  Portfolios are really useful when you want to track accounts that are similar or accounts that have
+    moved around between vendors</li>
+    <li><b>Currency:</b> This is the currency this account is tracked in.   It can be different from your profile currency</li>
+    <li><b>Managed:</b> Someone else is managing this account.</li>
+</ul>
+{% endblock %}

@@ -3,12 +3,17 @@ from django.contrib.admin import SimpleListFilter
 # Register your models here.
 
 from .models import Equity, Account, Transaction, EquityValue, EquityEvent, Inflation, EquityAlias, ExchangeRate, \
-    DataSource
+    DataSource, FundValue
 
 
 @admin.display(description="Source")
 def display_source(obj):
     return DataSource(obj.source).name
+
+
+class FundValueAdmin(admin.ModelAdmin):
+    list_filter = ("fund", "date", "real_date", "value", "source")
+    fields = ["fund", "date", "real_date", "value", "source"]
 
 
 class EquityAdmin(admin.ModelAdmin):
@@ -22,7 +27,6 @@ class EquityAliasAdmin(admin.ModelAdmin):
 
 class AccountAdmin(admin.ModelAdmin):
     list_display = ("name",)
-
 
 
 class TransactionAdmin(admin.ModelAdmin):
@@ -72,3 +76,4 @@ admin.site.register(Account, AccountAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(Inflation, InflationAdmin)
 admin.site.register(ExchangeRate, ExchangeRateAdmin)
+admin.site.register(FundValue, FundValueAdmin)

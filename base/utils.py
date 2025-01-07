@@ -125,6 +125,7 @@ def date_to_label(label_date: date, period: str) -> str:
         value = label_date.strftime('%d-%b-%Y')
     return value
 
+
 def label_to_values(label: str):
     """
     Based on a label value, return a start and end date
@@ -157,6 +158,24 @@ def label_to_values(label: str):
                     pass
     return start_date, end_date
 
+
+def set_simple_cache(key, data, timeout=36000):
+    if not settings.NO_CACHE:
+        cache.set(key, data, timeout)
+
+
+def get_simple_cache(key):
+    data = None
+    if not settings.NO_CACHE:
+        data = cache.get(key)
+    return data
+
+
+def clear_simple_cache(key):
+    if not settings.NO_CACHE:
+        cache.delete(key)
+
+
 def cache_dataframe(key, dataframe, timeout=3600):
     """
     Cache a Pandas DataFrame.
@@ -175,7 +194,6 @@ def cache_dataframe(key, dataframe, timeout=3600):
 def clear_cached_dataframe(key):
     if not settings.NO_CACHE:
         cache.delete(key)
-
 
 def get_cached_dataframe(key):
     """
@@ -215,34 +233,11 @@ def next_date(input_date: date) -> date:
     :param input_date:
     :return:
     """
-
     return input_date + relativedelta(months=1)
-
-
-def last_date(input_date: date) -> date:
-    """
-    Given a normalized date,  return the next one
-    :param input_date:
-    :return:
-    """
-    return input_date - relativedelta(months=1)
-
-
-def month_delta(first_date: date, second_date: date) -> int:
-    """
-    Give two dates (where the first is less than the second) return number of months that have passed
-    :param first_date:
-    :param second_date:
-    :return:
-    """
-    years = (second_date.year - first_date.year) * 12
-    months = second_date.month - first_date.month
-    return months + years
 
 
 def normalize_today() -> datetime.date:
     return datetime.today().replace(day=1).date()
-
 
 def tempdir() -> Path:
     return Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir())

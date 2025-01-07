@@ -1,25 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Portfolio Details{% endblock %}
+{% block title %}Details{% endblock %}
 {% load stocks_tags %}
 {% block content %}
 <script>
     $(document).ready(function() {
       $.ajax({
         url: "{% url 'cost_value_chart' %}",
-        data: {'object_id': {{ object.id }},
+        data: {'object_id': '{{ object.id }}',
                'object_type': '{{ object_type }}'},
         success: function (data) {
           new Chart("lineChart", {
             type: "line",
             data: data,
             options: {
-                scales: {
-                    yAxes: [{
-                        ticks: {
+                    scales: {
+                        y: {
                             beginAtZero: true
-                        }
-                    }]
-                },
+                        },
+                    },
                 elements: {
                    point:{
                        radius: 2
@@ -40,7 +38,7 @@
           });
         },
         error: function(data) {
-            alert('Error occured');
+            console.log('Error occured');
         }
 
       });
@@ -54,17 +52,33 @@
     {% if object_type == 'Account' %}
         {% if object.portfolio %}
             <a href="{% url 'portfolio_details' object.portfolio.id %}">
-                <button class="w3-margin-right w3-button-small w3-round-large diy-button diy-yellow">Portfolio</button></a>
+                <button class="w3-margin-right w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
         {% endif %}
         <a href="{% url 'account_table' object.id %}">
-            <button class="w3-button-small w3-round-large diy-button diy-green">Tables</button></a>
+            <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
     {% endif %}
 
     {% if object_type == 'Account' %}
+        {% if object.account_type == 'Cash' %}
+            <a href="{% url 'set_balance' object.id %}">
+                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
+        {% else %}
+            <a href="{% url 'set_fund' object.id %}">
+                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
+            <a href="{% url 'set_withdraw' object.id %}">
+                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
+           {% if object.account_type == 'Value' %}
+                <a href="{% url 'set_value' object.id %}">
+                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
+           {% else %}
+                <a href="{% url 'transaction_add' object.id %}">
+                    <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+           {% endif %}
+        {% endif %}
         <a href="{% url 'account_edit' object.id %}">
-            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-yellow">Edit</button></a>
+            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
         <a href="{% url 'account_close' object.id %}">
-            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-orange">Close</button></a>
+            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Close</button></a>
         <a href="{% url 'account_delete' object.id %}">
             <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
     {% else %}

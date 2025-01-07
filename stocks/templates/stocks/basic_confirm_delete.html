@@ -11,10 +11,10 @@
         <form method="post">{% csrf_token %}
             <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
             <a href="{{cancel_url}}">
-                <button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button>
+                <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
             </a>
             - or -
-            <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
+            <button class="w3-button-small w3-round-large subtle diy-button diy-red" type="submit">Delete</button>
         </form>
     </div>
 {% endblock %}

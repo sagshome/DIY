@@ -1,167 +1,118 @@
 {% extends "base.html" %}
 {% block title %}Account Equity Details{% endblock %}
 {% block content %}
-        <script>
-            var lineChart = ''
-            $(document).ready(function() {
-              $.ajax({
-                url: "{% url 'cost_value_chart' %}",
-                data: {'object_id': {{ account.id }},
-                       'object_type': '{{ account_type }}',
-                       'symbol': {{ equity.id}} },
-                success: function (data) {
-                  lineChart = new Chart("lineChart", {
-                    type: "line",
-                    data: data,
-                    options: {
-                        scales: {
-                            yAxes: [{
-                                ticks: {
-                                    beginAtZero: true
-                                }
-                            }]
+    <script>
+        var lineChart = ''
+        $(document).ready(function() {
+          $.ajax({
+            url: "{% url 'cost_value_chart' %}",
+            data: {'object_id': '{{ account.id }}',
+                   'object_type': '{{ account_type }}',
+                   'symbol': '{{ equity.id }}' },
+            success: function(data) {
+              lineChart = new Chart("lineChart", {
+                type: "line",
+                data: data,
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
                         },
-                        elements: {
-                            point:{
-                                radius: 2
-                            }
-                        },
+                    },
+                    elements: {
+                        point:{
+                            radius: 2
+                        }
+                    },
 
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        title: {
-                          display: true,
-                          text: "Return vs Cost"
-                        },
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            align: 'center'
-                        },
-                    }
-                  });
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    title: {
+                      display: true,
+                      text: "Return vs Cost"
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'center'
+                    },
                 }
               });
-            });
+            }
+          });
+        });
 
-            $(document).on('change', 'select', function() {
-                var url = "{% url 'portfolio_list' %}";
-                var compare_id = $(this).val()
-                console.log('compare to' + $(this).val()); // the selected options’s value
-                lineChart.destroy()
-                $.ajax({
-                url: "{% url 'portfolio_equity_compare' pk=account.id orig_id=equity.id compare_id=0 %}".replace('0', compare_id),
-                data: {},
-                success: function (data) {
-                  lineChart = new Chart("lineChart", {
-                    type: "line",
-                    data: data,
-                    options: {
-                        scales: {
-                            yAxes: [{
-                                ticks: {
-                                    beginAtZero: true
-                                }
-                            }]
-                        },
-                        elements: {
-                            point:{
-                                radius: 2
-                            }
-                        },
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        title: {
-                          display: true,
-                          text: "Return vs Cost"
-                        },
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            align: 'center'
-                        },
-                    }
-                  });
-                }
-              });
-            });
-        </script>
+    </script>
 
+    <div class="w3-container">
+        <h2 class="w3-margin">{{equity.key}} - {{equity.name}}</h2>
+        <h3 class="w3-margin">Details for account <a href="{% url 'account_details' account.id %}">{{account.name}}</a></h3>
 
-    <h2 class="w3-margin">{{equity.symbol}} - {{equity.name}}</h2>
-    <h3 class="w3-margin">Details for <a href="{% url 'account_details' account.id %}">{{account.name}}</a></h3>
+        <p class="w3-margin">{{equity.symbol}}
+            {% if profit %}
+              has generated a net profit of
+            {% else %}
+              has a current cost of
+            {% endif %}
+            ${{funded|floatformat:'2g'}}.
+            {% if dividends > 0 %}
+                It as produced dividends totalling ${{dividends|floatformat:'0g'}}
+            {% endif %}
+        </p>
 
-    <p class="w3-margin">{{equity.symbol}}
-        {% if profit %}
-          has generated a net profit of
-        {% else %}
-          has a current cost of
-        {% endif %}
-        ${{funded|floatformat:'2g'}}.
-        {% if dividends > 0 %}
-            It as produced dividends totalling ${{dividends|floatformat:'0g'}}
-        {% endif %}
-    </p>
-
-<div  class="w3-row">
-        <div style="height:350px;" class="w3-half w3-container">
-            <canvas id="lineChart" class="w3-card-2"></canvas>
-        </div>
-        <div class="w3-half w3-container">
-            <div id="documentation" class="w3-hide-small w3-container">
-                The <b>Return vs Cost</b> chart displays <br>
-                <ul>
-                    <li>Inflated Cost - How much your invested money would be worth when inflaction is factored in</li>
-                    <li>Effective Cost - After collecting dividends and selling stocks, how much did this really cost you (without inflation)</li>
-                    <li>Value - The value of the stocks in the account</li>
-                </ul>
+        <div  class="w3-row">
+            <div style="height:350px;" class="w3-container">
+                <canvas id="lineChart" class="w3-card-2"></canvas>
             </div>
         </div>
-    </div>
+    <!--
     <div class="w3-margin">
         Select Equity for comparison chart: {{form.equity}}
         <a href="{% url 'account_details' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View</button></a>
         <a href="{% url 'account_table' account.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View</button></a>
     </div>
-</div>
-<div class="w3-row">
-    <div class="w3-half w3-container w3-margin-top">
-        <table class="w3-table w3-stripped">
-            <caption class="w3-wide w3-padding-16">Portfolio Equity Values</caption>
-            <thead class="w3-margin-bottom" style="background:#eee;">
-                <th style="width:100px">Date</th>
-                <th class="w3-hide-small">Shares</th>
-                <th class="w3-hide-small">Cost</th>
-                <th class="w3-hide-small">Value</th>
-                <th class="w3-hide-small">Dividends</th>
-                <th>Price</th>
-                <th>Avg Cost</th>
-            </thead>
-            {% for data in context %}
-                {% if data.shares != 0 %}
-                    <tr>
-                        <td>{{ data.date | date:'Y-M' }}</td>
-                        <td class="w3-hide-small">{{data.shares|floatformat:'0g'}}</td>
-                        <td class="w3-hide-small">${{data.cost|floatformat:'2g'}}</td>
-                        {% if data.loss %}
-                            <td class="w3-red">
-                        {% else %}
-                            <td>
+    -->
+
+        <div class="w3-row">
+            <div class="w3-half w3-container w3-margin-top w3-mobile">
+                <table class="w3-table w3-stripped">
+                    <caption class="w3-wide w3-padding-16">Portfolio Equity Values</caption>
+                    <thead class="w3-margin-bottom" style="background:#eee;">
+                        <th style="width:100px">Date</th>
+                        <th class="w3-hide-small">Shares</th>
+                        <th class="w3-hide-small">Cost</th>
+                        <th class="w3-hide-small">Value</th>
+                        <th class="w3-hide-small">Dividends</th>
+                        <th>Price</th>
+                        <th>Avg Cost</th>
+                    </thead>
+                    {% for data in context %}
+                        {% if data.shares != 0 %}
+                            <tr>
+                                <td>{{ data.date | date:'Y-M' }}</td>
+                                <td class="w3-hide-small">{{data.shares|floatformat:'0g'}}</td>
+                                <td class="w3-hide-small">${{data.cost|floatformat:'2g'}}</td>
+                                {% if data.loss %}
+                                    <td class="w3-red">
+                                {% else %}
+                                    <td>
+                                {% endif %}
+                                ${{data.value|floatformat:'2g'}}</td>
+
+                                <td class="w3-hide-small">{% if data.total_dividends != 0 %} ${{data.total_dividends|floatformat:'2g'}} {% endif %}</td>
+
+                                <td>${{data.price|floatformat:'2g'}}</td>
+                                <td>${{data.avgcost|floatformat:'2g'}}</td>
+                            </tr>
                         {% endif %}
-                        ${{data.value|floatformat:'2g'}}</td>
+                   {% endfor %}
+                </table>
+            </div>
 
-                        <td class="w3-hide-small">{% if data.total_dividends != 0 %} ${{data.total_dividends|floatformat:'2g'}} {% endif %}</td>
-
-                        <td>${{data.price|floatformat:'2g'}}</td>
-                        <td>${{data.avgcost|floatformat:'2g'}}</td>
-                    </tr>
-                {% endif %}
-           {% endfor %}
-        </table>
-    </div>
-
-    <div class="w3-rest w3-container w3-margin-top">
-        {% include 'stocks/transaction_list.html' %}
+            <div class="w3-rest w3-container w3-margin-top w3-mobile">
+                {% include 'stocks/transaction_list.html' %}
+            </div>
+        </div>
     </div>
 
 {% endblock content %}
