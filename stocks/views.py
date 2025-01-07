@@ -499,7 +499,7 @@ def export_stocks_download(request):
                 description = None
                 region = None
 
-            writer.writerow([t.real_date.strftime('%Y-%m-%d %H:%M:%S %p'),
+            writer.writerow([t.real_date.strftime('%Y-%m-%d'),
                              t.account.name, t.account.account_name, symbol, region, description, t.action_str, currency, t.quantity, t.price, t.value])
 
         # todo: Figure out the currency, this is a root problem for the e_pd as well
