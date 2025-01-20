@@ -14,7 +14,7 @@ urlpatterns = [
     path(r'api/compare_chart/', views.compare_equity_chart, name='compare_equity_chart'),
     path(r'api/wealth', views.wealth_summary_chart, name='wealth_chart'),
     path(r'api/wealth_pie', views.wealth_summary_pie, name='wealth_pie'),
-    path(r'api/wealth_summary', views.portfolio_acc_summary, name='wealth_summary'),
+    path(r'api/wealth_summary', views.acc_summary, name='wealth_summary'),
 
     path(r'equity/add', views.add_equity, name='add_equity'),
     path(r'equity/<key>/update/', views.equity_update, name='equity_update'),
@@ -26,6 +26,7 @@ urlpatterns = [
     path(r'account/<pk>/edit/', views.AccountEdit.as_view(), name='account_edit'),
     # path(r'account/<pk>/copy/', views.AccountCopy.as_view(), name='account_copy'),
     path(r'account/<pk>/delete/', views.AccountDeleteView.as_view(), name='account_delete'),
+    path(r'account/<pk>/reconcile/', views.reconcile, name='account_reconcile'),
     path(r'account/<pk>/table/', views.AccountTableView.as_view(), name='account_table'),
     path(r'account/<pk>/update/', views.account_update, name='account_update'),
     path(r'account/<container_type>/<pk>/<obj_type>/<id>/details/', views.account_equity_details, name='account_equity_details'),
@@ -37,6 +38,7 @@ urlpatterns = [
 
     path(r'portfolio/add/', views.PortfolioAdd.as_view(), name='portfolio_add'),
     path(r'portfolio/<pk>/', views.PortfolioDetailView.as_view(), name='portfolio_details'),
+    path(r'portfolio/<pk>/data/', views.PortfolioDataView.as_view(), name='portfolio_data'),
     path(r'portfolio/<pk>/edit/', views.PortfolioEdit.as_view(), name='portfolio_edit'),
     path(r'portfolio/<pk>/delete/', views.PortfolioDeleteView.as_view(), name='portfolio_delete'),
     path(r'portfolio/<pk>/table/', views.PortfolioTableView.as_view(), name='portfolio_table'),

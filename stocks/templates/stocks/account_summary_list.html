@@ -21,9 +21,12 @@
                 <tr>
                     <td class="w3-left-align w3-small ">
                         {% if item.Type == 'Portfolio' %}
-                            <a class='d1y-blue' href="{% url 'portfolio_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                            Portfolio <a class='d1y-blue' href="{% url 'portfolio_details' item.Id %}"><b>{{ item.Name }}</b></a>
                         {% else %}
-                            <a class="d1y-blue" href="{% url 'account_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                            Account <a class="d1y-blue" href="{% url 'account_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                            {% if item.Closed == 'Closed' %}
+                                 (<em>Closed</em>)
+                            {% endif %}
                         {% endif %}
                     </td>
                     <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>

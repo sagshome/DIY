@@ -64,6 +64,8 @@ else:
 ALPHAVANTAGEAPI_KEY = os.environ['ALPHAVANTAGEAPI_KEY']
 SECRET_KEY = os.environ['SECRET_KEY']
 
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_USE_TLS = True

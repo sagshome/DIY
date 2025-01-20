@@ -195,6 +195,7 @@ def clear_cached_dataframe(key):
     if not settings.NO_CACHE:
         cache.delete(key)
 
+
 def get_cached_dataframe(key):
     """
     Retrieve a Pandas DataFrame from the cache.

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}IOOM Portfolio Data{% endblock %}
+{% block content %}
+<h2>Portfolio <a href="{% url 'portfolio_details' portfolio.id %}">{{portfolio.name}}</a> Account Data</h2>
+<div class="w3-responsive table-container">
+    <table class="w3-table w3-striped w3-bordered w3-small tableFixHead">
+        <thead>
+            <td>Date:</td>
+            {% for account in accounts %}
+                <td colspan="4">
+                    {% if account.account_type == 'Investment' %}
+                        <a href="{% url 'account_table' account.id %}">{{account.name}}</a>
+                    {% else %}
+                        <a href="{% url 'account_reconcile' account.id %}">{{account.name}}</a>
+                    {% endif %}
+                </td>
+            {% endfor %}
+        <tr>
+            <td></td>
+            {% for account in accounts %}
+                <td><b>Value</b></td>
+                <td><b>Deposit</b></td>
+                <td><b>Withdraw</b></td>
+                <td>Action</td>
+            {% endfor %}
+        </tr>
+        </thead>
+
+        {% for key, value_list in data.items %}
+            <tr>
+                <td><b>{{key}}</b></td>
+               {% for item in value_list %}
+                   <td>
+                       {% if forloop.counter|divisibleby:4 %}
+                          {% if item %}
+                              <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-light-blue" type="button">Reconcile</button>
+                           {% endif %}
+                        {% else %}
+                            <p>{{ item | floatformat:'0g'}}</p>
+                        {% endif %}
+                   </td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}
+{% block help_content %}
+<p>
+    The Manual Account Update allows you to correct/update data.  Typically, this is only needed if your statement does not match the data presented here.  The
+    changes will a transaction in your account.   This transaction can later be deleted.   Report Data and Value are always read-only and only presented to
+    provide context.<br><br>
+    The Price can only be updated if the equity in question is not updated via an API or the price has not been estimated based on other uploaded transactions.
+    <br><br>
+    The Shares can always be updated.   The value you enter should be the number of shares your think you had at the end of this report date month.
+</p>
+{% endblock %}

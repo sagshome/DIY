@@ -7,19 +7,25 @@
                 <th class="w3-container w3-small w3-right-align ">Total Cost</th>
                 <th class="w3-container w3-small w3-right-align">Total Value</th>
                 <th class="w3-container w3-small w3-right-align">Total Dividends</th>
+                <th class="w3-container w3-small w3-right-align">Deposits</th>
+                <th class="w3-container w3-small w3-right-align">Withdraws</th>
                 <th class="w3-container w3-small w3-right-align "></th>
             </tr>
         </thead>
         {% for item in summary_data %}
-            <tr>
-                <td class="w3-left-align w3-small ">{{ item.Date }}</td>
-                <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
-                <td class="w3-right-align w3-small">${{ item.Value | floatformat:'0g'}}</td>
-                <td class="w3-right-align w3-small">${{ item.TotalDividends | floatformat:'2g'}}</td>
-                <td>
-                    <a href="{% url 'update_account_date' account.id item.Date%}">
-                    <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Reconcile
-            </tr>
+                <tr>
+                    <td class="w3-left-align w3-small ">{{ item.Date }}</td>
+                    <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small">${{ item.Value | floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small">${{ item.TotalDividends | floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small">${{ item.Funds| floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small">${{ item.Redeemed | floatformat:'0g'}}</td>
+                    <td>
+                        <a href="{% url 'update_account_date' account.id item.Date%}">
+                            <button class="w3-button-small w3-round-large diy-button-auto diy-green">Reconcile</button>
+                        </a>
+                    </td>
+                </tr>
         {% endfor %}
     </table>
 </div>

@@ -133,3 +133,29 @@ tr.hide {
 
 .tableFixHead          { overflow: auto; height: 200px; }
 .tableFixHead thead th { position: sticky; top: 0; z-index: 1; }
+
+.table-container {
+    max-height: 700px; /* Set the desired height for the scrollable area */
+    overflow-y: auto; /* Enable vertical scrolling */
+    border: 1px solid #ccc; /* Optional: Add a border around the table */
+}
+
+table {
+    width: 100%; /* Ensure the table takes up the full width */
+    border-collapse: collapse; /* Optional: Remove gaps between table cells */
+}
+
+thead {
+    position: sticky; /* Keeps the header in place */
+    top: 0; /* Aligns the header to the top */
+    background-color: #fff; /* Set background color to prevent overlap effects */
+    z-index: 1; /* Ensure the header stays above the body content */
+}
+
+/*
+th, td {
+    padding: 10px; /* Add padding for better readability
+    border: 1px solid #ccc; /* Add borders for cell separation
+    text-align: left; /* Align text to the left
+}
+*/

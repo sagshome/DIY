@@ -6,13 +6,15 @@ import os
 import json
 
 from datetime import datetime, date
-from dateutil import relativedelta
 
 import plotly.io as pio
 import plotly.graph_objects as go
 
 import numpy as np
 import pandas as pd
+
+from dateutil.relativedelta import relativedelta
+
 from pandas import DataFrame, to_datetime
 
 from django.conf import settings
@@ -32,7 +34,7 @@ from django.views.generic import ListView, DetailView, CreateView, DeleteView, U
 from django.views.generic.dates import DateMixin
 from django.http import JsonResponse
 
-from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio, BaseContainer, FundValue
+from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio, BaseContainer, FundValue, ACCOUNT_COL
 from .forms import *
 from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
 from base.utils import DIYImportException, normalize_today, normalize_date, DateUtil
@@ -41,6 +43,73 @@ from base.models import Profile, COLORS, PALETTE
 
 
 logger = logging.getLogger(__name__)
+
+
+class PortfolioDataView(LoginRequiredMixin, DetailView):
+    model = Portfolio
+    template_name = 'stocks/portfolio_data.html'
+
+    def get_object(self):
+        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        p: Portfolio = context['portfolio']
+
+        accounts = {}
+        all_dates = pd.DataFrame(columns=['Date'])
+        all_accounts = p.account_set.all().order_by('-_start')
+        for account in all_accounts:
+            logger.debug('Processing account:%s' % account)
+            funded = list(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')). \
+                          values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
+            redeemed = list(account.transactions.filter(xa_action=Transaction.REDEEM).annotate(month=TruncMonth('date')). \
+                            values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
+            funded = pd.DataFrame(funded,  columns=['Date', 'Funded'])
+            redeemed = pd.DataFrame(redeemed,  columns=['Date', 'Withdrawn'])
+            funded['Date'] = pd.to_datetime(funded['Date'])
+            redeemed['Date'] = pd.to_datetime(redeemed['Date'])
+            try:
+                df = account.e_pd.groupby('Date', as_index=False).sum('Value')[['Date', 'Value']]
+                try:
+                    df = df.merge(funded, on='Date', how='outer')
+                    df = df.merge(redeemed, on='Date', how='outer')
+
+                    df = df.replace(np.nan, 0)
+                    df = df.infer_objects(copy=False)
+
+                    df['Date'] = df['Date'].dt.date
+                    all_dates = all_dates.merge(df['Date'], on='Date', how='outer')
+                    # df = df[(df['Value'] != 0) & (df['Funded'] != 0) & (df['Withdrawn'] != 0)]
+                    accounts[account] = df
+                except ValueError:
+                    logger.error('Merge Error Portfolio:%s Account:%s' % (p, account))
+            except KeyError:
+                logger.error('Group Error Portfolio:%s Account:%s' % (p, account))
+        process_dates = all_dates['Date'].to_list()
+        process_dates.sort(reverse=True)
+        rows = {}
+        for this_date in process_dates:
+            rows[this_date] = []
+            for account in accounts:
+                matched = accounts[account].loc[accounts[account]['Date'] == this_date]
+                if matched.empty:
+                    rows[this_date].extend([None, None, None, None])
+                else:
+                    value = matched['Value'].item()
+                    funded = matched['Funded'].item()
+                    withdrawn = matched['Withdrawn'].item()
+                    if value == 0 and funded == 0 and withdrawn == 0:
+                        rows[this_date].extend([None, None, None, None])
+                    else:
+                        if account.account_type == 'Investment':
+                            rows[this_date].extend([value, funded, withdrawn, account.id])
+                        else:
+                            rows[this_date].extend([value, funded, withdrawn, None])
+
+        context['accounts'] = all_accounts
+        context['data'] = rows
+        return context
 
 
 class AccountView(LoginRequiredMixin, ListView):
@@ -61,6 +130,8 @@ class AccountView(LoginRequiredMixin, ListView):
             context['can_update'] = True if profile.av_api_key else False
         except Profile.DoesNotExist:
             context['can_update'] = False
+
+
 
         account_list_data = []
         for portfolio in Portfolio.objects.filter(user=self.request.user):
@@ -123,9 +194,19 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
     @staticmethod
     def container_data(myobj: BaseContainer):
         equity_data = myobj.e_pd.groupby('Date').agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).reset_index()
-        equity_data.replace(np.nan, 0, inplace=True)
-        equity_data.sort_values(by=['Date'], inplace=True, ascending=False)
-        return equity_data
+        equity_data = pd.merge(equity_data, myobj.p_pd)  # Add in columns for Funding/Redeemed
+        equity_data.replace(np.nan, 0, inplace=True)  # Clear up any bad numbers
+        equity_data.sort_values(by=['Date'], inplace=True, ascending=False)  # Sort by date in reverse order
+        trimmed = equity_data[equity_data['Value'] != 0]  # Get rid of useless data
+        last_date = trimmed.loc[len(trimmed.index) - 1]['Date'].date()
+        if last_date < normalize_today():  # Add back in useful data
+            last_date = last_date + relativedelta(months=1)
+            last_redeemed = trimmed.loc[len(trimmed.index) - 1]['Redeemed']
+            changed = equity_data[(equity_data['Date'] >= pd.to_datetime(last_date)) & (equity_data['Redeemed'] != last_redeemed)]
+            changed = changed.reset_index()
+            trimmed.loc[len(trimmed)] = changed.loc[len(changed.index) - 1]  # generates copy warning
+        trimmed.sort_values(by=['Date'], inplace=True, ascending=False)  # Resort
+        return trimmed
 
 
 class AccountTableView(ContainerTableView):
@@ -334,18 +415,19 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
         # Access the updated form instance
         updated_data = form.cleaned_data
         funded = self.object.get_pattr('Funds', normalize_date(self.object.end))
-        if self.object.account_type == 'Holding':
+        if self.object.account_type == 'Value':
             value = self.object.get_pattr('Redeemed', normalize_date(self.object.end))
         else:
-            value = self.object.get_pattr('Value', normalize_date(self.object.end))
-            if updated_data['accounts']:
-                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
-                                           xa_action=Transaction.TRANS_OUT, account=self.object.account)
-                Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
-                                           xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
-            else:
-                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
-                                       xa_action=Transaction.REDEEM, account=self.object.account)
+            value = self.object.get_eattr('Value', normalize_date(self.object.end))
+            if value != 0:
+                if updated_data['accounts']:
+                    Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
+                                               xa_action=Transaction.TRANS_OUT, account=self.object.account)
+                    Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
+                                               xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
+                else:
+                    Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
+                                           xa_action=Transaction.REDEEM, account=self.object.account)
         return super().form_valid(form)
 
 
@@ -658,6 +740,12 @@ def set_transaction(request, account_id, action):
                 logger.debug('Fund/Redeem request for account:%s' % account)
                 Transaction(user=request.user, account=account, xa_action=xa_action, real_date=form.cleaned_data['real_date'],
                             value=form.cleaned_data['value'], price=0, quantity=0).save()
+                if 'number' in form.cleaned_data and form.cleaned_data['number']:
+                    this_date = form.cleaned_data['real_date']
+                    for _ in range(form.cleaned_data['number']):
+                        this_date = this_date + relativedelta(months=1)
+                        Transaction(user=request.user, account=account, xa_action=xa_action, real_date=this_date,
+                                    value=form.cleaned_data['value'], price=0, quantity=0).save()
                 if account.account_type == 'Value':
                     value = value * -1 if xa_action == Transaction.REDEEM else value
                     logger.debug('Update Values base on :%s' % value)
@@ -670,6 +758,8 @@ def set_transaction(request, account_id, action):
             if valid:
                 account.reset()
                 return HttpResponseRedirect(reverse('account_details', kwargs={'pk': account.id}))
+        else:
+            pass
     else:
         form = TransactionSetValueForm(initial=initial)
     return render(request, 'stocks/add_transaction.html', {'form': form, 'view_verb': 'Quick', 'account': account, 'action_locked': True})
@@ -788,7 +878,7 @@ def account_equity_compare(request, pk, orig_id, compare_id):
     while next_date <= last_date:
         months.append(next_date)
         month_dict[next_date] = len(months) - 1
-        next_date = next_date + relativedelta.relativedelta(months=1)
+        next_date = next_date + relativedelta(months=1)
 
     cost = ct_shares = e_shares = ct_div = e_div = 0
     cost_list = []
@@ -836,7 +926,109 @@ def account_equity_compare(request, pk, orig_id, compare_id):
 
 
 @login_required
+def reconcile(request, pk):
+    def set_initial():
+
+        first_value = FundValue.objects.filter(fund__symbol=account.f_key).earliest('date')
+        last_value = FundValue.objects.filter(fund__symbol=account.f_key).latest('date')
+
+        funded = dict(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')). \
+                      values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
+        redeemed = dict(account.transactions.filter(xa_action=Transaction.REDEEM).annotate(month=TruncMonth('date')). \
+                        values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
+
+        initial = []
+        for redeemed_key in redeemed.keys():
+            if redeemed_key > last_value.date:
+                initial.append({'date': redeemed_key, 'reported_date': redeemed_key, 'value': 0, 'source': None,
+                                'deposited': 0, 'withdrawn': redeemed[redeemed_key]})
+
+        for record in FundValue.objects.filter(fund__symbol=account.f_key).order_by('-date'):
+            this_funded = funded[record.date] if record.date in funded else 0
+            this_redeemed = redeemed[record.date] if record.date in redeemed else 0
+            initial.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name,
+                            'deposited': int(this_funded), 'withdrawn': int(this_redeemed)})
+
+        for funded_key in funded.keys():
+            if funded_key < first_value.date:
+                initial.append({'date': funded_key, 'reported_date': funded_key, 'value': 0, 'source': None,
+                                'deposited': funded[funded_key], 'withdrawn': 0})
+        return initial
+
+    account = get_object_or_404(Account, pk=pk, user=request.user)
+    if request.method == 'POST':
+        initial = set_initial()
+        formset = SimpleReconcileFormSet(request.POST)
+        if formset.is_valid():
+            as_dict = {d['date']: d for d in initial}
+            for form in formset:
+                if as_dict[form.cleaned_data['date']]['reported_date'] != form.cleaned_data['reported_date'] or \
+                        as_dict[form.cleaned_data['date']]['value'] != form.cleaned_data['value']:
+                    logger.debug('Change detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
+                    try:
+                        fund_value = FundValue.objects.get(fund__symbol=account.f_key, date=form.cleaned_data['date'])
+                    except FundValue.DoesNotExist:
+                        fund = Equity.objects.get(symbol=account.f_key)
+                        fund_value = FundValue(fund=fund, date=form.cleaned_data['date'])
+                    fund_value.value = form.cleaned_data['value']
+                    fund_value.real_date = form.cleaned_data['reported_date']
+                    fund_value.source = DataSource.USER.value
+                    fund_value.save()
+                if as_dict[form.cleaned_data['date']]['deposited'] != form.cleaned_data['deposited']:
+                    diff = form.cleaned_data['deposited'] - as_dict[form.cleaned_data['date']]['deposited']
+                    # Case 1 - original was 0,  just make a deposit record
+                    # Case 2 - this was more,  make a new deposit record
+                    # Case 3 - this was less, since negative can not pass the clean,  a record or records must exist
+                    if diff > 0:
+                        Transaction.objects.create(real_date=form.cleaned_data['reported_date'], xa_action=Transaction.FUND, account=account, value=diff, estimated=False)
+                    else:
+                        diff = abs(diff)
+                        for transaction in Transaction.objects.filter(date=form.cleaned_data['date'], xa_action=Transaction.FUND, account=account):
+                            if transaction.value >= diff:
+                                transaction.value -= diff
+                                transaction.estimated = False
+                                transaction.save()
+                                break
+                            else:
+                                diff -= transaction.value
+                                transaction.value = 0
+                                transaction.estimated = False
+                                transaction.save()
+
+                if as_dict[form.cleaned_data['date']]['withdrawn'] != form.cleaned_data['withdrawn']:
+                    diff = form.cleaned_data['withdrawn'] - as_dict[form.cleaned_data['date']]['withdrawn']
+                    # Case 1 - original was 0,  just make a deposit record
+                    # Case 2 - this was more,  make a new deposit record
+                    # Case 3 - this was less, since negative can not pass the clean,  a record or records must exist
+                    if diff > 0:
+                        Transaction.objects.create(real_date=form.cleaned_data['reported_date'], xa_action=Transaction.REDEEM, account=account, value=diff, estimated=False)
+                    else:
+                        diff = abs(diff)
+                        for transaction in Transaction.objects.filter(date=form.cleaned_data['date'], xa_action=Transaction.REDEEM, account=account):
+                            if transaction.value >= diff:
+                                transaction.value -= diff
+                                transaction.estimated = False
+                                transaction.save()
+                                break
+                            else:
+                                diff -= transaction.value
+                                transaction.value = 0
+                                transaction.estimated = False
+                                transaction.save()
+            account.reset()
+        else:
+            pass
+
+    initial = set_initial()  # This is called twice on POST since I may have changed the data.
+    formset = SimpleReconcileFormSet(initial=initial)
+    return render(request, 'stocks/reconciliation.html', {'formset': formset, 'account': account})
+
+
+@login_required
 def reconciliation(request, a_pk, date_str):
+    '''
+    Used for Value and Cash accounts.
+    '''
     account = get_object_or_404(Account, pk=a_pk, user=request.user)
     try:
         this_date = pd.to_datetime(datetime.strptime(date_str, '%b-%Y').date())
@@ -844,10 +1036,10 @@ def reconciliation(request, a_pk, date_str):
         return render(request, '404.html',)
 
     account.e_pd['Date'] = account.e_pd['Date'].dt.strftime('%b-%Y')
-    initial = account.e_pd.loc[account.e_pd['Date'] == this_date][['Equity', 'Cost', 'Value', 'Shares', 'Dividends', 'TotalDividends', 'Price']].sort_values(by='Value', ascending=False).to_dict(orient='records')
+    initial = account.e_pd.loc[account.e_pd['Date'] == this_date][['Equity', 'Object_ID', 'Cost', 'Value', 'Shares', 'Dividends', 'TotalDividends', 'Price']].sort_values(by='Value', ascending=False).to_dict(orient='records')
     for record in initial:
         try:
-            record['Equity'] = Equity.objects.get(symbol=record['Equity'])
+            record['Equity'] = Equity.objects.get(id=record['Object_ID'])
         except Equity.DoesNotExist:  # Symbol may have come in with a .TO type extension
             symbol = '.'.join(record['Equity'].split('.')[:-1])
             record['Equity'] = Equity.objects.get(symbol=symbol)
@@ -865,7 +1057,8 @@ def reconciliation(request, a_pk, date_str):
             formset.save()
     else:
         formset = ReconciliationFormSet(initial=initial)
-    return render(request, 'stocks/reconciliation.html', {'formset': formset})
+    return render(request, 'stocks/data_list.html', {'formset': formset})
+
 
 @login_required
 def account_fund_details(request, container_type, pk, obj_type, id):
@@ -1196,7 +1389,7 @@ def compare_equity_chart(request):
     while next_date <= last_date:
         months.append(next_date)
         month_dict[next_date] = len(months) - 1
-        next_date = next_date + relativedelta.relativedelta(months=1)
+        next_date = next_date + relativedelta(months=1)
 
     cost = ct_shares = e_shares = ct_div = e_div = 0
     cost_list = []
@@ -1313,45 +1506,80 @@ def cost_value_chart(request):
 
 
 @login_required
-def portfolio_acc_summary(request):
-    user = request.user
+def acc_summary(request):
+    '''
+    Three modes,  1) Portfolio,  2) Account,  3) Everything
+    '''
     colors = COLORS.copy()
     ci = 0
-    try:
-        start = Account.objects.filter(user=user, _start__isnull=False).earliest('_start')._start.strftime('%Y-%m-%d')
-    except Account.DoesNotExist:
+
+    user = request.user
+    object_id = request.GET.get('object_id')
+    object_type = request.GET.get('object_type')
+
+    if object_type:
+        if object_type == 'Account':
+            accounts = Account.objects.filter(user=user, id=object_id)
+        else:
+            accounts = Account.objects.filter(user=user, portfolio_id=object_id)
+    else:
+        accounts = Account.objects.filter(user=user)
+
+    if accounts.exists():
+        start = accounts.filter(_start__isnull=False).earliest('_start')._start.strftime('%Y-%m-%d')
+        if accounts.filter(_end__isnull=True).exists():
+            end = normalize_today().strftime('%Y-%m-%d')
+        else:
+            end = accounts.latest('_end')._end.strftime('%Y-%m-%d')
+    else:
         return JsonResponse({'labels': [], 'datasets': []})
 
+    if not object_type:  # This is a 'Everything' - so remove accounts with a portfolio
+        accounts = accounts.exclude(portfolio__isnull=False)
 
-    end = normalize_today().strftime('%Y-%m-%d')
     date_range = pd.date_range(start=start, end=end, freq='MS')
     month_df = pd.DataFrame({'Date': date_range, 'Value': 0})
 
     labels = [this_date.strftime('%Y-%b') for this_date in month_df['Date'].to_list()]
-
+    df = pd.DataFrame(columns=ACCOUNT_COL)
     datasets = []
-    for account in Account.objects.filter(user=user, portfolio__isnull=True):
+    for account in accounts:
         color = colors[ci]
         ci += 1
         datasets.append({
             'label': account.name,
             'fill': False,
-            'data': pd.concat([month_df,  account.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
-            'boarderColor': color,  'backgroundColor': color,
+            'data': pd.concat([month_df, account.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+            'boarderColor': color, 'backgroundColor': color,
             'stack': 1,
+            'order': 1,
         })
+        df = pd.concat([df, account.p_pd]).groupby('Date', as_index=False).sum()
 
-    for portfolio in Portfolio.objects.filter(user=user):
-        color = colors[ci]
-        ci += 1
+    if not object_type:  # This is a 'Everything' - process portfolios a portfolio
+        for portfolio in Portfolio.objects.filter(user=user):
+            color = colors[ci]
+            ci += 1
 
-        datasets.append({
-            'label': portfolio.name,
-            'fill': False,
-            'data': pd.concat([month_df,  portfolio.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
-            'boarderColor': color,  'backgroundColor': color,
-            'stack': 1,
-        })
+            datasets.append({
+                'label': portfolio.name,
+                'fill': False,
+                'data': pd.concat([month_df,  portfolio.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+                'boarderColor': color,  'backgroundColor': color,
+                'stack': 1,
+                'order': 1,
+            })
+            df = pd.concat([df, portfolio.p_pd]).groupby('Date', as_index=False).sum()
+
+    df['Cost'] = df['Funds'] - df['Redeemed']
+    datasets.append({
+        'label': 'Cost',
+        'fill': False,
+        'data': df['Cost'].to_list(),
+        'boarderColor': '#000000', 'backgroundColor': '#000000',
+        'type': 'line',
+        'order': 0,
+    })
 
     return JsonResponse({'labels': labels, 'datasets': datasets})
 

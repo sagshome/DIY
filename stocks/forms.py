@@ -108,9 +108,13 @@ class AccountCopyForm(forms.ModelForm):
 
 
 class TransactionForm(forms.ModelForm):
+
+    repeat = forms.ChoiceField(choices=[('no', 'No'), ('yes', 'Yes'),])
+    number = forms.IntegerField(label='Num. of Repeats', max_value=11, min_value=1, required=False)
+
     class Meta:
         model = Transaction
-        fields = ("user", "xa_action", "account", "equity", "real_date", "price", "quantity", "value")
+        fields = ("user", "xa_action", "account", "equity", "real_date", "price", "quantity", "value", "repeat", "number")
         widgets = {
             'user': forms.HiddenInput(),
             'xa_action': forms.Select(),
@@ -161,9 +165,11 @@ class TransactionForm(forms.ModelForm):
 
 
 class TransactionSetValueForm(TransactionForm):
+
+
     class Meta:
         model = Transaction
-        fields = ("user", "account", "xa_action", "equity", "real_date", "price", "quantity", "value")
+        fields = ("user", "account", "xa_action", "equity", "real_date", "price", "quantity", "value", "repeat", "number")
 
         widgets = {
             'user': forms.HiddenInput(),
@@ -297,3 +303,52 @@ class ReconciliationForm(forms.Form):
 
 ReconciliationFormSet = formset_factory(ReconciliationForm, extra=0)
 
+
+class SimpleReconcileForm(forms.Form):
+    '''
+    Simple form to update funding, redeeming and values for non-investment accounts.
+    '''
+    date = forms.DateField()
+    reported_date = forms.DateField(required=True)
+    value = forms.FloatField(required=True)
+    source = forms.CharField(required=False)
+    deposited = forms.FloatField(required=True)
+    withdrawn = forms.FloatField(required=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["date"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
+        self.fields["date"].widget.attrs['readonly'] = True
+        self.fields["reported_date"].widget.attrs['style'] = 'width:80px;'
+        self.fields["value"].widget.attrs['style'] = 'width:80px;'
+        self.fields["deposited"].widget.attrs['style'] = 'width:80px;'
+        self.fields["withdrawn"].widget.attrs['style'] = 'width:80px;'
+        self.fields["source"].widget.attrs['style'] = 'width:150px;background-color:Wheat'
+        self.fields["source"].widget.attrs['readonly'] = True
+
+    def clean_reported_date(self):
+        reported_date = self.cleaned_data['reported_date']
+        normalized_date = self.cleaned_data['date']
+        if reported_date.month != normalized_date.month or reported_date.year != normalized_date.year:
+            raise ValidationError(f"Record {normalized_date} - Reported Date {reported_date}must be in the same month", code="Incorrect Field")
+        if reported_date.year < 2000:
+            raise ValidationError(f"Reported Date {reported_date} must be in this century (2000+)", code="Incorrect Field")
+        return self.cleaned_data['reported_date']
+
+    def clean_value(self):
+        if self.cleaned_data['value'] < 0:
+            raise ValidationError('Value must be a positive value')
+        return self.cleaned_data['value']
+
+    def clean_deposited(self):
+        if self.cleaned_data['deposited'] < 0:
+            raise ValidationError('Deposit must be a positive value')
+        return self.cleaned_data['deposited']
+
+    def clean_withdrawn(self):
+        if self.cleaned_data['withdrawn'] < 0:
+            raise ValidationError('Withdrawn must be a positive value')
+        return self.cleaned_data['withdrawn']
+
+
+SimpleReconcileFormSet = formset_factory(SimpleReconcileForm, extra=0)

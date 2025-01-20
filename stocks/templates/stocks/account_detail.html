@@ -1,47 +1,88 @@
 {% extends "base.html" %}
-{% block title %}Details{% endblock %}
+{% block title %}IOOM Details{% endblock %}
 {% load stocks_tags %}
 {% block content %}
 <script>
     $(document).ready(function() {
-      $.ajax({
-        url: "{% url 'cost_value_chart' %}",
-        data: {'object_id': '{{ object.id }}',
-               'object_type': '{{ object_type }}'},
-        success: function (data) {
-          new Chart("lineChart", {
-            type: "line",
-            data: data,
-            options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true
+      var object_type = '{{object_type}}'
+      if (object_type == 'Portfolio') {
+         $.ajax({
+            url: "{% url 'wealth_summary' %}",
+            data: {'object_id': '{{ object.id }}',
+                   'object_type': '{{ object_type }}'},
+            success: function (data) {
+                new Chart("lineChart", {
+                    type: "bar",
+                    data: {
+                        labels: data['labels'],
+                        datasets: data['datasets'],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        title: {
+                            display: true,
+                            text: 'Account Accumulation Chart'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'right',
+                            align: 'center'
                         },
                     },
-                elements: {
-                   point:{
-                       radius: 2
-                  }
-                },
-                responsive: true,
-                maintainAspectRatio: false,
-                title: {
-                  display: true,
-                  text: "Funding vs Value"
-                },
-                legend: {
-                    display: true,
-                    position: 'top',
-                    align: 'center'
-                },
-            }
-          });
-        },
+                    scales: {
+                        xAxes: [{
+                            stacked: true // this should be set to make the bars stacked
+                        }],
+                    }
+                });
+            },
         error: function(data) {
-            console.log('Error occured');
+            alert('Error occured');
         }
 
-      });
+        });
+
+      } else {
+          $.ajax({
+            url: "{% url 'cost_value_chart' %}",
+            data: {'object_id': '{{ object.id }}',
+                   'object_type': '{{ object_type }}'},
+            success: function (data) {
+              new Chart("lineChart", {
+                type: "line",
+                data: data,
+                options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            },
+                        },
+                    elements: {
+                       point:{
+                           radius: 2
+                      }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    title: {
+                      display: true,
+                      text: "Funding vs Value"
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'center'
+                    },
+                }
+              });
+            },
+            error: function(data) {
+                console.log('Error occured');
+            }
+
+          });
+      }
     });
 </script>
 <div class="w3-row">
@@ -52,40 +93,43 @@
     {% if object_type == 'Account' %}
         {% if object.portfolio %}
             <a href="{% url 'portfolio_details' object.portfolio.id %}">
-                <button class="w3-margin-right w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
+                <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
         {% endif %}
-        <a href="{% url 'account_table' object.id %}">
-            <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-    {% endif %}
-
-    {% if object_type == 'Account' %}
         {% if object.account_type == 'Cash' %}
             <a href="{% url 'set_balance' object.id %}">
-                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
+                <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
+            <a href="{% url 'account_table' object.id %}">
+                <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
         {% else %}
             <a href="{% url 'set_fund' object.id %}">
-                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
+                <button class="w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
             <a href="{% url 'set_withdraw' object.id %}">
-                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
+                <button class="w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
            {% if object.account_type == 'Value' %}
                 <a href="{% url 'set_value' object.id %}">
-                <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
+                <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
+            <a href="{% url 'account_reconcile' object.id %}">
+                <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
            {% else %}
                 <a href="{% url 'transaction_add' object.id %}">
-                    <button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+                    <button class="w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+                <a href="{% url 'account_table' object.id %}">
+                    <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
            {% endif %}
         {% endif %}
         <a href="{% url 'account_edit' object.id %}">
-            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
+            <button class="w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
         <a href="{% url 'account_close' object.id %}">
-            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Close</button></a>
+            <button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
         <a href="{% url 'account_delete' object.id %}">
-            <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
+            <button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
     {% else %}
         <a href="{% url 'portfolio_edit' object.id %}">
-            <button class="diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
+            <button class="w3-margin-left diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
+        <a href="{% url 'portfolio_data' object.id %}">
+            <button class="diy-button diy-green  w3-button-small w3-round-large ">Data</button></a>
         <a href="{% url 'portfolio_delete' object.id %}">
-            <button class="w3-margin-left w3-button-small w3-margin-left w3-round-large diy-button diy-red">Delete</button></a>
+            <button class="w3-button-small w3-round-large diy-button-auto diy-red">Delete</button></a>
     {% endif %}
 </div>
 
@@ -98,11 +142,13 @@
     {% include 'stocks/account_summary_list.html' %}
 </div>
 
+{% if object_type == 'Portfolio' or object_type == 'Account' and object.account_type == 'Investment' %}
 <div class="w3-row">
     <div class="w3-container">
         {% include 'stocks/equity_summary_list.html' %}
     </div>
 </div>
+{% endif %}
 {% endblock content %}
 
 {% block help_content %}

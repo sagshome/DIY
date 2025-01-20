@@ -24,11 +24,18 @@
 
         function show_hide() {
             var action_value = $("#id_xa_action").val();
+            var repeat_value = $("#id_repeat").val();
             if (action_value == 1 || action_value == 5 || action_value == 8 || action_value == 9 || action_value == 6 || action_value == 10 || action_value == 11) {
+                // This is a Funding type
                 hideDiv('equityRow');
                 hideDiv('priceRow');
                 hideDiv('quantityRow');
                 showDiv('valueRow');
+                if (action_value == 1 || action_value == 5) {
+                    showDiv('repeatRow');
+                } else {
+                    hideDiv('repeatRow');
+               }
             } else if ((action_value == 2 || action_value == 3 || action_value == 4 || action_value == 7)) {
                 if (!investment) {
                     hideDiv('equityRow');
@@ -41,11 +48,18 @@
                     showDiv('quantityRow');
                     hideDiv('valueRow');
                 }
+                hideDiv('repeatRow')
             } else {
                 hideDiv('equityRow');
                 hideDiv('priceRow');
                 hideDiv('quantityRow');
                 hideDiv('valueRow');
+                hideDiv('repeatRow')
+            }
+            if (repeat_value == 'yes') {
+                showDiv('numberRow');
+            } else {
+                hideDiv('numberRow');
             }
         }
 
@@ -128,8 +142,8 @@
               action_id.addEventListener("change", update_equity);
           }
           document.getElementById("id_equity").addEventListener("change", update_values);
+          document.getElementById("id_repeat").addEventListener("change", show_hide);
           show_hide();
-
         });
     </script>
 
@@ -180,16 +194,26 @@
                     <td>{{ form.value }}</td>
                     <td>{{ form.value.errors }}</td>
                 </tr>
+                <tr id=repeatRow style="display: block;">
+                    <td class="diy-label">{{ form.repeat.label_tag }}</td>
+                    <td>{{ form.repeat }}</td>
+                    <td>{{ form.repeat.errors }}</td>
+                </tr>
+                <tr id=numberRow style="display: block;">
+                    <td class="diy-label">{{ form.number.label_tag }}</td>
+                    <td>{{ form.number }}</td>
+                    <td>{{ form.number.errors }}</td>
+                </tr>
             </table>
 
             <div class="w3-row">
                 <div class="w3-col w3-container m2">
-                    <input type="submit" class="w3-button-small w3-round-large diy-long diy-button diy-green" name="submit-type" value="Submit">
+                    <input type="submit" class="w3-button-small w3-round-large diy-button diy-green" name="submit-type" value="Submit">
                 </div>
                 {% if account %}
                     <div class="w3-col w3-container m2">
                         <a href="{% url 'account_details' account.id %}">
-                            <button class="w3-button-small w3-round-large diy-long diy-button diy-red" type="button">Cancel</button>
+                            <button class="w3-button-small w3-round-large diy-button diy-red" type="button">Cancel</button>
                         </a>
                     </div>
                 {% endif %}
