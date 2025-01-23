@@ -51,21 +51,7 @@
 </script>
 
 <h2 class="w3-margin">Data view for {{account_type}}:{{account.name}}</h2>
-
-<div class="w3-bar w3-hide-small">
-    <div class="w3-bar-item">
-        <a href="{% url 'portfolio_list' %}"><button class="w3-button-small w3-round-large diy-button diy-green"> Wealth </button></a>
-        {% if account_type == 'Account' %}
-            <a href="{% url 'account_details' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Chart View </button></a>
-            {% if account.portfolio %}
-               <a href="{% url 'portfolio_details' account.portfolio.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Portfolio View </button></a>
-            {% endif %}
-        {% else %}
-            <a href="{% url 'portfolio_details' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Chart View </button></a>
-        {% endif %}
-    </div>
-</div>
-
+{% include 'stocks/account_actions.html' %}
 {% if account_list  %}
     <h2>Account(s) List</h2>
     <div class="w3-row>">

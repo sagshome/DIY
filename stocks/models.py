@@ -404,7 +404,7 @@ class Equity(models.Model):
         if self.searchable and do_update:
             self.update_external_equity_data(False)
 
-    def ev_set_data(self):
+    def av_set_data(self):
         request = URL.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
         if request.status_code == 200:
             self.validated = True
@@ -969,6 +969,10 @@ class BaseContainer(models.Model):
         raise NotImplementedError
 
     @property
+    def container_type(self):
+        raise NotImplementedError
+
+    @property
     def dividends(self) -> int:
         raise NotImplementedError
 
@@ -1072,6 +1076,10 @@ class Portfolio(BaseContainer):
             except Account.DoesNotExist:
                 pass  # Likely
         return None
+
+    @property
+    def container_type(self):
+        return 'Portfolio'
 
     @property
     def cost(self):
@@ -1210,6 +1218,10 @@ class Account(BaseContainer):
     @property
     def closed(self) -> bool:
         return self.end is not None
+
+    @property
+    def container_type(self):
+        return 'Account'
 
     @property
     def cost(self) -> int:

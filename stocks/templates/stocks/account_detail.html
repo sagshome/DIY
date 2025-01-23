@@ -4,12 +4,12 @@
 {% block content %}
 <script>
     $(document).ready(function() {
-      var object_type = '{{object_type}}'
+      var object_type = '{{account.container_type}}'
       if (object_type == 'Portfolio') {
          $.ajax({
             url: "{% url 'wealth_summary' %}",
-            data: {'object_id': '{{ object.id }}',
-                   'object_type': '{{ object_type }}'},
+            data: {'object_id': '{{ account.id }}',
+                   'object_type': '{{ account.container_type }}'},
             success: function (data) {
                 new Chart("lineChart", {
                     type: "bar",
@@ -46,8 +46,8 @@
       } else {
           $.ajax({
             url: "{% url 'cost_value_chart' %}",
-            data: {'object_id': '{{ object.id }}',
-                   'object_type': '{{ object_type }}'},
+            data: {'object_id': '{{ account.id }}',
+                   'object_type': '{{ account.container_type }}'},
             success: function (data) {
               new Chart("lineChart", {
                 type: "line",
@@ -89,49 +89,7 @@
     <p>Total Funding for <b>{{object_type}}: {{object.name}}</b> is: ${{funded|floatformat:'0g'}},
         Total Redeemed is: ${{redeemed|floatformat:'0g'}} {% calc_return funded redeemed %}</p>
 </div>
-<div class="w3-bar w3-hide-small">
-    {% if object_type == 'Account' %}
-        {% if object.portfolio %}
-            <a href="{% url 'portfolio_details' object.portfolio.id %}">
-                <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
-        {% endif %}
-        {% if object.account_type == 'Cash' %}
-            <a href="{% url 'set_balance' object.id %}">
-                <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
-            <a href="{% url 'account_table' object.id %}">
-                <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-        {% else %}
-            <a href="{% url 'set_fund' object.id %}">
-                <button class="w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
-            <a href="{% url 'set_withdraw' object.id %}">
-                <button class="w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
-           {% if object.account_type == 'Value' %}
-                <a href="{% url 'set_value' object.id %}">
-                <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
-            <a href="{% url 'account_reconcile' object.id %}">
-                <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-           {% else %}
-                <a href="{% url 'transaction_add' object.id %}">
-                    <button class="w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
-                <a href="{% url 'account_table' object.id %}">
-                    <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-           {% endif %}
-        {% endif %}
-        <a href="{% url 'account_edit' object.id %}">
-            <button class="w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
-        <a href="{% url 'account_close' object.id %}">
-            <button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
-        <a href="{% url 'account_delete' object.id %}">
-            <button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
-    {% else %}
-        <a href="{% url 'portfolio_edit' object.id %}">
-            <button class="w3-margin-left diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
-        <a href="{% url 'portfolio_data' object.id %}">
-            <button class="diy-button diy-green  w3-button-small w3-round-large ">Data</button></a>
-        <a href="{% url 'portfolio_delete' object.id %}">
-            <button class="w3-button-small w3-round-large diy-button-auto diy-red">Delete</button></a>
-    {% endif %}
-</div>
+{% include 'stocks/account_actions.html' %}
 
 <div class="w3-row">
     <canvas id="lineChart" height=300 style="border:1px solid" >

@@ -1,0 +1,52 @@
+<!-- Requires the variables:
+    {{account}}  : The account or portfolio we are working on
+     {{view_type}} :  Chart or Data
+-->
+<div class="w3-bar w3-hide-small">
+    <div class="w3-bar-item">
+        {% if account.container_type == 'Account' %}
+            {% if account.portfolio %}
+                <a href="{% url 'portfolio_details' account.portfolio.id %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
+            {% else %}
+                <a href="{% url 'portfolio_list' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>
+            {% endif %}
+
+            {% if view_type == 'Data' %}
+                <a href="{% url 'account_details' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Chart</button></a>
+            {% elif view_type == 'Chart' %}
+                {% if account.account_type == 'Investment' %}
+                    <a href="{% url 'account_table' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+                {% else %}
+                    <a href="{% url 'account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+                {% endif %}
+            {% endif %}
+
+            {% if account.account_type == 'Cash' %}
+                <a href="{% url 'set_balance' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
+            {% else %}
+                <a href="{% url 'set_fund' account.id %}">
+                        <button class="w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
+                <a href="{% url 'set_withdraw' account.id %}">
+                        <button class="w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
+                {% if account.account_type == 'Value' %}
+                    <a href="{% url 'set_value' account.id %}">
+                            <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
+                    <a href="{% url 'account_reconcile' account.id %}">
+                            <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+                {% else %}
+                    <a href="{% url 'transaction_add' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+                {% endif %}
+            {% endif %}
+            <a href="{% url 'account_edit' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
+            <a href="{% url 'account_close' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
+            <a href="{% url 'account_delete' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
+        {% else %}
+           <a href="{% url 'portfolio_list' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>
+
+           <a href="{% url 'portfolio_edit' account.id %}"><button class="w3-margin-left diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
+           <a href="{% url 'portfolio_data' account.id %}"><button class="diy-button diy-green  w3-button-small w3-round-large ">Data</button></a>
+           <a href="{% url 'portfolio_delete' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-red">Delete</button></a>
+        {% endif %}
+    </div>
+</div>
+

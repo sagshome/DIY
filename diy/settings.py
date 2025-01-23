@@ -186,11 +186,10 @@ TIME_ZONE = 'America/New_York'
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
-STATIC_ROOT = "static_root/"
+STATIC_ROOT = "static/"
 
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
-    BASE_DIR / "contrib"
+    BASE_DIR / "diy_static",
 ]
 
 # Default primary key field type

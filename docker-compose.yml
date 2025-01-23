@@ -25,6 +25,8 @@ services:
   django:
     env_file:
       - diy/production.env
+    ports:
+      - "8001:8001"
     build:
       dockerfile: build/app-Dockerfile
     container_name: ioom_app
@@ -35,8 +37,8 @@ services:
     networks:
       ioom_network:
         ipv4_address: 172.20.0.15
-    expose:
-      - "8000"  # Expose port for internal communication
+    # expose:
+    #  - "8000"  # Expose port for internal communication
     restart: always
     healthcheck:
       test: [ "CMD-SHELL", "test",  "-f", "/app/healthcheck" ]
@@ -45,6 +47,7 @@ services:
       retries: 6
 
   nginx:
+    image: nginx:latest
     ports:
       - "80:80"
       - "443:443"
@@ -53,8 +56,8 @@ services:
     container_name: ioom_nginx
     hostname: nginx.itsonlyourmoney.com
     volumes:
-      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
       - /mnt/shared/project/diy/certbot/www:/var/www/certbot
+      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
     depends_on:
       - certbot
       - django
@@ -67,9 +70,14 @@ services:
     image: certbot/certbot
     container_name: ioom_certbot
     volumes:
-      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
       - /mnt/shared/project/diy/certbot/www:/var/www/certbot
-    command: certonly --webroot --webroot-path=/var/www/certbot --email scott.sargent61@gmail.com --agree-tos --non-interactive --expand --domains www.itsonlyourmoney.com --domains mail.itsonlyourmoney.com
+      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
+    command: certonly --webroot --webroot-path=/var/www/certbot --agree-tos --email scott.sargent61@gmail.com -d itsonlyourmoney.com -d www.itsonlyourmoney.com --non-interactive
+
+    # entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 2073600; done'"
+
+
+    # command: certonly --webroot --webroot-path=/var/www/certbot --email scott.sargent61@gmail.com --agree-tos --non-interactive --expand --domains www.itsonlyourmoney.com --domains mail.itsonlyourmoney.com
 
   redis:
     # Since this is not visible outside the docker network.   No need to expose the port

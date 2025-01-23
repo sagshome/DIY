@@ -193,20 +193,20 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
 
     @staticmethod
     def container_data(myobj: BaseContainer):
+        """
+        Produce a trimmed down dataframe from the first to the last record
+
+        """
+        end = myobj.end
         equity_data = myobj.e_pd.groupby('Date').agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).reset_index()
-        equity_data = pd.merge(equity_data, myobj.p_pd)  # Add in columns for Funding/Redeemed
+        if len(myobj.p_pd):
+            equity_data = pd.merge(equity_data, myobj.p_pd)
+
         equity_data.replace(np.nan, 0, inplace=True)  # Clear up any bad numbers
         equity_data.sort_values(by=['Date'], inplace=True, ascending=False)  # Sort by date in reverse order
-        trimmed = equity_data[equity_data['Value'] != 0]  # Get rid of useless data
-        last_date = trimmed.loc[len(trimmed.index) - 1]['Date'].date()
-        if last_date < normalize_today():  # Add back in useful data
-            last_date = last_date + relativedelta(months=1)
-            last_redeemed = trimmed.loc[len(trimmed.index) - 1]['Redeemed']
-            changed = equity_data[(equity_data['Date'] >= pd.to_datetime(last_date)) & (equity_data['Redeemed'] != last_redeemed)]
-            changed = changed.reset_index()
-            trimmed.loc[len(trimmed)] = changed.loc[len(changed.index) - 1]  # generates copy warning
-        trimmed.sort_values(by=['Date'], inplace=True, ascending=False)  # Resort
-        return trimmed
+        if end:
+            return equity_data[equity_data['Date'] <= pd.to_datetime(end)]
+        return equity_data
 
 
 class AccountTableView(ContainerTableView):
@@ -234,9 +234,9 @@ class AccountTableView(ContainerTableView):
             summary_data = {}
         # Build the table data as [date, (shares, value), (shares, value)... total_value
         return {'account': a,
-                'account_type': 'Account',
                 'summary_data': summary_data,
                 'equities': elist,
+                'view_type': 'Data',
                 'equity_count': elist.count()
                 }
 
@@ -263,10 +263,10 @@ class PortfolioTableView(ContainerTableView):
 
         # Build the table data as [date, (shares, value), (shares, value)... total_value
         return {'account': p,
-                'account_type': 'Portfolio',
                 'account_list': p.account_set.all().order_by('-_start'),
                 'summary_data': json.loads(summary_data.to_json(orient='records')),
                 'equities': elist,
+                'view_type': 'Data',
                 'equity_count': elist.count()
                 }
 
@@ -322,13 +322,13 @@ class PortfolioDetailView(ContainerDetailView):
         account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
         context['account_list_data'] = account_list_data
 
-        return {'object': p,
-                'object_type': 'Portfolio',
+        return {'account': p,
                 'account_list_data': account_list_data,
                 'xas': p.transactions.order_by('-real_date', 'xa_action'),
                 'can_update': False,
                 'funded': funded,
                 'redeemed': abs(redeemed),
+                'view_type': 'Chart',
                 'equity_list_data': json.loads(self.equity_data(p).to_json(orient='records'))
                 }
 
@@ -362,12 +362,12 @@ class AccountDetailView(ContainerDetailView):
         else:
             redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
 
-        return {'object': account,
-                'object_type': 'Account',
+        return {'account': account,
                 'xas': account.transactions.order_by('-real_date', 'xa_action'),
                 'can_update': can_update,
                 'funded': funded,
                 'redeemed': redeemed,
+                'view_type': 'Chart',
                 'equity_list_data': json.loads(self.equity_data(account).to_json(orient='records'))
                 }
 
@@ -403,12 +403,15 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
 
     def get_initial(self):
         super().get_initial()
-        accounts = Account.objects.filter(user=self.request.user, _end__isnull=True).exclude(id=self.object.id)
+        accounts = Account.objects.filter(user=self.request.user, account_type=self.object.account_type, _end__isnull=True).exclude(id=self.object.id)
         if self.object.portfolio:
             accounts = accounts.filter(portfolio=self.object.portfolio)
         self.initial['accounts'] = accounts
         self.initial['user'] = self.request.user.id
-        self.initial['_end'] = datetime.today().date()
+        try:
+            self.initial['_end'] = self.object.transactions.latest('real_date').real_date
+        except Transaction.DoesNotExist:
+            self.initial['_end'] = self.object.id
         return self.initial
 
     def form_valid(self, form):
@@ -419,15 +422,16 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
             value = self.object.get_pattr('Redeemed', normalize_date(self.object.end))
         else:
             value = self.object.get_eattr('Value', normalize_date(self.object.end))
-            if value != 0:
-                if updated_data['accounts']:
-                    Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
-                                               xa_action=Transaction.TRANS_OUT, account=self.object.account)
-                    Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
-                                               xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
-                else:
-                    Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
-                                           xa_action=Transaction.REDEEM, account=self.object.account)
+
+        if value != 0:
+            if updated_data['accounts']:
+                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
+                                           xa_action=Transaction.TRANS_OUT, account=self.object.account)
+                Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
+                                           xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
+            else:
+                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
+                                       xa_action=Transaction.REDEEM, account=self.object.account)
         return super().form_valid(form)
 
 
