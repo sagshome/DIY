@@ -202,17 +202,31 @@ REDIS_PORT = 6379         # Default Redis port exposed by Docker
 REDIS_DB = 0             # Redis database index
 REDIS_PASSWORD = None    # Redis password (if you set one)
 
-CELERY_BROKER_URL = 'redis://172.20.0.30:6379/0'  # Use Redis as the message broker
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULTS_BACKEND = CELERY_BROKER_URL
+if NO_CACHE:
+    CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously in standalone mode
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CELERY_BROKER_URL = None  # No broker for standalone mode
+    CELERY_RESULT_BACKEND = None
+else:
+    CELERY_TASK_ALWAYS_EAGER = False
+    CELERY_BROKER_URL = 'redis://172.20.0.30:6379/0'  # Use Redis as the message broker
+    CELERY_ACCEPT_CONTENT = ['json']
+    CELERY_TASK_SERIALIZER = 'json'
+    CELERY_RESULTS_BACKEND = CELERY_BROKER_URL
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # 'BACKEND': 'django_redis.cache.RedisCache',
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+if NO_CACHE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+        }
+    }
