@@ -1,7 +1,7 @@
 FROM nginx:alpine
 RUN mkdir /app
 RUN mkdir /app/static_root
-COPY static /app/static
+COPY diy_static /app/static
 COPY build/nginx.conf /etc/nginx/conf.d/default.conf
 COPY build/junk-reducer /etc/nginx/junk-reducer
 COPY diy/uwsgi_params /app
