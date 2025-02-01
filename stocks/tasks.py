@@ -32,6 +32,10 @@ def daily_update():
     for account in Account.objects.all():
         account.update_static_values()
 
+@shared_task
+def hourly_update():
+    for equity in Equity.objects.filter(searchable=True):
+        equity.yp_update(daily=False)
 
 @shared_task
 def add_to_cache(user_id):

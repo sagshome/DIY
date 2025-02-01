@@ -21,9 +21,11 @@
                     <td class="w3-right-align w3-small">${{ item.Funds| floatformat:'0g'}}</td>
                     <td class="w3-right-align w3-small">${{ item.Redeemed | floatformat:'0g'}}</td>
                     <td>
-                        <a href="{% url 'update_account_date' account.id item.Date%}">
-                            <button class="w3-button-small w3-round-large diy-button-auto diy-green">Reconcile</button>
-                        </a>
+                        {% if can_reconcile %}
+                            <a href="{% url 'update_account_date' account.id item.Date%}">
+                                <button class="w3-button-small w3-round-large diy-button-auto diy-green">Reconcile</button>
+                            </a>
+                        {% endif %}
                     </td>
                 </tr>
         {% endfor %}

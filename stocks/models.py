@@ -507,7 +507,7 @@ class Equity(models.Model):
         except FundValue.DoesNotExist:
             logger.error('No Fund data for %s' % self)
 
-    def yp_update(self):
+    def yp_update(self, daily=False):
         if self.equity_type == 'Equity':
             data = yf.Ticker(self.key).history().to_records()
             if len(data):
@@ -521,8 +521,9 @@ class Equity(models.Model):
                         if dividend != 0:
                             EquityEvent.get_or_create(equity=self, event_type='Dividend', real_date=this_date,
                                                   value=dividend, source=DataSource.API.value)
-                        self.last_updated = datetime.today().date()
-                        self.save(update=False)
+                        if daily:
+                            self.last_updated = datetime.today().date()
+                            self.save(update=False)
                         return True
             return False
         return True
@@ -569,8 +570,7 @@ class Equity(models.Model):
     def update_external_equity_data(self, force):
         EquityEvent.objects.filter(equity=self, event_type='Dividend', source__gt=DataSource.API.value).delete()
         EquityValue.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
-        if not self.yp_update():
-            self.av_update(force)
+        self.av_update(force)
 
     def update(self, force: bool = False, key: str = None):
         """
@@ -687,19 +687,24 @@ class EquityValue(models.Model):
                 obj.source = kwargs['source']
                 obj.price = kwargs['price']
                 obj.real_date = real_date
+                logger.debug('Better source - Updated %s' % obj)
                 obj.save()
             elif obj.source == kwargs['source'] and (not obj.real_date or obj.real_date < real_date):
                 obj.price = kwargs['price']
                 obj.real_date = real_date
+                logger.debug('More recent date - Updated %s' % obj)
                 obj.save()
             elif obj.source == kwargs['source'] and obj.real_date == real_date:
-                obj.price = kwargs['price']
-                obj.save()
+                if obj.price != kwargs['price']:
+                    logger.debug('Same Date price change- Updated %s' % obj)
+                    obj.price = kwargs['price']
+                    obj.save()
 
         except EquityValue.DoesNotExist:
             kwargs['date'] = norm_date
             obj = cls.objects.create(**kwargs)
             created = True
+            logger.debug('Created %s' % obj)
         return obj, created
 
     @classmethod

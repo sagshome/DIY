@@ -45,6 +45,62 @@ from base.models import Profile, COLORS, PALETTE
 logger = logging.getLogger(__name__)
 
 
+class BaseDeleteView(LoginRequiredMixin, DeleteView):
+    template_name = 'stocks/basic_confirm_delete.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        return context
+
+    def get_success_url(self):
+        try:
+            url = self.request.POST["success_url"]
+        except AttributeError:
+            url = super().get_success_url()
+        return url
+
+
+class AccountDeleteView(BaseDeleteView):
+    model = Account
+    template_name = 'stocks/basic_confirm_delete.html'
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Account'
+        context['extra_text'] = 'Deleting an account is permanent - All transaction will be removed..'
+        return context
+
+
+class PortfolioDeleteView(BaseDeleteView):
+    model = Portfolio
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Portfolio'
+        context['extra_text'] = 'Deleting a portfolio will NOT delete the accounts it contains,  you will need to delete them separately.'
+        return context
+
+
+class TransactionDeleteView(BaseDeleteView):
+    model = Transaction
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Transaction'
+        context['extra_text'] = 'Deleting a Transaction is permanent'
+        return context
+
+
 class PortfolioDataView(LoginRequiredMixin, DetailView):
     model = Portfolio
     template_name = 'stocks/portfolio_data.html'
@@ -145,49 +201,6 @@ class AccountView(LoginRequiredMixin, ListView):
         return context
 
 
-class AccountDeleteView(LoginRequiredMixin, DeleteView):
-    model = Account
-    template_name = 'stocks/basic_confirm_delete.html'
-    success_url = '/stocks/account/'
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['object_type'] = 'Account'
-        context['extra_text'] = 'Deleting an account is permanent - All transaction will be removed..'
-        context['cancel_url'] = reverse('portfolio_list', kwargs={})
-        return context
-
-
-class TransactionDeleteView(LoginRequiredMixin, DeleteView):
-    model = Transaction
-    template_name = 'stocks/basic_confirm_delete.html'
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
-
-    def get_success_url(self):
-        return reverse_lazy('account_details', kwargs = {'pk': self.object.account.id})
-
-    def get_context_data(self, **kwargs):
-        this = self.get_object()
-        context = super().get_context_data(**kwargs)
-        context['object_type'] = 'Transaction'
-        context['extra_text'] = 'Deleting a Transaction is permanent'
-        context['cancel_url'] = reverse_lazy('account_details', kwargs = {'pk': this.account.id})
-        return context
-
-    def dispatch(self, request, *args, **kwargs):
-        # Call the parent class's dispatch method to handle the request
-        response = super().dispatch(request, *args, **kwargs)
-
-        print("View work is done!")
-
-        return response
-
-
 class ContainerTableView(LoginRequiredMixin, DetailView):
     template_name = 'stocks/account_table.html'
 
@@ -237,13 +250,13 @@ class AccountTableView(ContainerTableView):
                 'summary_data': summary_data,
                 'equities': elist,
                 'view_type': 'Data',
-                'equity_count': elist.count()
+                'equity_count': elist.count(),
+                'can_reconcile': True
                 }
 
 
 class PortfolioTableView(ContainerTableView):
     model = Account
-    template_name = 'stocks/account_table.html'
 
     def get_object(self):
         return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
@@ -267,7 +280,8 @@ class PortfolioTableView(ContainerTableView):
                 'summary_data': json.loads(summary_data.to_json(orient='records')),
                 'equities': elist,
                 'view_type': 'Data',
-                'equity_count': elist.count()
+                'equity_count': elist.count(),
+                'can_reconcile': False
                 }
 
 
@@ -439,22 +453,6 @@ class PortfolioEdit(PortfolioView, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Edit'
-        return context
-
-
-class PortfolioDeleteView(LoginRequiredMixin, DeleteView):
-    model = Portfolio
-    template_name = 'stocks/basic_confirm_delete.html'
-    success_url = '/stocks/account/'
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['object_type'] = 'Portfolio'
-        context['extra_text'] = 'Deleting a portfolio will NOT delete the accounts it contains,  you will need to delete them separately.'
-        context['cancel_url'] = reverse('portfolio_list', kwargs={})
         return context
 
 
@@ -698,13 +696,14 @@ def add_transaction(request, account_id):
                                                 'xa_action': new.xa_action})
             else:
                 account.reset()
-                return HttpResponseRedirect(reverse('account_details', kwargs={'pk': new.account.id}))
+                return HttpResponseRedirect(form.cleaned_data['success_url'])
     else:  # Initial get
         form = TransactionForm(initial={'user': request.user,
                                         'account': account,
                                         'real_date': datetime.now().date()})
 
     context = {
+        'success_url': request.META.get('HTTP_REFERER', '/'),
         'form': form,
         'account': account,
         'view_verb': 'Add',
@@ -761,12 +760,17 @@ def set_transaction(request, account_id, action):
                 raise Http404('Action %s is not supported for account type' % (action, account.account_type))
             if valid:
                 account.reset()
-                return HttpResponseRedirect(reverse('account_details', kwargs={'pk': account.id}))
+                return HttpResponseRedirect(form.cleaned_data['success_url'])
         else:
             pass
     else:
         form = TransactionSetValueForm(initial=initial)
-    return render(request, 'stocks/add_transaction.html', {'form': form, 'view_verb': 'Quick', 'account': account, 'action_locked': True})
+    return render(request, 'stocks/add_transaction.html', {
+        'success_url': request.META.get('HTTP_REFERER', '/'),
+        'form': form,
+        'view_verb': 'Quick',
+        'account': account,
+        'action_locked': True})
 
 
 @login_required
@@ -802,7 +806,7 @@ def account_equity_date_update(request, p_pk, e_pk, date_str):
             pass
     else:
         form = ManualUpdateEquityForm(initial={'account': account.id, 'equity': equity.id, 'report_date': this_date, 'shares': shares, 'value': value, 'price': price})
-    return render(request, 'stocks/portfolio_update_equity.html', context={'form': form, 'account': account, 'equity': equity})
+    return render(request, 'stocks/account_equity_date_update.html', context={'form': form, 'account': account, 'equity': equity})
 
 
 @login_required
@@ -1031,37 +1035,60 @@ def reconcile(request, pk):
 @login_required
 def reconciliation(request, a_pk, date_str):
     '''
-    Used for Value and Cash accounts.
+    Used for Investment Accounts
     '''
+
     account = get_object_or_404(Account, pk=a_pk, user=request.user)
     try:
-        this_date = pd.to_datetime(datetime.strptime(date_str, '%b-%Y').date())
+        view_date = datetime.strptime(date_str, '%b-%Y').date()
+        pd_date = pd.to_datetime(view_date)
     except ValueError:
         return render(request, '404.html',)
 
     account.e_pd['Date'] = account.e_pd['Date'].dt.strftime('%b-%Y')
-    initial = account.e_pd.loc[account.e_pd['Date'] == this_date][['Equity', 'Object_ID', 'Cost', 'Value', 'Shares', 'Dividends', 'TotalDividends', 'Price']].sort_values(by='Value', ascending=False).to_dict(orient='records')
+    initial = account.e_pd.loc[account.e_pd['Date'] == pd_date][['Equity', 'Object_ID', 'Cost', 'Value', 'Shares', 'Dividends', 'TotalDividends', 'Price']].sort_values(by='Value', ascending=False).to_dict(orient='records')
     for record in initial:
-        try:
-            record['Equity'] = Equity.objects.get(id=record['Object_ID'])
-        except Equity.DoesNotExist:  # Symbol may have come in with a .TO type extension
-            symbol = '.'.join(record['Equity'].split('.')[:-1])
-            record['Equity'] = Equity.objects.get(symbol=symbol)
+        equity = Equity.objects.get(id=record['Object_ID'])
+        record['Equity'] = equity
+        record['equity_id'] = equity.id
+        result = account.transactions.filter(equity=equity, date=view_date, xa_action__in=[Transaction.TRANS_IN, Transaction.BUY]).aggregate(Sum('value'), Avg('price'))
+        record['Bought'] = result['value__sum']  # if result['value__sum'] else 0
+        record['Bought_Price'] = result['price__avg']  # if result['price__avg'] else 0
+        result = account.transactions.filter(equity=equity, date=view_date, xa_action=Transaction.REDIV).aggregate(Sum('value'), Avg('price'))
+        record['Reinvested'] = result['value__sum']  # if result['value__sum'] else 0
+        record['Reinvested_Price'] = result['price__avg']  # if result['price__avg'] else 0
+        result = account.transactions.filter(equity=equity, date=view_date, xa_action__in=[Transaction.TRANS_OUT, Transaction.SELL]).aggregate(Sum('value'), Avg('price'))
+        record['Sold'] = result['value__sum']  # if result['value__sum'] else 0
+        record['Sold_Price'] = result['price__avg']  # if result['price__avg'] else 0
 
+    formset_errors = None
     if request.method == 'POST':
         formset = ReconciliationFormSet(request.POST)
         if formset.is_valid():
             for form in formset:
-                equity = form.cleaned_data['Equity']
-                for entry in initial:
-                    if entry['Equity'] == equity:
-                        if entry['Cost'] != form.cleaned_data['Cost']:
+                equity = Equity.objects.get(id=form.cleaned_data['equity_id'])
+                logger.debug('Processing equity %s' % equity)
+                for entry in initial:  # See if this form changed
+                    if entry['equity_id'] == equity.id:
+                        if form.data_changed(entry, 'Bought', 'Bought_Price'):
                             pass
-
-            formset.save()
+                        if form.data_changed(entry, 'Reinvested', 'Reinvested_Price'):
+                            pass
+                        if form.data_changed(entry, 'Sold', 'Sold_Price'):
+                            pass
+                        if form.data_changed(entry, 'Price'):
+                            pass
+                        if form.data_changed(entry, 'Dividends'):
+                            pass
+                        break
+        else:
+            formset_errors = formset.errors
     else:
         formset = ReconciliationFormSet(initial=initial)
-    return render(request, 'stocks/data_list.html', {'formset': formset})
+    return render(request, 'stocks/data_list.html', {'formset': formset, 'errors': formset_errors,
+                                                     'account': account, 'date_str': date_str,
+                                                     'xas': account.transactions.filter(date=view_date),
+                                                     'success_url': request.META.get('HTTP_REFERER', '/')})
 
 
 @login_required
@@ -1247,6 +1274,7 @@ def add_equity(request):
         form = AddEquityForm()
 
     context = {
+        'success_url': request.META.get('HTTP_REFERER', '/'),
         'form': form,
     }
     return render(request, 'stocks/add_equity.html', context)
@@ -1292,7 +1320,7 @@ def get_equity_list(request):
         except ValueError:
             logger.error("Received a non-numeric action %s" % request.GET.get("action"))
 
-    values = Equity.objects.exclude(deactived_date__lt=this_date)
+    values = Equity.objects.filter(equity_type='Equity').exclude(deactived_date__lt=this_date)
 
     if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES]:
         try:

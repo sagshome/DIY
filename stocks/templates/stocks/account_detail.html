@@ -89,7 +89,7 @@
     <p>Total Funding for <b>{{object_type}}: {{object.name}}</b> is: ${{funded|floatformat:'0g'}},
         Total Redeemed is: ${{redeemed|floatformat:'0g'}} {% calc_return funded redeemed %}</p>
 </div>
-{% include 'stocks/account_actions.html' %}
+{% include 'stocks/includes/account_actions.html' %}
 
 <div class="w3-row">
     <canvas id="lineChart" height=300 style="border:1px solid" >
@@ -97,13 +97,13 @@
     </canvas>
 </div>
 <div class="w3-container">
-    {% include 'stocks/account_summary_list.html' %}
+    {% include 'stocks/includes/account_summary_list.html' %}
 </div>
 
 {% if object_type == 'Portfolio' or object_type == 'Account' and object.account_type == 'Investment' %}
 <div class="w3-row">
     <div class="w3-container">
-        {% include 'stocks/equity_summary_list.html' %}
+        {% include 'stocks/includes/equity_summary_list.html' %}
     </div>
 </div>
 {% endif %}

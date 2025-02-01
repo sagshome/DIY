@@ -1,3 +1,9 @@
+<div>
+    {% if account %}
+        <a href="{% url 'transaction_add' account.id %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+    {% endif %}
+</div>
+<div>
 <table class="w3-table w3-stripped">
     <caption class="w3-wide w3-padding-16">Transactions</caption>
     <thead class="w3-margin-bottom" style="background:#eee;">
@@ -72,4 +78,5 @@
         {% endif %}
     {% endfor %}
 </table>
+</div>
 

@@ -2,6 +2,9 @@ from django import forms
 from django.core.exceptions import ValidationError
 from .models import DataSource, Equity, EquityValue, Account, Transaction, Portfolio, CURRENCIES
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
+from django.core.validators import MinValueValidator
+
+from decimal import Decimal
 from django.forms.widgets import HiddenInput
 
 
@@ -275,13 +278,34 @@ class UploadFileForm(forms.Form):
 
 
 class ReconciliationForm(forms.Form):
-    Equity = forms.CharField(required=True, widget=forms.TextInput())
-    Cost = forms.DecimalField(required=False, decimal_places=2)
-    Value = forms.DecimalField(required=False, decimal_places=2)
-    Shares = forms.DecimalField(required=False, decimal_places=1)
-    Price = forms.DecimalField(required=False, decimal_places=2)
-    Dividends = forms.DecimalField(required=False, decimal_places=2)
+    equity_id = forms.IntegerField(widget=forms.HiddenInput(), required=True)
+    Equity = forms.CharField(required=False, widget=forms.TextInput())
+
+    Cost = forms.DecimalField(required=False)
+    Value = forms.DecimalField(required=False)
+    Shares = forms.DecimalField(required=False)
+    Bought = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    Bought_Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    Reinvested = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    Reinvested_Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    Sold = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    Sold_Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+
+    Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    Dividends = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
     TotalDividends = forms.DecimalField(required=False, decimal_places=2)
+
+    def data_changed(self, initial, key1,  key2=None):
+        new_key1 = 0 if key1 not in self.cleaned_data or not self.cleaned_data[key1] else self.cleaned_data[key1]
+        old_key1 = 0 if not initial[key1] else initial[key1]
+        if not (float(new_key1) == old_key1):
+            return True
+        if key2:
+            new_key2 = 0 if key2 not in self.cleaned_data or not self.cleaned_data[key2] else self.cleaned_data[key2]
+            old_key2 = 0 if not initial[key2] else initial[key2]
+            if not (float(new_key2) == old_key2):
+                return True
+        return False
 
     class Meta:
         widgets = {
@@ -293,12 +317,20 @@ class ReconciliationForm(forms.Form):
         if 'initial' in kwargs and 'Equity' in kwargs['initial']:
             if kwargs['initial']['Equity'].searchable:
                 self.fields["Price"].widget.attrs['readonly'] = True
-                self.fields["Price"].widget.attrs['style'] = 'background-color:Wheat'
+                self.fields["Price"].widget.attrs['style'] = 'width:95px;text-align: right;background-color:Wheat;'
+                self.fields["Dividends"].widget.attrs['readonly'] = True
+                self.fields["Dividends"].widget.attrs['style'] = 'width:95px;text-align: right;background-color:Wheat;'
+            else:
+                self.fields["Price"].widget.attrs['style'] = 'width:95px;text-align: right;'
+                self.fields["Dividends"].widget.attrs['style'] = 'width:95px;text-align: right;'
 
-        self.fields["Equity"].widget.attrs['style'] = 'width:150px;background-color:Wheat'
+        for field in ["Bought", "Bought_Price", "Reinvested", "Reinvested_Price", "Sold", "Sold_Price"]:
+            self.fields[field].widget.attrs['style'] = 'width:95px;text-align: right;'
+        for field in ['Cost', 'Value', 'Shares', 'TotalDividends']:
+            self.fields[field].widget.attrs['readonly'] = True
+            self.fields[field].widget.attrs['style'] = 'width:95px;text-align: right;background-color:Wheat;'
         self.fields["Equity"].widget.attrs['readonly'] = True
-        self.fields["TotalDividends"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
-        self.fields["TotalDividends"].widget.attrs['readonly'] = True
+        self.fields["Equity"].widget.attrs['style'] = 'text-align: left;background-color:Wheat;'
 
 
 ReconciliationFormSet = formset_factory(ReconciliationForm, extra=0)

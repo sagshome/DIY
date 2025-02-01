@@ -150,6 +150,8 @@
     <h2>{{account.name}} - {{view_verb}} Transaction</h2>
         <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
+            <input type="hidden" name="success_url" value="{{ success_url }}">
+
             {% for error in form.non_field_errors %}
                 <div class="w3-row w3-red">
                     {{ error }}
@@ -212,8 +214,8 @@
                 </div>
                 {% if account %}
                     <div class="w3-col w3-container m2">
-                        <a href="{% url 'account_details' account.id %}">
-                            <button class="w3-button-small w3-round-large diy-button diy-red" type="button">Cancel</button>
+                        <a href="{{success_url}}">
+                            <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
                         </a>
                     </div>
                 {% endif %}

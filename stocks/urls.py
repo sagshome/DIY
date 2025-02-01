@@ -24,7 +24,6 @@ urlpatterns = [
     path(r'account/<pk>/', views.AccountDetailView.as_view(), name='account_details'),
     path(r'account/<pk>/close/', views.AccountCloseView.as_view(), name='account_close'),
     path(r'account/<pk>/edit/', views.AccountEdit.as_view(), name='account_edit'),
-    # path(r'account/<pk>/copy/', views.AccountCopy.as_view(), name='account_copy'),
     path(r'account/<pk>/delete/', views.AccountDeleteView.as_view(), name='account_delete'),
     path(r'account/<pk>/reconcile/', views.reconcile, name='account_reconcile'),
     path(r'account/<pk>/table/', views.AccountTableView.as_view(), name='account_table'),

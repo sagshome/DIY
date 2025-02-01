@@ -15,6 +15,7 @@
     is complete.
     <form method="post" novalidate>
         {% csrf_token %}
+        <input type="hidden" name="success_url" value="{{ success_url }}">
         {% for error in form.non_field_errors %}
             <div class="w3-row w3-red">
                 {{ error }}
@@ -48,9 +49,11 @@
                 <td> {{ form.equity_type.errors }}</td>
             </tr>
         </table>
-          <a href="{% url 'portfolio_list' %}"><button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button></a>
+        <a href="{{success_url}}">
+            <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
+        </a>
             - or -
-          <input type="submit" class="w3-button-small w3-round-xlarge w3-green" name="submit" value="Submit">
-        </form>
+        <input type="submit" class="w3-button-small w3-round-xlarge w3-green" name="submit" value="Submit">
+    </form>
 {% endblock %}
 
