@@ -19,7 +19,7 @@ urlpatterns = [
     path(r'equity/add', views.add_equity, name='add_equity'),
     path(r'equity/<key>/update/', views.equity_update, name='equity_update'),
 
-    path(r'account/', views.AccountView.as_view(), name='portfolio_list'),
+    path(r'account/', views.AccountView.as_view(), name='stocks_main'),
     path(r'account/add/', views.add_account, name='account_add'),
     path(r'account/<pk>/', views.AccountDetailView.as_view(), name='account_details'),
     path(r'account/<pk>/close/', views.AccountCloseView.as_view(), name='account_close'),
@@ -41,6 +41,7 @@ urlpatterns = [
     path(r'portfolio/<pk>/edit/', views.PortfolioEdit.as_view(), name='portfolio_edit'),
     path(r'portfolio/<pk>/delete/', views.PortfolioDeleteView.as_view(), name='portfolio_delete'),
     path(r'portfolio/<pk>/table/', views.PortfolioTableView.as_view(), name='portfolio_table'),
+    path(r'portfolio/<pk>/update/', views.portfolio_update, name='portfolio_update'),
 
     path(r'transaction/<account_id>/add/', views.add_transaction, name='transaction_add'),
     path(r'transaction/<account_id>/fund/', views.set_transaction,  {'action': 'fund'}, name='set_fund'),

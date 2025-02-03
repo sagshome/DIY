@@ -170,7 +170,7 @@ class PortfolioDataView(LoginRequiredMixin, DetailView):
 
 class AccountView(LoginRequiredMixin, ListView):
     model = Account
-    template_name = 'stocks/portfolio_list.html'
+    template_name = 'stocks/stocks_main.html'
 
     def get_context_data(self, **kwargs):
         """
@@ -181,14 +181,6 @@ class AccountView(LoginRequiredMixin, ListView):
         """
         context = super().get_context_data(**kwargs)
 
-        try:
-            profile = Profile.objects.get(user=self.request.user)
-            context['can_update'] = True if profile.av_api_key else False
-        except Profile.DoesNotExist:
-            context['can_update'] = False
-
-
-
         account_list_data = []
         for portfolio in Portfolio.objects.filter(user=self.request.user):
             account_list_data.append(portfolio.summary)
@@ -196,7 +188,6 @@ class AccountView(LoginRequiredMixin, ListView):
             account_list_data.append(account.summary)
 
         account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
-
         context['account_list_data'] = account_list_data
         return context
 
@@ -392,7 +383,7 @@ class PortfolioView(LoginRequiredMixin):
     form_class = PortfolioForm
 
     def get_success_url(self):
-        return reverse('portfolio_list', kwargs={})
+        return reverse('stocks_main', kwargs={})
 
     def get_initial(self):
         super().get_initial()
@@ -413,7 +404,7 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
     form_class = AccountCloseForm
 
     def get_success_url(self):
-        return reverse('portfolio_list', kwargs={})
+        return reverse('stocks_main', kwargs={})
 
     def get_initial(self):
         super().get_initial()
@@ -492,7 +483,7 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
         return super().get_object(queryset=Account.objects.filter(user=self.request.user))
 
     def get_success_url(self):
-        return reverse('portfolio_list')
+        return reverse('stocks_main')
 
     def get_initial(self):
         original = Account.objects.get(pk=self.kwargs['pk'])
@@ -628,7 +619,7 @@ def add_account(request):
                 Equity.objects.create(symbol=account.f_key, currency=account.currency, name=account.f_key, equity_type='Cash')
             elif account.account_type == 'Value':
                 Equity.objects.create(symbol=account.f_key, currency=account.currency, name=account.f_key, equity_type='Value')
-            return HttpResponseRedirect(reverse('portfolio_list'))
+            return HttpResponseRedirect(reverse('stocks_main'))
 
     form = AccountAddForm(initial={'user': request.user, 'currency': request.user.profile.currency, 'managed': False})
     return render(request, 'stocks/add_account.html', {'form': form})
@@ -836,6 +827,27 @@ def account_compare(request, pk, symbol):
     chart_html = pio.to_html(fig, full_html=False)
     return render(request, 'stocks/portfolio_compare.html',
                   {'account': account, 'compare_to': compare_equity, 'chart': chart_html})
+
+
+@login_required
+def account_update(request, pk):
+    account = get_object_or_404(Account, pk=pk, user=request.user)
+
+    profile = Profile.objects.get(user=request.user)
+    key = profile.av_api_key if profile.av_api_key else None
+    for equity in account.equities.filter(searchable=True):
+        equity.yp_update(daily=False)
+    return HttpResponse(status=200)
+
+@login_required
+def portfolio_update(request, pk):
+    portfolio = get_object_or_404(Portfolio, pk=pk, user=request.user)
+
+    profile = Profile.objects.get(user=request.user)
+    key = profile.av_api_key if profile.av_api_key else None
+    for equity in portfolio.equities.filter(searchable=True):
+        equity.yp_update(daily=False)
+    return HttpResponse(status=200)
 
 
 @login_required
@@ -1268,7 +1280,7 @@ def add_equity(request):
                                   name=form.cleaned_data['description'], equity_type=form.cleaned_data['equity_type'],
                                   searchable=False, validated=True)
 
-            return HttpResponseRedirect(reverse('portfolio_list'))
+            return HttpResponseRedirect(reverse('stocks_main'))
 
     else:  # Initial get
         form = AddEquityForm()

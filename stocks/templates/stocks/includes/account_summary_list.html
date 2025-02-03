@@ -1,4 +1,36 @@
 
+<script>
+    const spinner = document.getElementById('spinner');
+
+    function showSpinner() {
+        spinner.classList.add('show');
+    }
+
+    function hideSpinner() {
+        spinner.classList.remove('show');
+    }
+
+    async function fetchData() {
+        showSpinner();
+        try {
+            const response = await fetch('https://api.example.com/data');
+            const data = await response.json();
+            console.log(data);
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        } finally {
+            hideSpinner();
+        }
+    }
+
+    // Optionally, you can add a timeout to ensure the spinner hides if the API call takes too long
+    async function fetchDataWithTimeout(api) {
+         const response = await fetch(api);
+         const data = await response.json();
+         console.log(data);
+    }
+</script>
+
 <div>
     {% if account_list_data %}
         <table class="w3-table w3-striped">
@@ -71,11 +103,13 @@
                     {% endif %}
                     <td class="w3-right-align w3-small ">
                         {% if item.Type == 'Portfolio' %}
+                            <button onclick="fetchDataWithTimeout('{% url 'portfolio_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
                             <a class="w3-hide-small" href="{% url 'portfolio_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
                             <a class="w3-hide-small" href="{% url 'portfolio_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% else %}
-                        <a class="w3-hide-small" href="{% url 'account_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
-                        <a class="w3-hide-small" href="{% url 'account_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
+                            <button onclick="fetchDataWithTimeout('{% url 'account_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
+                            <a class="w3-hide-small" href="{% url 'account_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
+                            <a class="w3-hide-small" href="{% url 'account_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% endif %}
                     </td>
                 </tr>

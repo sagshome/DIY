@@ -402,7 +402,7 @@ class Equity(models.Model):
 
         super(Equity, self).save(*args, **kwargs)
         if self.searchable and do_update:
-            self.update_external_equity_data(False)
+            self.update_external_equity_data(False, None)
 
     def av_set_data(self):
         request = URL.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
@@ -528,49 +528,53 @@ class Equity(models.Model):
             return False
         return True
 
-    def av_update(self, force):
-        if self.equity_type == 'Equity' and self.searchable:
-            now = datetime.now().date()
-            if now == self.last_updated and not force:
-                logger.info('%s - Already updated %s' % (self, now))
-            else:
-                data_key = 'Monthly Adjusted Time Series'
-                result = URL.get('AVURL', f'TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={AV_API_KEY}')
-
-                if not result.status_code == 200:
-                    logger.warning('AVURL Result is %s - %s' % (result.status_code, result.reason))
-                    return
-
-                data = result.json()
-                if data_key in data:  # if not,  we timed out our API key
-                    for entry in data[data_key]:
-                        try:
-                            date_value = datetime.strptime(entry, '%Y-%m-%d').date()
-                        except ValueError:
-                            logger.error('Invalid date format in: %s' % entry)
-                            return
-
-                        if date_value >= EPOCH:
-                            EquityValue.get_or_create(equity=self, source=DataSource.API.value, real_date=date_value,
-                                                      price=float(data[data_key][entry]['4. close']))
-
-                            dividend = float(data[data_key][entry]['7. dividend amount'])
-                            if dividend != 0:
-                                EquityEvent.get_or_create(equity=self, event_type='Dividend', real_date=date_value,
-                                                          value=dividend, source=DataSource.API.value)
-                    self.last_updated = now
-                    self.save(update=False)
+    def av_update(self, force, key):
+        if key:
+            if self.equity_type == 'Equity' and self.searchable:
+                now = datetime.now().date()
+                if now == self.last_updated and not force:
+                    logger.info('%s - Already updated %s' % (self, now))
                 else:
-                    if 'Information' in data and data['Information'].startswith('Thank you for using'):
-                        logger.warning("Too many calls to AVURL")
-                        URL.pause("AVURL")
-                    else:
-                        logger.warning('Invalid Response: %s' % data)
+                    data_key = 'Monthly Adjusted Time Series'
+                    result = URL.get('AVURL', f'TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={key}')
 
-    def update_external_equity_data(self, force):
+                    if not result.status_code == 200:
+                        logger.warning('AVURL Result is %s - %s' % (result.status_code, result.reason))
+                        return
+
+                    data = result.json()
+                    if data_key in data:  # if not,  we timed out our API key
+                        for entry in data[data_key]:
+                            try:
+                                date_value = datetime.strptime(entry, '%Y-%m-%d').date()
+                            except ValueError:
+                                logger.error('Invalid date format in: %s' % entry)
+                                return
+
+                            if date_value >= EPOCH:
+                                EquityValue.get_or_create(equity=self, source=DataSource.API.value, real_date=date_value,
+                                                          price=float(data[data_key][entry]['4. close']))
+
+                                dividend = float(data[data_key][entry]['7. dividend amount'])
+                                if dividend != 0:
+                                    EquityEvent.get_or_create(equity=self, event_type='Dividend', real_date=date_value,
+                                                              value=dividend, source=DataSource.API.value)
+                        self.last_updated = now
+                        self.save(update=False)
+                    else:
+                        if 'Information' in data and data['Information'].startswith('Thank you for using'):
+                            logger.warning("Too many calls to AVURL")
+                            URL.pause("AVURL")
+                        else:
+                            logger.warning('Invalid Response: %s' % data)
+
+    def update_external_equity_data(self, force, key):
         EquityEvent.objects.filter(equity=self, event_type='Dividend', source__gt=DataSource.API.value).delete()
         EquityValue.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
-        self.av_update(force)
+        if key:
+            self.av_update(force, key)
+        else:
+            self.yp_update(False)
 
     def update(self, force: bool = False, key: str = None):
         """
@@ -583,7 +587,7 @@ class Equity(models.Model):
                 self.set_equity_data()
                 self.save()
             elif self.searchable:
-                self.update_external_equity_data(force)
+                self.update_external_equity_data(force, key)
         self.fill_equity_value_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
@@ -1112,7 +1116,8 @@ class Portfolio(BaseContainer):
 
     @property
     def equities(self) -> QuerySet[Equity]:
-        return Equity.objects.filter(symbol__in=Transaction.objects.filter(account__portfolio=self).values('equity__symbol')).order_by('symbol')
+        return Equity.objects.filter(
+            id__in=Transaction.objects.filter(account__portfolio=self, xa_action__in=Transaction.SHARE_TRANSACTIONS).values('equity__id')).order_by('symbol')
 
     @property
     def equity_keys(self):
@@ -1629,6 +1634,10 @@ class Transaction(models.Model):
         return False
 
     def save(self, *args, **kwargs):
+        if 'reset' in kwargs:
+            do_reset = kwargs.pop('reset')
+        else:
+            do_reset = True
 
         self.date = normalize_date(self.real_date) if self.real_date else None
         reported_price = 0 if not self.price else self.price
@@ -1675,7 +1684,9 @@ class Transaction(models.Model):
             except EquityValue.DoesNotExist:
                 EquityValue.objects.create(source=DataSource.UPLOAD.value, equity=self.equity, price=self.price, real_date=self.real_date, date=self.date)
 
-            for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=self.equity).values_list('account', flat=True).distinct()):
-                account.reset()
+            if do_reset:
+                for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=self.equity).values_list('account', flat=True).distinct()):
+                    account.reset()
 
-        self.account.reset()
+        if do_reset:
+            self.account.reset()

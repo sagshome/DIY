@@ -12,8 +12,9 @@ from django.db.models import Sum
 from django.db.models.functions import TruncMonth, TruncYear
 
 from base.models import Profile
+from base.utils import normalize_date
 from expenses.models import Item, Category, SubCategory
-from stocks.models import Inflation, Portfolio, Account, Equity, Transaction, EquityValue, Equity, Inflation, ExchangeRate, Account
+from stocks.models import Inflation, Portfolio, Account, Equity, Transaction, EquityValue, Equity, Inflation, ExchangeRate, Account, EquityEvent, FundValue
 
 
 logger = logging.getLogger(__name__)
@@ -142,21 +143,86 @@ def create_salary(user: User):
         next_date = next_date + relativedelta(months=1)
 
 
+def _process_pay(user, account, pay_date, starting, amount, equities) -> float:
+    starting += amount
+    Transaction(account=account, user=user, real_date=pay_date, xa_action=Transaction.FUND, value=amount).save(reset=False)
+    e = equities[random.randint(0, len(equities) - 1)]
+    try:
+        price = EquityValue.objects.get(equity=e, date=normalize_date(pay_date)).price
+        shares_bought = starting // price
+        starting -= shares_bought * price
+        if shares_bought > 0:
+            Transaction(account=account, user=user, real_date=pay_date, xa_action=Transaction.BUY, equity=e, price=price, quantity=shares_bought).save(reset=False)
+    except EquityValue.DoesNotExist:
+        logger.debug('can not lookup equity value for %s on %s' % (e, normalize_date(pay_date)))
+    return starting
+
+
+def _process_value(account, fund, user, pay_date, starting, new, change):
+
+    Transaction(account=account, user=user, real_date=pay_date, xa_action=Transaction.FUND, value=new).save(reset=False)
+    ending = starting + starting * change
+    ending += new
+    try:
+        fund_value = FundValue.objects.get(date=normalize_date(pay_date), fund=fund)
+        fund_value.value = ending
+        fund_value.real_date = pay_date
+    except FundValue.DoesNotExist:
+        fund_value = FundValue(date=normalize_date(pay_date), real_date=pay_date, value=ending, fund=fund)
+    fund_value.save(fix_holes=False, increment=0)
+    return ending
+
+
 def create_portfolios(user: User):
     end_date = datetime.today().date()
     start_date = end_date.replace(year=end_date.year-10)
 
     logger.debug('Start Investing')
-
+    Portfolio.objects.filter(user=user).delete()
+    Account.objects.filter(user=user).delete()
     portfolio1 = Portfolio.objects.create(user=user, name='Company Retirement', currency='CAD')
+    portfolio1_equities = [Equity.objects.get(symbol='BMO'), Equity.objects.get(symbol='BCE'), Equity.objects.get(symbol='XDIV')]
     account1 = Account.objects.create(user=user, name="Dan's Account", account_type='Value', currency='CAD', account_name='Foo_007', managed=True, portfolio=portfolio1)
     account2 = Account.objects.create(user=user, name="Debbie's Account", account_type='Value', currency='CAD', account_name='Bar_007', managed=True, portfolio=portfolio1)
+    Equity.objects.create(symbol=account1.f_key, currency=account1.currency, name=account1.f_key, equity_type='Value')
+    Equity.objects.create(symbol=account2.f_key, currency=account2.currency, name=account2.f_key, equity_type='Value')
+
+    money = 0
+    fund = Equity.objects.get(symbol=account1.f_key)
     for pay in Item.objects.filter(user=user, description__icontains='Dan', subcategory__name='Salary'):
-        Transaction(account=account1, user=user, real_date=pay.date, xa_action=Transaction.FUND, value=float(pay.amount) * 16 / 100)
+        change = random.uniform(-3, 8) / 24 / 100  # this would equal a year-over-year change between -3 and 8 divided by the 24 changes in the month
+        value = float(pay.amount) * 16 / 100
+        money = _process_value(account1, fund, user, pay.date, money, value, change)
+
+    money = 0
+    fund = Equity.objects.get(symbol=account2.f_key)
     for pay in Item.objects.filter(user=user, description__icontains='Debbie', subcategory__name='Salary'):
-        Transaction(account=account2, user=user, real_date=pay.date, xa_action=Transaction.FUND, value=float(pay.amount) * 8 / 100)
+        change = random.uniform(-4, 12) / 24 / 100  # this would equal a year-over-year change between -3 and 8 divided by the 24 changes in the month
+        value = float(pay.amount) * 16 / 100
+        money = _process_value(account2, fund, user, pay.date, money, value, change)
 
 
+    '''money = 0
+    for pay in Item.objects.filter(user=user, description__icontains='Dan', subcategory__name='Salary'):
+        value = float(pay.amount) * 16 / 100
+        logger.debug('%s Dan - Pay Amount is: %s - Contribution Value is %s' % (pay.date, pay.amount, value))
+        money = _process_pay(user, account1, pay.date, money, value, portfolio1_equities)
+
+    money = 0
+    for pay in Item.objects.filter(user=user, description__icontains='Debbie', subcategory__name='Salary'):
+        value = float(pay.amount) * 8 / 100
+        logger.debug('%s Debbie - Pay Amount is: %s - Contribution Value is %s' % (pay.date, pay.amount, value))
+        money = _process_pay(user, account2, pay.date, money, value, portfolio1_equities)
+
+    # Add in DRIP
+    for account in Account.objects.ftiler(user=user):
+        for equity in account.equities:
+            shares = 0
+            for event in EquityEvent.objects.filter(equity=equity).order_by('date'):'''
+
+    for account in Account.objects.filter(user=user):
+        account.reset()
+        account.update_static_values()
 
 #@shared_task
 def daily_refresh():
