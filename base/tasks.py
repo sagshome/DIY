@@ -190,14 +190,14 @@ def create_portfolios(user: User):
     money = 0
     fund = Equity.objects.get(symbol=account1.f_key)
     for pay in Item.objects.filter(user=user, description__icontains='Dan', subcategory__name='Salary'):
-        change = random.uniform(-3, 8) / 24 / 100  # this would equal a year-over-year change between -3 and 8 divided by the 24 changes in the month
+        change = random.uniform(-5, 15) / 24 / 100  # random low to high, divided by number of deposits per year, as a percent
         value = float(pay.amount) * 16 / 100
         money = _process_value(account1, fund, user, pay.date, money, value, change)
 
     money = 0
     fund = Equity.objects.get(symbol=account2.f_key)
     for pay in Item.objects.filter(user=user, description__icontains='Debbie', subcategory__name='Salary'):
-        change = random.uniform(-4, 12) / 24 / 100  # this would equal a year-over-year change between -3 and 8 divided by the 24 changes in the month
+        change = random.uniform(-10, 25) / 24 / 100
         value = float(pay.amount) * 16 / 100
         money = _process_value(account2, fund, user, pay.date, money, value, change)
 

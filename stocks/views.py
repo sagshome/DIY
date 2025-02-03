@@ -247,7 +247,7 @@ class AccountTableView(ContainerTableView):
 
 
 class PortfolioTableView(ContainerTableView):
-    model = Account
+    model = Portfolio
 
     def get_object(self):
         return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
@@ -1062,6 +1062,7 @@ def reconciliation(request, a_pk, date_str):
     for record in initial:
         equity = Equity.objects.get(id=record['Object_ID'])
         record['Equity'] = equity
+        record['Value'] = round(record['Value'], 2)
         record['equity_id'] = equity.id
         result = account.transactions.filter(equity=equity, date=view_date, xa_action__in=[Transaction.TRANS_IN, Transaction.BUY]).aggregate(Sum('value'), Avg('price'))
         record['Bought'] = result['value__sum']  # if result['value__sum'] else 0
@@ -1732,6 +1733,9 @@ def wealth_summary_chart(request):
 
 @login_required
 def wealth_summary_pie(request):
+    '''
+    A quick pie chart - launched at login time
+    '''
     data = []
     labels = []
     option_links = []

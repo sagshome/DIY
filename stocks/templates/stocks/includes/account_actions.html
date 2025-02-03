@@ -42,9 +42,12 @@
             <a href="{% url 'account_delete' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
         {% else %}
            <a href="{% url 'stocks_main' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>
-
-           <a href="{% url 'portfolio_edit' account.id %}"><button class="w3-margin-left diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
-           <a href="{% url 'portfolio_table' account.id %}"><button class="diy-button diy-green  w3-button-small w3-round-large ">Data</button></a>
+           {% if view_type == 'Data' %}
+                <a href="{% url 'portfolio_details' account.id %}"><button class="diy-button diy-green  w3-button-small w3-round-large ">Chart</button></a>
+            {% else %}
+                <a href="{% url 'portfolio_table' account.id %}"><button class="diy-button diy-green  w3-button-small w3-round-large ">Data</button></a>
+            {% endif %}
+           <a href="{% url 'portfolio_edit' account.id %}"><button class="diy-button diy-yellow  w3-button-small w3-round-large ">Edit</button></a>
            <a href="{% url 'portfolio_delete' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-red">Delete</button></a>
         {% endif %}
     </div>

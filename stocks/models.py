@@ -383,6 +383,9 @@ class Equity(models.Model):
         return key  # US does not get a region decorator via AV_URL
 
     def __str__(self):
+        if self.equity_type == 'Value' or self.equity_type == 'Cash':
+            account_id = int(self.symbol.split('-')[1])
+            return Account.objects.get(id=account_id).name
         return f'{self.symbol} ({self.region}) - {self.name}'
 
     def save(self, *args, **kwargs):
