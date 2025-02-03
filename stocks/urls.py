@@ -15,6 +15,7 @@ urlpatterns = [
     path(r'api/wealth', views.wealth_summary_chart, name='wealth_chart'),
     path(r'api/wealth_pie', views.wealth_summary_pie, name='wealth_pie'),
     path(r'api/wealth_summary', views.acc_summary, name='wealth_summary'),
+    path(r'api/equity_summary', views.equity_summary, name='equity_summary'),
 
     path(r'equity/add', views.add_equity, name='add_equity'),
     path(r'equity/<key>/update/', views.equity_update, name='equity_update'),

@@ -1629,6 +1629,64 @@ def acc_summary(request):
 
 
 @login_required
+def equity_summary(request):
+    colors = COLORS.copy()
+    ci = 0
+
+    user = request.user
+    object_id = request.GET.get('object_id')
+    object_type = request.GET.get('object_type')
+
+    if not (object_id and object_type):
+        return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+
+    if object_type == 'Account':
+        this = get_object_or_404(Account, id=object_id, user=request.user)
+    else:
+        this = get_object_or_404(Portfolio, id=object_id, user=request.user)
+
+    start = this.start
+    end = this.end if this.end else normalize_today()
+    if not (start and end):
+        return JsonResponse({'status': 'false', 'message': 'Invalid Data'}, status=500)
+
+    start = start.strftime('%Y-%m-%d')
+    end = end.strftime('%Y-%m-%d')
+
+    date_range = pd.date_range(start=start, end=end, freq='MS')
+    month_df = pd.DataFrame({'Date': date_range, 'Value': 0})
+
+    labels = [this_date.strftime('%Y-%b') for this_date in month_df['Date'].to_list()]
+    df = pd.DataFrame(columns=ACCOUNT_COL)
+    datasets = []
+    for equity in this.equities:
+        color = colors[ci]
+        ci += 1
+        datasets.append({
+            'label': equity.symbol,
+            'fill': False,
+            'data': pd.concat([month_df, this.e_pd.loc[this.e_pd['Object_ID'] == equity.id, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+            'boarderColor': color, 'backgroundColor': color,
+            'stack': 1,
+            'order': 1,
+        })
+        df = pd.concat([df, this.p_pd]).groupby('Date', as_index=False).sum()
+
+    cost_df = this.p_pd['Funds'] - this.p_pd['Redeemed']
+
+    datasets.append({
+        'label': 'Cost',
+        'fill': False,
+        'data': cost_df.to_list(),
+        'boarderColor': '#000000', 'backgroundColor': '#000000',
+        'type': 'line',
+        'order': 0,
+    })
+
+    return JsonResponse({'labels': labels, 'datasets': datasets})
+
+
+@login_required
 def wealth_summary_chart(request):
     """
     Build the chart data required for the timespan with the following data

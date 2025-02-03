@@ -5,9 +5,12 @@
 <script>
     $(document).ready(function() {
       var object_type = '{{account.container_type}}'
-      if (object_type == 'Portfolio') {
-         $.ajax({
-            url: "{% url 'wealth_summary' %}",
+      var url = "{% url 'wealth_summary' %}"
+      if (object_type == 'Account') {
+          url = "{% url 'equity_summary' %}"
+      }
+      $.ajax({
+            url: url,
             data: {'object_id': '{{ account.id }}',
                    'object_type': '{{ account.container_type }}'},
             success: function (data) {
@@ -41,48 +44,7 @@
             alert('Error occured');
         }
 
-        });
-
-      } else {
-          $.ajax({
-            url: "{% url 'cost_value_chart' %}",
-            data: {'object_id': '{{ account.id }}',
-                   'object_type': '{{ account.container_type }}'},
-            success: function (data) {
-              new Chart("lineChart", {
-                type: "line",
-                data: data,
-                options: {
-                        scales: {
-                            y: {
-                                beginAtZero: true
-                            },
-                        },
-                    elements: {
-                       point:{
-                           radius: 2
-                      }
-                    },
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    title: {
-                      display: true,
-                      text: "Funding vs Value"
-                    },
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'center'
-                    },
-                }
-              });
-            },
-            error: function(data) {
-                console.log('Error occured');
-            }
-
-          });
-      }
+      });
     });
 </script>
 <div class="w3-row">
