@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}IOOM Reconcile {{account.name}}{% endblock %}
+{% load stocks_tags %}
+{% block content %}
+
+<div>
+    <h2>Data {{account.name}}</h2>
+    {% include 'stocks/includes/account_actions.html' %}
+
+
+    <!-- my_template.html -->
+    <form method="post">
+        {% csrf_token %}
+        {{ formset.management_form }}
+        {% if formset.errors.errors %}
+            <div class="w3-panel w3-red">
+                {% for dict in formset.error_messages %}
+                    {% for error in dict.values %}
+                        {{ error }}
+                    {% endfor %}
+                {% endfor %}
+             </div>
+        {% endif %}
+
+        <div class="w3-responsive table-container">
+
+        <table class="w3-table w3-striped w3-bordered tableFixHead">
+
+            <caption class="w3-wide w3-padding-16">Reconciliation Table</caption>
+            <thead class="w3-margin-bottom" style="background:#eee;">
+
+                <td class="w3-container w3-small w3-left-align">Date</td>
+                <td class="w3-container w3-small w3-left-align">Reported Date</td>
+
+                <td class="w3-container w3-small w3-right-align">Value</td>
+                <td class="w3-container w3-small w3-right-align">Data Source</td>
+
+                <td class="w3-container w3-small w3-right-align">Deposited</td>
+                <td class="w3-container w3-small w3-right-align">Withdrawn</td>
+
+            </thead>
+            {% for form in formset %}
+
+                <tr>
+                {% for field in form.visible_fields %}
+                    {% if field.name == 'date' %}<td class="w3-small w3-left-align">{{ field }}</td>{% endif %}
+                    {% if field.name == 'reported_date' %}<td class="w3-small w3-left-align">{{ field }}</td>{% endif %}
+                    {% if field.name == 'value' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
+                    {% if field.name == 'source' %}<td class="w3-small w3-right-align">{{ field.value }}</td>{% endif %}
+
+                    {% if field.name == 'deposited' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
+                    {% if field.name == 'withdrawn' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
+                {% endfor %}
+                    {% if form.errors %}<td>{{form.errors}}</td>{% endif %}
+                </tr>
+            {% endfor %}
+        </table>
+        </div>
+        <button class="w3-margin-right w3-button-small w3-round-large diy-button diy-green" type="submit">Submit</button>
+
+         <a href="{% url 'account_details' account.id %}">
+            <button class="w3-button-small w3-round-large diy-button diy-red">Cancel</button></a>
+    </form>
+
+</div>
+
+{% endblock content %}
+
+{% block help_content %}
+<p>
+    <b>Portfolio Details</b>.  This somewhat busy page is likely the most important.   The main summary is the first line,
+    it has the total funding and the total funds redeemed.  That is what I refer to as the Effective Cost.
+</p>
+<h4>Return vs Cost</h4>
+<b>Inflated cost</b>,  takes into account
+    what inflation does to the value of your funds.   A 10K investment overtime should continually drop since inflation
+    eats away at the value.   <b>Effective Cost</b> Is the total of Invested Funds less any dividends withdrawn regardless
+    of inflation.  It should be higher than the value, or you are really loosing money.   Lastly <b>Value</b> is the
+    actual value,  again regardless of inflation.
+<h4>Equity Summary</h4>
+This table is any equity you ever had in this portfolio.   It has the current share
+<h4>Portfolio Transaction</h4>
+This is the pertinent activities.  I don't include dividends, but you can see them as well as historic prices by selecting
+the equity in the equity summary table.
+{% endblock %}

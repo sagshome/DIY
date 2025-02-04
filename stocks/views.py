@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 
+from typing import List, Dict
 from dateutil.relativedelta import relativedelta
 
 from pandas import DataFrame, to_datetime
@@ -242,7 +243,8 @@ class AccountTableView(ContainerTableView):
                 'equities': elist,
                 'view_type': 'Data',
                 'equity_count': elist.count(),
-                'can_reconcile': True
+                'can_reconcile': True,
+                'object_type': 'Account',
                 }
 
 
@@ -272,6 +274,7 @@ class PortfolioTableView(ContainerTableView):
                 'equities': elist,
                 'view_type': 'Data',
                 'equity_count': elist.count(),
+                'object_type': 'Portfolio',
                 'can_reconcile': False
                 }
 
@@ -334,7 +337,8 @@ class PortfolioDetailView(ContainerDetailView):
                 'funded': funded,
                 'redeemed': abs(redeemed),
                 'view_type': 'Chart',
-                'equity_list_data': json.loads(self.equity_data(p).to_json(orient='records'))
+                'equity_list_data': json.loads(self.equity_data(p).to_json(orient='records')),
+                'object_type': 'Portfolio',
                 }
 
 
@@ -373,7 +377,8 @@ class AccountDetailView(ContainerDetailView):
                 'funded': funded,
                 'redeemed': redeemed,
                 'view_type': 'Chart',
-                'equity_list_data': json.loads(self.equity_data(account).to_json(orient='records'))
+                'equity_list_data': json.loads(self.equity_data(account).to_json(orient='records')),
+                'object_type': 'Account',
                 }
 
 
@@ -456,12 +461,17 @@ class TransactionEdit(LoginRequiredMixin, UpdateView):
         return super().get_object(queryset=Transaction.objects.filter(user=self.request.user))
 
     def get_success_url(self):
-        return reverse('account_details', kwargs={'pk': self.object.account.id})
+        try:
+            url = self.request.POST["success_url"]
+        except AttributeError:
+            url = reverse('account_details', kwargs={'pk': self.object.account.id})
+        return url
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Edit'
         context['account'] = context['object'].account
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
         return context
 
     def dispatch(self, request, *args, **kwargs):
@@ -946,36 +956,41 @@ def account_equity_compare(request, pk, orig_id, compare_id):
 
 
 @login_required
-def reconcile(request, pk):
-    def set_initial():
-
+def reconcile_value(request, pk):
+    """
+    Does not seem to be a standard way to do this,  so I will need to use a non-generic View
+    """
+    def set_initial() -> List[Dict]:
+        """
+        Build the list of dictionaries for the forms based on existing data
+        """
         first_value = FundValue.objects.filter(fund__symbol=account.f_key).earliest('date')
         last_value = FundValue.objects.filter(fund__symbol=account.f_key).latest('date')
 
-        funded = dict(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')). \
+        funded = dict(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')).
                       values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
-        redeemed = dict(account.transactions.filter(xa_action=Transaction.REDEEM).annotate(month=TruncMonth('date')). \
+        redeemed = dict(account.transactions.filter(xa_action=Transaction.REDEEM).annotate(month=TruncMonth('date')).
                         values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
 
-        initial = []
+        result = []
         for redeemed_key in redeemed.keys():
             if redeemed_key > last_value.date:
-                initial.append({'date': redeemed_key, 'reported_date': redeemed_key, 'value': 0, 'source': None,
-                                'deposited': 0, 'withdrawn': redeemed[redeemed_key]})
+                result.append({'date': redeemed_key, 'reported_date': redeemed_key, 'value': 0, 'source': None,
+                               'deposited': 0, 'withdrawn': redeemed[redeemed_key]})
 
         for record in FundValue.objects.filter(fund__symbol=account.f_key).order_by('-date'):
             this_funded = funded[record.date] if record.date in funded else 0
             this_redeemed = redeemed[record.date] if record.date in redeemed else 0
-            initial.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name,
-                            'deposited': int(this_funded), 'withdrawn': int(this_redeemed)})
+            result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name,
+                           'deposited': int(this_funded), 'withdrawn': int(this_redeemed)})
 
         for funded_key in funded.keys():
             if funded_key < first_value.date:
-                initial.append({'date': funded_key, 'reported_date': funded_key, 'value': 0, 'source': None,
-                                'deposited': funded[funded_key], 'withdrawn': 0})
-        return initial
+                result.append({'date': funded_key, 'reported_date': funded_key, 'value': 0, 'source': None,
+                               'deposited': funded[funded_key], 'withdrawn': 0})
+        return result
 
-    account = get_object_or_404(Account, pk=pk, user=request.user)
+    account = get_object_or_404(Account, pk=pk, account_type='Value', user=request.user)
     if request.method == 'POST':
         initial = set_initial()
         formset = SimpleReconcileFormSet(request.POST)
@@ -984,7 +999,7 @@ def reconcile(request, pk):
             for form in formset:
                 if as_dict[form.cleaned_data['date']]['reported_date'] != form.cleaned_data['reported_date'] or \
                         as_dict[form.cleaned_data['date']]['value'] != form.cleaned_data['value']:
-                    logger.debug('Change detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
+                    logger.debug('Change date or value detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
                     try:
                         fund_value = FundValue.objects.get(fund__symbol=account.f_key, date=form.cleaned_data['date'])
                     except FundValue.DoesNotExist:
@@ -994,6 +1009,7 @@ def reconcile(request, pk):
                     fund_value.real_date = form.cleaned_data['reported_date']
                     fund_value.source = DataSource.USER.value
                     fund_value.save()
+
                 if as_dict[form.cleaned_data['date']]['deposited'] != form.cleaned_data['deposited']:
                     diff = form.cleaned_data['deposited'] - as_dict[form.cleaned_data['date']]['deposited']
                     # Case 1 - original was 0,  just make a deposit record
@@ -1041,8 +1057,48 @@ def reconcile(request, pk):
 
     initial = set_initial()  # This is called twice on POST since I may have changed the data.
     formset = SimpleReconcileFormSet(initial=initial)
-    return render(request, 'stocks/reconciliation.html', {'formset': formset, 'account': account})
+    return render(request, 'stocks/value_reconciliation.html', {'formset': formset, 'account': account})
 
+@login_required
+def reconcile_cash(request, pk):
+    """
+    Does not seem to be a standard way to do this,  so I will need to use a non-generic View
+    """
+    def set_initial() -> List[Dict]:
+        """
+        Build the list of dictionaries for the forms based on existing data
+        """
+        result = []
+        for record in FundValue.objects.filter(fund__symbol=account.f_key).order_by('-date'):
+            result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name})
+        return result
+
+    account = get_object_or_404(Account, pk=pk, account_type='Cash', user=request.user)
+    if request.method == 'POST':
+        initial = set_initial()
+        formset = SimpleCashReconcileFormSet(request.POST)
+        if formset.is_valid():
+            as_dict = {d['date']: d for d in initial}
+            for form in formset:
+                if as_dict[form.cleaned_data['date']]['reported_date'] != form.cleaned_data['reported_date'] or \
+                        as_dict[form.cleaned_data['date']]['value'] != form.cleaned_data['value']:
+                    logger.debug('Change date or value detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
+                    try:
+                        fund_value = FundValue.objects.get(fund__symbol=account.f_key, date=form.cleaned_data['date'])
+                    except FundValue.DoesNotExist:
+                        fund = Equity.objects.get(symbol=account.f_key)
+                        fund_value = FundValue(fund=fund, date=form.cleaned_data['date'])
+                    fund_value.value = form.cleaned_data['value']
+                    fund_value.real_date = form.cleaned_data['reported_date']
+                    fund_value.source = DataSource.USER.value
+                    fund_value.save()
+            account.reset()
+        else:
+            pass
+
+    initial = set_initial()  # This is called twice on POST since I may have changed the data.
+    formset = SimpleCashReconcileFormSet(initial=initial)
+    return render(request, 'stocks/cash_reconciliation.html', {'formset': formset, 'account': account})
 
 @login_required
 def reconciliation(request, a_pk, date_str):

@@ -8,7 +8,7 @@
             {% if account.account_type == 'Investment' %}
               <a href="{% url 'account_table' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
             {% else %}
-               <a href="{% url 'account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+               <a href="{% url 'value_account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
             {% endif %}
 
         </td>

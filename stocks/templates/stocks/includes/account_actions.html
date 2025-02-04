@@ -16,8 +16,10 @@
             {% elif view_type == 'Chart' %}
                 {% if account.account_type == 'Investment' %}
                     <a href="{% url 'account_table' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-                {% else %}
-                    <a href="{% url 'account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+                {% elif account.account_type == 'Value' %}
+                    <a href="{% url 'value_account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+                {% elif account.account_type == 'Cash' %}
+                    <a href="{% url 'cash_account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
                 {% endif %}
             {% endif %}
 
@@ -31,7 +33,7 @@
                 {% if account.account_type == 'Value' %}
                     <a href="{% url 'set_value' account.id %}">
                             <button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
-                    <a href="{% url 'account_reconcile' account.id %}">
+                    <a href="{% url 'value_account_reconcile' account.id %}">
                             <button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
                 {% else %}
                     <a href="{% url 'transaction_add' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>

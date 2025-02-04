@@ -11,7 +11,7 @@
                     {% if account.account_type == 'Investment' %}
                         <a href="{% url 'account_table' account.id %}">{{account.name}}</a>
                     {% else %}
-                        <a href="{% url 'account_reconcile' account.id %}">{{account.name}}</a>
+                        <a href="{% url 'value_account_reconcile' account.id %}">{{account.name}}</a>
                     {% endif %}
                 </td>
             {% endfor %}

@@ -133,7 +133,7 @@ class TransactionForm(forms.ModelForm):
         self.fields['price'].required = False
         self.fields['value'].required = False
         self.fields['quantity'].required = False
-        self.fields['equity'].queryset = Equity.objects.all().order_by('symbol')
+        self.fields['equity'].queryset = Equity.objects.filter(equity_type='Equity').order_by('symbol')
 
     def clean_equity(self):
         account = self.cleaned_data['account']
@@ -169,7 +169,6 @@ class TransactionForm(forms.ModelForm):
 
 class TransactionSetValueForm(TransactionForm):
 
-
     class Meta:
         model = Transaction
         fields = ("user", "account", "xa_action", "equity", "real_date", "price", "quantity", "value", "repeat", "number")
@@ -199,6 +198,10 @@ class TransactionEditForm(TransactionForm):
         self.fields["real_date"].widget.attrs['readonly'] = True
         self.fields['xa_action'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["xa_action"].widget.attrs['readonly'] = True
+        self.fields['equity'].widget.attrs['style'] = 'background-color:Wheat'
+        self.fields["equity"].widget.attrs['readonly'] = True
+        self.fields['xa_action'].choices = [(self.initial['xa_action'], Transaction.TRANSACTION_MAP[self.initial['xa_action']])]
+        self.fields['equity'].queryset = Equity.objects.filter(id=self.initial['equity'])
 
 
 class ManualUpdateEquityForm(forms.Form):
@@ -238,7 +241,6 @@ class ManualUpdateEquityForm(forms.Form):
 
         self.fields['report_date'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["report_date"].widget.attrs['readonly'] = True
-
 
     def clean(self):
         cleaned_data = super().clean()
@@ -336,6 +338,39 @@ class ReconciliationForm(forms.Form):
 ReconciliationFormSet = formset_factory(ReconciliationForm, extra=0)
 
 
+class SimpleCashReconcileForm(forms.Form):
+    '''
+    Simple form to update funding, redeeming and values for non-investment accounts.
+    '''
+    date = forms.DateField()
+    reported_date = forms.DateField(required=True)
+    value = forms.FloatField(required=True)
+    source = forms.CharField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["date"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
+        self.fields["date"].widget.attrs['readonly'] = True
+        self.fields["reported_date"].widget.attrs['style'] = 'width:80px;'
+        self.fields["value"].widget.attrs['style'] = 'width:80px;'
+        self.fields["source"].widget.attrs['style'] = 'width:150px;background-color:Wheat'
+        self.fields["source"].widget.attrs['readonly'] = True
+
+    def clean_reported_date(self):
+        reported_date = self.cleaned_data['reported_date']
+        normalized_date = self.cleaned_data['date']
+        if reported_date.month != normalized_date.month or reported_date.year != normalized_date.year:
+            raise ValidationError(f"Record {normalized_date} - Reported Date {reported_date}must be in the same month", code="Incorrect Field")
+        if reported_date.year < 2000:
+            raise ValidationError(f"Reported Date {reported_date} must be in this century (2000+)", code="Incorrect Field")
+        return self.cleaned_data['reported_date']
+
+    def clean_value(self):
+        if self.cleaned_data['value'] < 0:
+            raise ValidationError('Value must be a positive value')
+        return self.cleaned_data['value']
+
+
 class SimpleReconcileForm(forms.Form):
     '''
     Simple form to update funding, redeeming and values for non-investment accounts.
@@ -384,3 +419,4 @@ class SimpleReconcileForm(forms.Form):
 
 
 SimpleReconcileFormSet = formset_factory(SimpleReconcileForm, extra=0)
+SimpleCashReconcileFormSet = formset_factory(SimpleCashReconcileForm, extra=0)

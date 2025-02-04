@@ -210,7 +210,7 @@
 
             <div class="w3-row">
                 <div class="w3-col w3-container m2">
-                    <input type="submit" class="w3-button-small w3-round-large diy-button diy-green" name="submit-type" value="Submit">
+                    <button class="w3-button-small w3-round-large subtle diy-button diy-green" type="submit">Submit</button>
                 </div>
                 {% if account %}
                     <div class="w3-col w3-container m2">
@@ -220,8 +220,8 @@
                     </div>
                 {% endif %}
                 <div class="w3-col w3-container m2">
-                    {% if view_verb == 'Edit' %}
-                        <input type="submit" class="w3-button-small w3-round-large diy-long diy-button diy-green" name="submit-type" value="Add Another">
+                    {% if view_verb == 'Add' %}
+                        <button class="w3-button-small w3-round-large subtle diy-auto diy-green" name="submit-type" value="Add Another" type="submit">Add Another</button>
                     {% endif %}
                 </div>
             </div>

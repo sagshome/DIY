@@ -384,8 +384,16 @@ class Equity(models.Model):
 
     def __str__(self):
         if self.equity_type == 'Value' or self.equity_type == 'Cash':
-            account_id = int(self.symbol.split('-')[1])
-            return Account.objects.get(id=account_id).name
+            account_key = self.symbol.split('-')[1]
+            account_key = account_key.split(':')[0]
+            try:
+                account_id = int(account_key)
+                try:
+                    return Account.objects.get(id=account_id).name
+                except Account.DoesNotExist:
+                    pass  # Just use the default string
+            except ValueError:
+                pass # Just use the default string
         return f'{self.symbol} ({self.region}) - {self.name}'
 
     def save(self, *args, **kwargs):
@@ -783,9 +791,18 @@ class FundValue(models.Model):
         """
         Fix any missing dates (called with save)
         """
+        try:
+            earlier_date = FundValue.objects.filter(fund=self.fund, date__lt=self.date).exclude(source=DataSource.ESTIMATE.value).latest('date')
+        except FundValue.DoesNotExist:
+            earlier_date = None
 
-        earlier_date = FundValue.objects.filter(fund=self.fund, date__lt=self.date).exclude(source=DataSource.ESTIMATE.value).latest('date')
-        later_date = FundValue.objects.filter(fund=self.fund, date__gt=self.date).exclude(source=DataSource.ESTIMATE.value).earliest('date')
+        try:
+            later_date = FundValue.objects.filter(fund=self.fund, date__gt=self.date).exclude(source=DataSource.ESTIMATE.value).earliest('date')
+        except FundValue.DoesNotExist:
+            try:
+                later_date = later_date = FundValue.objects.filter(fund=self.fund, date__gt=self.date).earliest('date')
+            except FundValue.DoesNotExist:
+                later_date = None
 
         if earlier_date:
             FundValue.plug_holes(earlier_date, self)
@@ -1265,7 +1282,7 @@ class Account(BaseContainer):
             try:
                 first = FundValue.objects.filter(fund=equity).earliest('date').date
             except FundValue.DoesNotExist:
-                logger.error('Transaction/Funds set %s:  No data' % self)
+                logger.error('Transaction/Funds %s:  No data' % self)
                 return df
 
         trades: QuerySet = xas.filter(xa_action__in=Transaction.SHARE_TRANSACTIONS).exclude(xa_action=Transaction.REDIV).order_by('date')
