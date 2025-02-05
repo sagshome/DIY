@@ -43,12 +43,12 @@
                 <tr>
                     {% for field in form.visible_fields %}
                         {% if field.name == 'Equity' %}<td class="w3-small w3-left-align">{{ field.value}}</td>{% endif %}
-                        {% if field.name == 'Cost' %}<td class="w3-small w3-right-align">{{ field.value }}</td>{% endif %}
-                        {% if field.name == 'Value' %}<td class="w3-small w3-right-align">{{ field.value }}</td>{% endif %}
-                        {% if field.name == 'Shares' %}<td class="w3-small w3-right-align">{{ field.value }}</td>{% endif %}
+                        {% if field.name == 'Cost' %}<td class="w3-small w3-right-align">${{ field.value | floatformat:'2g' }}</td>{% endif %}
+                        {% if field.name == 'Value' %}<td class="w3-small w3-right-align">${{ field.value | floatformat:'2g' }}</td>{% endif %}
+                        {% if field.name == 'Shares' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
                         {% if field.name == 'Price' %}<td class="w3-small w3-right-align">{{ field  }}</td>{% endif %}
                         {% if field.name == 'Dividends' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
-                        {% if field.name == 'TotalDividends' %}<td class="3-small w3-right-align">{{ field.value }}</td>{% endif %}
+                        {% if field.name == 'TotalDividends' %}<td class="w3-small w3-right-align">{{ field.value | floatformat:'2g' }}</td>{% endif %}
                     {% endfor %}
                     <td>
                         {% if form.errors %}

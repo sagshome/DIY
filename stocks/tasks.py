@@ -49,3 +49,11 @@ def add_to_cache(user_id):
         _ = portfolio.p_pd  # Just to the math which will cache the results
         _ = portfolio.e_pd
 
+
+@shared_task
+def equity_new_estimates(equity_id):
+    try:
+        equity = Equity.objects.get(id=equity_id)
+        equity.fill_equity_value_holes()
+    except Equity.DoesNotExist:
+        logger.error('Failed to update estimates for equity id %s' % equity_id)

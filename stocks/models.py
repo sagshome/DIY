@@ -58,6 +58,7 @@ class DataSource(Enum):
     ADMIN = 10  # !
     ADJUSTED = 20 # F
     API = 30  # A
+    RECONCILED = 35
     UPLOAD = 40  # U
     USER = 50  # M
     ESTIMATE = 60  # E
@@ -80,6 +81,9 @@ class DataSource(Enum):
             return 'M'
         if value == cls.ESTIMATE.value:
             return 'E'
+        if value == cls.RECONCILED.value:
+            return 'R'
+
         return '.'
 
 

@@ -155,12 +155,12 @@ class TransactionForm(forms.ModelForm):
         account = self.cleaned_data['account']
         if account.account_type == 'Investment':
             if self.cleaned_data['xa_action'] in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES] and not self.cleaned_data['quantity']:
-                raise ValidationError("This action require an quantity", code="Empty Field")
+                raise ValidationError("This action requires an quantity", code="Empty Field")
         return self.cleaned_data['quantity']
 
     def clean_value(self):
         if self.cleaned_data['value'] is not None:
-            if self.cleaned_data['value'] <= 0:
+            if self.cleaned_data['value'] <= 0 and self.cleaned_data['xa_action'] != Transaction.SELL:
                 raise ValidationError("Value must be non-zero and positive", code="Incorrect Field")
         elif self.cleaned_data['xa_action'] not in [Transaction.BUY, Transaction.SELL, Transaction.REDIV, Transaction.FEES, Transaction.VALUE, Transaction.BALANCE] and not self.cleaned_data['value']:
             raise ValidationError("This action require an value", code="Empty Field")
@@ -283,19 +283,12 @@ class ReconciliationForm(forms.Form):
     equity_id = forms.IntegerField(widget=forms.HiddenInput(), required=True)
     Equity = forms.CharField(required=False, widget=forms.TextInput())
 
-    Cost = forms.DecimalField(required=False)
-    Value = forms.DecimalField(required=False)
-    Shares = forms.DecimalField(required=False)
-    Bought = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    Bought_Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    Reinvested = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    Reinvested_Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    Sold = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    Sold_Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-
-    Price = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    Dividends = forms.DecimalField(required=False, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
-    TotalDividends = forms.DecimalField(required=False, decimal_places=2)
+    Cost = forms.FloatField(required=False)
+    Value = forms.FloatField(required=False)
+    Shares = forms.FloatField(required=False, validators=[MinValueValidator(0)])
+    Price = forms.FloatField(required=False, validators=[MinValueValidator(0)])
+    Dividends = forms.FloatField(required=False, validators=[MinValueValidator(0)])
+    TotalDividends = forms.FloatField(required=False, validators=[MinValueValidator(0)])
 
     def data_changed(self, initial, key1,  key2=None):
         new_key1 = 0 if key1 not in self.cleaned_data or not self.cleaned_data[key1] else self.cleaned_data[key1]
@@ -326,11 +319,11 @@ class ReconciliationForm(forms.Form):
                 self.fields["Price"].widget.attrs['style'] = 'width:95px;text-align: right;'
                 self.fields["Dividends"].widget.attrs['style'] = 'width:95px;text-align: right;'
 
-        for field in ["Bought", "Bought_Price", "Reinvested", "Reinvested_Price", "Sold", "Sold_Price"]:
-            self.fields[field].widget.attrs['style'] = 'width:95px;text-align: right;'
-        for field in ['Cost', 'Value', 'Shares', 'TotalDividends']:
+        for field in ['Cost', 'Value', 'TotalDividends']:
             self.fields[field].widget.attrs['readonly'] = True
             self.fields[field].widget.attrs['style'] = 'width:95px;text-align: right;background-color:Wheat;'
+
+        self.fields['Shares'].widget.attrs['style'] = 'width:95px;text-align: right;'
         self.fields["Equity"].widget.attrs['readonly'] = True
         self.fields["Equity"].widget.attrs['style'] = 'text-align: left;background-color:Wheat;'
 

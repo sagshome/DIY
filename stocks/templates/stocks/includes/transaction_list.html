@@ -28,17 +28,17 @@
                 </td>
                 <td class="w3-left-align">{{x.action_str}}</td>
                 <td class="w3-left-align">{% if x.equity %}{{x.equity.symbol}} {% endif %}</td>
-                <td class="w3-right-align">{% if x.currency_value %} ${{x.currency_value|floatformat:'0g'}}{% endif %}</td>
+                <td class="w3-right-align">{% if x.currency_value %} ${{x.currency_value|floatformat:'2g'}}{% endif %}</td>
                 <td class="w3-left-align w3-small">
                     {% if x.equity %}
                         {% if x.price == 0 %}
                             {% if x.xa_action == 4 %}
-                                {{x.quantity|floatformat:'1g'}} shares SOLD for funding
+                                {{x.quantity|floatformat:'2g'}} shares SOLD for funding
                             {% else %}
-                                {{x.quantity|floatformat:'1g'}} shares split/reinvest (no cost)
+                                {{x.quantity|floatformat:'2g'}} shares split/reinvest (no cost)
                             {% endif %}
                         {% else %}
-                            {{x.quantity|floatformat:'1g'}} shares at ${{x.price|floatformat:'2g'}}
+                            {{x.quantity|floatformat:'2g'}} shares at ${{x.price|floatformat:'2g'}}
                         {% endif %}
                     {% endif %}
                 </td>
@@ -60,17 +60,17 @@
             </td>
             <td>{{x.action_str}}</td>
             <td>{% if x.equity %}{{x.equity.symbol}} {% endif %}</td>
-            <td class="w3-right-align">{% if x.value %} ${{x.value|floatformat:'0g'}}{% endif %}</td>
+            <td class="w3-right-align">{% if x.value %} ${{x.value|floatformat:'2g'}}{% endif %}</td>
             <td>
                 {% if x.equity %}
                     {% if x.price == 0 %}
                         {% if x.xa_action == 4 %}
-                            {{x.quantity|floatformat:'1g'}} shares SOLD for funding
+                            {{x.quantity|floatformat:'2g'}} shares SOLD for funding
                         {% else %}
-                            {{x.quantity|floatformat:'1g'}} shares split/reinvest (no cost)
+                            {{x.quantity|floatformat:'2g'}} shares split/reinvest (no cost)
                         {% endif %}
                     {% else %}
-                        {{x.quantity|floatformat:'1g'}} shares at ${{x.price|floatformat:'2g'}}
+                        {{x.quantity|floatformat:'2g'}} shares at ${{x.price|floatformat:'2g'}}
                     {% endif %}
                 {% endif %}
             </td>

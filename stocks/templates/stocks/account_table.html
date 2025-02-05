@@ -51,20 +51,29 @@
 </script>
 
 <h2 class="w3-margin">Data view for {{object_type}}:{{account.name}}</h2>
-{% include 'stocks/includes/account_actions.html' %}
-{% if account_list  %}
-    <h2>Account(s) List</h2>
-    <div class="w3-row>">
-        <table class="w3-table w3-striped w3-boarder w3-padding-top w3-padding-bottom">
-            {% include 'stocks/includes/account_header.html' %}
-            {% include 'stocks/includes/account_list.html' %}
-        </table>
+<div class="w3-cell-row w3-border">
+    <div class="w3-cell w3-border">
+        {% include 'stocks/includes/account_actions.html' %}
+        {% if account_list  %}
+            <h2>Account(s) List</h2>
+            <div class="w3-row>">
+                <table class="w3-table w3-striped w3-boarder w3-padding-top w3-padding-bottom">
+                    {% include 'stocks/includes/account_header.html' %}
+                    {% include 'stocks/includes/account_list.html' %}
+                </table>
+            </div>
+        {% endif %}
+        <div class="w3-container">
+            {% include 'stocks/includes/value_summary_list.html' %}
+        </div>
     </div>
-{% endif %}
-
-<div class="w3-container">
-    {% include 'stocks/includes/value_summary_list.html' %}
+    {% if xas %}
+        <div>
+            {% include "stocks/includes/transaction_list.html" %}
+        </div>
+    {% endif %}
 </div>
+
 
 {% endblock content %}
 

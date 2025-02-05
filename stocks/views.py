@@ -36,6 +36,7 @@ from django.views.generic.dates import DateMixin
 from django.http import JsonResponse
 
 from .models import Equity, Account, DataSource, Transaction, EquityEvent, EquityValue, Portfolio, BaseContainer, FundValue, ACCOUNT_COL
+from .tasks import equity_new_estimates
 from .forms import *
 from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
 from base.utils import DIYImportException, normalize_today, normalize_date, DateUtil
@@ -245,6 +246,7 @@ class AccountTableView(ContainerTableView):
                 'equity_count': elist.count(),
                 'can_reconcile': True,
                 'object_type': 'Account',
+                'xas': a.transactions.all().order_by('-date'),
                 }
 
 
@@ -1116,6 +1118,10 @@ def reconciliation(request, a_pk, date_str):
     account.e_pd['Date'] = account.e_pd['Date'].dt.strftime('%b-%Y')
     initial = account.e_pd.loc[account.e_pd['Date'] == pd_date][['Equity', 'Object_ID', 'Cost', 'Value', 'Shares', 'Dividends', 'TotalDividends', 'Price']].sort_values(by='Value', ascending=False).to_dict(orient='records')
     for record in initial:
+        record['Cost'] = round(record['Cost'], 2)
+        record['Value'] = round(record['Value'], 2)
+        record['Shares'] = round(record['Shares'], 2)
+        record['Price'] = round(record['Price'], 3)
         equity = Equity.objects.get(id=record['Object_ID'])
         record['Equity'] = equity
         record['Value'] = round(record['Value'], 2)
@@ -1134,22 +1140,45 @@ def reconciliation(request, a_pk, date_str):
     if request.method == 'POST':
         formset = ReconciliationFormSet(request.POST)
         if formset.is_valid():
+            source = DataSource.RECONCILED.value
             for form in formset:
                 equity = Equity.objects.get(id=form.cleaned_data['equity_id'])
                 logger.debug('Processing equity %s' % equity)
                 for entry in initial:  # See if this form changed
                     if entry['equity_id'] == equity.id:
-                        if form.data_changed(entry, 'Bought', 'Bought_Price'):
-                            pass
-                        if form.data_changed(entry, 'Reinvested', 'Reinvested_Price'):
-                            pass
-                        if form.data_changed(entry, 'Sold', 'Sold_Price'):
-                            pass
+                        if form.data_changed(entry, 'Shares'):
+                            # Big assume,   this was a REDIV since they did not just make a transaction
+                            orig = entry['Shares']
+                            transaction = Transaction(equity=equity, account=account, user=request.user, date=view_date, price=0, value=0, esimated=True)
+                            if entry['Shares'] > form.cleaned_data['Shares']:
+                                transaction.quantity = entry['Shares'] - form.cleaned_data['Shares']
+                                transaction.xa_action = Transaction.SELL
+                            else:
+                                transaction.quantity = form.cleaned_data['Shares'] - entry['Shares']
+                                transaction.xa_action = Transaction.BUY
+                            transaction.save()
                         if form.data_changed(entry, 'Price'):
-                            pass
+                            try:
+                                ev = EquityValue.objects.get(date=view_date, equity=equity)
+                            except EquityValue.DoesNotExist:
+                                ev = EquityValue(date=view_date, source=DataSource.ESTIMATE.value)
+                            if ev.source > DataSource.RECONCILED.value:
+                                ev.source = DataSource.RECONCILED.value
+                                ev.price = form.cleaned_data['Price']
+                                ev.save()
+                                equity_new_estimates.delay(equity.id)  # Update the estimated recrods.
                         if form.data_changed(entry, 'Dividends'):
-                            pass
-                        break
+                            try:
+                                event = EquityEvent.objects.get(date=view_date, event_type='Dividend', equity=equity)
+                            except EquityEvent.DoesNotExist:
+                                event = EquityEvent(date=view_date, event_type='Dividend', source=DataSource.ESTIMATE.value)
+                            if event.source > DataSource.RECONCILED.value:
+                                event.source = DataSource.RECONCILED.value
+                                event.value = form.cleaned_data['Dividends']
+                                event.save()
+            account.reset()
+            return HttpResponseRedirect(reverse('account_table', kwargs={'pk': account.id}))
+
         else:
             formset_errors = formset.errors
     else:

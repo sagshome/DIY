@@ -151,7 +151,6 @@
         <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
             <input type="hidden" name="success_url" value="{{ success_url }}">
-
             {% for error in form.non_field_errors %}
                 <div class="w3-row w3-red">
                     {{ error }}
@@ -226,8 +225,4 @@
                 </div>
             </div>
         </form>
-
-        <div id="documentation" class="pad-md">
-            Add a Fund, Buy, Sell or Redeem transaction for {{account.name}}
-        </div>
 {% endblock content %}
