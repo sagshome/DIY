@@ -6,6 +6,7 @@
                 <th class="w3-container w3-small w3-left-align">Date</th>
                 <th class="w3-container w3-small w3-right-align ">Total Cost</th>
                 <th class="w3-container w3-small w3-right-align">Total Value</th>
+                <th class="w3-container w3-small w3-right-align">Cash on Hand</th>
                 <th class="w3-container w3-small w3-right-align">Total Dividends</th>
                 <th class="w3-container w3-small w3-right-align">Deposits</th>
                 <th class="w3-container w3-small w3-right-align">Withdraws</th>
@@ -17,6 +18,7 @@
                     <td class="w3-left-align w3-small ">{{ item.Date }}</td>
                     <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
                     <td class="w3-right-align w3-small">${{ item.Value | floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small">${{ item.Cash | floatformat:'0g'}}</td>
                     <td class="w3-right-align w3-small">${{ item.TotalDividends | floatformat:'0g'}}</td>
                     <td class="w3-right-align w3-small">${{ item.Funds| floatformat:'0g'}}</td>
                     <td class="w3-right-align w3-small">${{ item.Redeemed | floatformat:'0g'}}</td>

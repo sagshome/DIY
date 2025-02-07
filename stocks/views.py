@@ -201,7 +201,6 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
     def container_data(myobj: BaseContainer):
         """
         Produce a trimmed down dataframe from the first to the last record
-
         """
         end = myobj.end
         equity_data = myobj.e_pd.groupby('Date').agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).reset_index()
@@ -230,7 +229,6 @@ class AccountTableView(ContainerTableView):
         """
         context = super().get_context_data(**kwargs)
         a: Account = context['account']
-        data = list()
         elist = a.equities.order_by('symbol')
         summary_data = self.container_data(a)
         try:
@@ -411,7 +409,16 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
     form_class = AccountCloseForm
 
     def get_success_url(self):
-        return reverse('stocks_main', kwargs={})
+        try:
+            url = self.request.POST["success_url"]
+        except AttributeError:
+            url = reverse('stocks_main', kwargs={})
+        return url
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        return context
 
     def get_initial(self):
         super().get_initial()
@@ -430,10 +437,7 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
         # Access the updated form instance
         updated_data = form.cleaned_data
         funded = self.object.get_pattr('Funds', normalize_date(self.object.end))
-        if self.object.account_type == 'Value':
-            value = self.object.get_pattr('Redeemed', normalize_date(self.object.end))
-        else:
-            value = self.object.get_eattr('Value', normalize_date(self.object.end))
+        value = self.object.get_eattr('Value', normalize_date(self.object.end))
 
         if value != 0:
             if updated_data['accounts']:
@@ -443,7 +447,7 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
                                            xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
             else:
                 Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
-                                       xa_action=Transaction.REDEEM, account=self.object.account)
+                                       xa_action=Transaction.REDEEM, account=self.object)
         return super().form_valid(form)
 
 
@@ -644,62 +648,31 @@ def add_transaction(request, account_id):
     if request.method == 'POST':
         form = TransactionForm(request.POST, initial={'user': request.user, 'account': account })
         if form.is_valid():
-            action = form.cleaned_data['xa_action']
-            if action in [Transaction.FUND, Transaction.REDEEM, Transaction.TRANS_IN, Transaction.TRANS_OUT]:
-                value = form.cleaned_data['value']
-                if (action in [Transaction.FUND, Transaction.TRANS_IN] and value < 0) or (action in [Transaction.REDEEM, Transaction.TRANS_OUT] and value > 0):
-                    value = value * -1
-                new = Transaction.objects.create(user=request.user,
-                                                 real_date=form.cleaned_data['real_date'],
-                                                 price=0,
-                                                 quantity=0,
-                                                 value=value,
-                                                 xa_action=form.cleaned_data['xa_action'],
-                                                 account=account)
-
-            elif (action == Transaction.BUY) or (action == Transaction.SELL):
-                quantity = form.cleaned_data['quantity']
-                if (action == Transaction.BUY and quantity < 0) or (action == Transaction.SELL and quantity > 0):
-                    quantity = quantity * -1
-
-                new = Transaction.objects.create(user=request.user,
-                                                 equity=form.cleaned_data['equity'],
-                                                 real_date=form.cleaned_data['real_date'],
-                                                 price=form.cleaned_data['price'],
-                                                 quantity=quantity,
-                                                 xa_action=form.cleaned_data['xa_action'],
-                                                 account=account)
-            elif (action == Transaction.REDIV):
-                quantity = form.cleaned_data['quantity']
-
-                new = Transaction.objects.create(user=request.user,
-                                                 equity=form.cleaned_data['equity'],
-                                                 real_date=form.cleaned_data['real_date'],
-                                                 price=0,
-                                                 quantity=quantity,
-                                                 xa_action=form.cleaned_data['xa_action'],
-                                                 account=account)
-            elif (action == Transaction.FEES):
-                quantity = form.cleaned_data['quantity']
-
-                new = Transaction.objects.create(user=request.user,
-                                                 equity=form.cleaned_data['equity'],
-                                                 real_date=form.cleaned_data['real_date'],
-                                                 price=0,
-                                                 quantity=quantity,
-                                                 xa_action=Transaction.SELL,
-                                                 account=account)
-
+            equity = form.cleaned_data['equity'] if 'equity' in form.cleaned_data else None
+            transaction = Transaction(user=request.user,
+                                      real_date=form.cleaned_data['real_date'],
+                                      price=form.cleaned_data['price'],
+                                      quantity=form.cleaned_data['quantity'],
+                                      value=form.cleaned_data['value'],
+                                      xa_action=form.cleaned_data['xa_action'],
+                                      account=account,
+                                      equity=equity,
+                                      )
+            transaction.save()
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
-                equity = new.equity.id if new.equity else None
+                equity = transaction.equity.id if transaction.equity else None
                 form = TransactionForm(initial={'user': request.user,
                                                 'account': account,
                                                 'equity': equity,
-                                                'real_date': new.real_date,
-                                                'xa_action': new.xa_action})
+                                                'real_date': transaction.real_date,
+                                                'xa_action': transaction.xa_action})
+
             else:
                 account.reset()
-                return HttpResponseRedirect(form.cleaned_data['success_url'])
+                if 'success_url' in form.cleaned_data:
+                    return HttpResponseRedirect(form.cleaned_data['success_url'])
+                else:
+                    return HttpResponseRedirect(reverse('stocks_main', kwargs={}))
     else:  # Initial get
         form = TransactionForm(initial={'user': request.user,
                                         'account': account,
@@ -1061,6 +1034,7 @@ def reconcile_value(request, pk):
     formset = SimpleReconcileFormSet(initial=initial)
     return render(request, 'stocks/value_reconciliation.html', {'formset': formset, 'account': account})
 
+
 @login_required
 def reconcile_cash(request, pk):
     """
@@ -1101,6 +1075,7 @@ def reconcile_cash(request, pk):
     initial = set_initial()  # This is called twice on POST since I may have changed the data.
     formset = SimpleCashReconcileFormSet(initial=initial)
     return render(request, 'stocks/cash_reconciliation.html', {'formset': formset, 'account': account})
+
 
 @login_required
 def reconciliation(request, a_pk, date_str):

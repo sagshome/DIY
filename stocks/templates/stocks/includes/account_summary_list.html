@@ -57,7 +57,7 @@
                         {% else %}
                             Account <a class="d1y-blue" href="{% url 'account_details' item.Id %}"><b>{{ item.Name }}</b></a>
                             {% if item.Closed == 'Closed' %}
-                                 (<em>Closed</em>)
+                                 (<em>{{item.End}}</em>)
                             {% endif %}
                         {% endif %}
                     </td>

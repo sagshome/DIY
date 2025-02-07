@@ -124,7 +124,7 @@ EQUITY_COL = ['Date',
               ]
 # todo:  How do I do shares/Cost/Price for things that are transferred in/out.
 
-ACCOUNT_COL = ['Date', 'Funds', 'Redeemed', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
+ACCOUNT_COL = ['Date', 'Funds', 'Redeemed', 'Cash', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
 
 
 def currency_factor(exchange_date: date, input_currency: str, my_currency: str) -> float:
@@ -1164,7 +1164,7 @@ class Portfolio(BaseContainer):
     def p_pd(self) -> DataFrame:
         new = get_cached_dataframe(self.p_key)
         try:
-            if not new.any:
+            if not new.empty:
                 return new
         except AttributeError:
             pass  # get may return None
@@ -1182,7 +1182,7 @@ class Portfolio(BaseContainer):
     def e_pd(self) -> DataFrame:
         new = get_cached_dataframe(self.e_key)
         try:
-            if not new.any:
+            if not new.empty:
                 return new
         except AttributeError as e:
             pass   # get may return None
@@ -1277,7 +1277,6 @@ class Account(BaseContainer):
     def extend_equity_df(self, equity: Equity, df: DataFrame) -> DataFrame:
         """ New """
         dividends: Dict[date, float]
-        moneys: Dict[date, float]
         entry: EquityValue
         xas = self.transactions.filter(equity=equity)
         try:
@@ -1299,13 +1298,9 @@ class Account(BaseContainer):
         else:
             values = FundValue.objects.filter(fund=equity).order_by('date')
 
-        # Bank Accounts, todo: what about TRANS_IN,  TRANS_OUT
         funded = dict(xas.filter(xa_action__in=[Transaction.FUND,]).annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
         redeemed = dict(xas.filter(xa_action__in=[Transaction.REDEEM,]).annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
-
-        # equity_values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
         dividends = dict(EquityEvent.objects.filter(date__gte=first, equity=equity, event_type='Dividend').values_list('date', 'value'))
-        # moneys = dict(Transaction.objects.filter(date__gte=first, equity=equity, xa_action__in=[Transaction.FEES, Transaction.INTEREST]).values_list('date', 'value'))
 
         if len(redivs) > 0 and not self.managed:
             logger.error('Account %s has REDIVS but is not managed - The realized gains may be double counted')
@@ -1365,7 +1360,7 @@ class Account(BaseContainer):
             else:
                 this_price = entry.price
 
-            if shares < 1 and start_shares != 0:  # Do this once
+            if shares < 1 and start_shares != 0:  # Do this once, less than 1 because floats sometimes give crazy .000000001 values for 0
                 if shares:
                     logger.debug('%s:%s - %s Negative shares %s' % (self.name, equity, entry.date, shares))
                 value = entry.price * start_shares * cf if equity.equity_type == 'Equity' else value
@@ -1388,7 +1383,7 @@ class Account(BaseContainer):
     def e_pd(self) -> DataFrame:
         df = get_cached_dataframe(self.e_key)
         try:
-            if df.any:
+            if not df.empty:
                 return df
         except AttributeError:
             pass  # Get may return None
@@ -1421,7 +1416,7 @@ class Account(BaseContainer):
 
         df = get_cached_dataframe(self.p_key)
         try:
-            if not df.any:
+            if not df.empty:
                 return df
         except AttributeError:
             pass   # get may return None
@@ -1430,27 +1425,49 @@ class Account(BaseContainer):
         if not self.transactions:  # Account is new/empty
             return df
 
-        trades: QuerySet = self.transactions.filter(xa_action__in=[Transaction.FUND, Transaction.REDEEM]).order_by('date')
-        if not trades.exists():
-            logger.error('Transaction set:  No Funding/Withdraws in transaction data for %s' % self.name)
-            return df
-
-        this_date = trades.earliest('date').date
-        final_date = normalize_today()
-
+        this_date = self.transactions.earliest('date').date
+        final_date = normalize_date(self.end) if self.end else normalize_today()
+        xas = self.transactions
         xa_dates = list(self.transactions.values_list('date', flat=True).distinct())
-        funding = redeemed = 0
+        funding = redeemed = cash = effective = 0
+        last_date = None
         while this_date <= final_date:
+            new_effective = 0
             if this_date in xa_dates:
-                funds = trades.filter(xa_action=Transaction.FUND, date=this_date).aggregate(Sum('value'))['value__sum']
-                funding += funds if funds else 0
-                withdraw = trades.filter(xa_action=Transaction.REDEEM, date=this_date).aggregate(Sum('value'))['value__sum']
-                redeemed += withdraw if withdraw else 0
+                funds = xas.filter(xa_action=Transaction.FUND, date=this_date).aggregate(Sum('value'))['value__sum']
+                new_cash = xas.filter(xa_action=Transaction.INTEREST, date=this_date).aggregate(Sum('value'))['value__sum']
+                trans_in = xas.filter(xa_action=Transaction.TRANS_IN, date=this_date).aggregate(Sum('value'))['value__sum']
+                withdraw = xas.filter(xa_action=Transaction.REDEEM, date=this_date).aggregate(Sum('value'))['value__sum']
+                trans_out = xas.filter(xa_action=Transaction.TRANS_OUT, date=this_date).aggregate(Sum('value'))['value__sum']
+                delta = xas.filter(xa_action__in=[Transaction.BUY, Transaction.SELL], date=this_date).aggregate(Sum('value'))['value__sum']
 
-            df.loc[len(df.index)] = [this_date, funding, redeemed, 0]
+                funds = funds if funds else 0
+                new_cash = new_cash if new_cash else 0
+                trans_in = trans_in if trans_in else 0
+                withdraw = withdraw if withdraw else 0
+                trans_out = trans_out if trans_out else 0
+                delta = delta * -1 if delta else 0  # delta is used to calculate cash,  and since buy is + and sell is - when need to negate the results
+
+                funding += funds + trans_in
+                redeemed += withdraw + trans_out
+                cash += new_cash + funds - withdraw + delta
+                new_effective = new_cash + funds + trans_in - withdraw - trans_out
+            # Clear up floating errors
+            cash = 0 if cash < 1 else cash
+            logger.debug('%s %s %s %s' % (this_date, funding, redeemed, cash))
+            if funding or redeemed or cash:
+                if last_date:
+                    effective = Inflation.inflated(effective, last_date, this_date)
+                last_date = this_date
+                effective += new_effective
+                df.loc[len(df.index)] = [this_date, funding, redeemed, cash,  effective]
             this_date = next_date(this_date)
 
         df['Date'] = pd.to_datetime(df['Date'])
+        df = df.merge(self.e_pd.groupby(['Date']).agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).reset_index(), on='Date',
+                                 how='left')
+        df.replace(np.nan, 0, inplace=True)
+        df['Actual'] = df['Cash'] + df['Value']
         cache_dataframe(self.p_key, df)
         return df
 
@@ -1507,6 +1524,8 @@ class Account(BaseContainer):
         summary['Type'] = 'Account'
         summary['Id'] = self.id
         summary['Closed'] = 'Closed' if self.closed else 'Open'
+        summary['End'] = self.end
+
         return summary
 
     @property
@@ -1600,13 +1619,13 @@ class Transaction(models.Model):
             choices.append((choice.id, name))
         return sorted(choices)
 
-    TRANSACTION_TYPE = ((FUND, 'Deposit'),
-                        (BUY, 'Buy'),
-                        (REDIV, 'Reinvested Dividend'),
+    TRANSACTION_TYPE = ((FUND, 'Deposit'),                  # Value only and always positive
+                        (BUY, 'Buy'),                       # Price and Quantity
+                        (REDIV, 'Reinvested Dividend'),     # Price and Quantity but Price is set to 0
                         (SELL, 'Sell'),
                         (INTEREST, 'Dividends/Interest'),
                         (REDEEM, 'Withdraw'),
-                        (FEES, 'Sold for Fees'),
+                        (FEES, 'Fees Paid'),
                         (TRANS_IN, 'Transferred In'),
                         (TRANS_OUT, 'Transferred Out'),
                         (VALUE, 'Value'),
@@ -1658,36 +1677,40 @@ class Transaction(models.Model):
         return False
 
     def save(self, *args, **kwargs):
+        """
+        Do the logic to make sure value have the correct value
+        """
         if 'reset' in kwargs:
             do_reset = kwargs.pop('reset')
         else:
-            do_reset = True
+            do_reset = False
 
-        self.date = normalize_date(self.real_date) if self.real_date else None
-        reported_price = 0 if not self.price else self.price
-
-        if self.xa_action == self.REDIV:
-            self.price = 0  # On Dividends
+        if 'source' in kwargs:
+            source = kwargs.pop('source')
         else:
-            self.price = abs(reported_price)
+            source = DataSource.ESTIMATE.value  # This is the least trusted source
 
-        if self.xa_action in [self.BUY, self.REDEEM]:
-            self.price = self.price if self.price else 0
-            self.quantity = self.quantity if self.quantity else 0
-
-        if self.quantity:
-            self.quantity = abs(self.quantity)
-            if self.xa_action in [self.SELL, self.TRANS_OUT]:
-                self.quantity = self.quantity * -1
+        if self.real_date:
+            self.date = normalize_date(self.real_date)
+        elif self.date:
+            self.real_date = self.date
+            self.date = normalize_date(self.date)
         else:
-            self.quantity = 0
+            self.real_date = datetime.now().date()
+            self.date = normalize_date(self.real_date)
 
+        self.price = 0 if not self.price else abs(self.price)
+        self.quantity = 0 if not self.quantity else abs(self.quantity)
         if not self.value:
             self.value = self.price * self.quantity
 
-        self.value = abs(self.value)
-        if self.xa_action in [self.SELL, self.TRANS_OUT]:
-            self.value = self.value * -1
+        # Everything is positive
+
+        if self.xa_action == self.REDIV:
+            self.price = 0  # On Dividends
+        elif self.xa_action in [self.SELL, self.TRANS_OUT, self.FEES]:
+            self.quantity *= -1
+            self.value *= -1
 
         if self.equity:
             cf = currency_factor(self.date, self.equity.currency, self.account.currency)
@@ -1700,17 +1723,19 @@ class Transaction(models.Model):
         if self.price != 0 and self.equity and not self.equity.searchable:
             try:
                 ev = EquityValue.objects.get(equity=self.equity, date=self.date)
-                if ev.source > DataSource.UPLOAD.value:
+                if ev.source > source or (ev.source == source and ev.real_date < self.real_date):
                     ev.price = self.price
                     ev.real_date = self.real_date
-                    ev.source = DataSource.UPLOAD.value
+                    ev.source = source
                     ev.save()
             except EquityValue.DoesNotExist:
-                EquityValue.objects.create(source=DataSource.UPLOAD.value, equity=self.equity, price=self.price, real_date=self.real_date, date=self.date)
+                EquityValue.objects.create(source=source, equity=self.equity, price=self.price, real_date=self.real_date, date=self.date)
 
             if do_reset:
-                for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=self.equity).values_list('account', flat=True).distinct()):
-                    account.reset()
+                if self.equity:
+                    for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=self.equity).values_list('account', flat=True).distinct()):
+                        account.reset()
 
-        if do_reset:
-            self.account.reset()
+        else:
+            if do_reset:
+                self.account.reset()

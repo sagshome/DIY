@@ -4,9 +4,10 @@
   <h1 class="w3-margin">Close Account</h1>
     <div class="w3-row">
         <div style="height:350px;" class="w3-half w3-container">
-
           <form action="" method="post">
             {% csrf_token %}
+              <input type="hidden" name="success_url" value="{{ success_url }}">
+
             {% for error in form.non_field_errors %}
                 <div class="w3-row w3-red">
                     {{ error }}
@@ -31,7 +32,11 @@
                     </tr>
                 {% endfor %}
             </table>
-            <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
+              <a href="{{success_url}}">
+                <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
+            </a>
+            - or -
+            <button class="w3-button-small w3-round-large subtle diy-button diy-yellow" type="submit">Close</button>
           </form>
         </div>
         <div style="height:350px;" class="w3-half w3-container">

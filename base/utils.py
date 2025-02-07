@@ -216,7 +216,7 @@ def get_cached_dataframe(key):
         except TypeError:
             logger.debug('Had some strange data with key %s -> clearing the data' % key)
             clear_cached_dataframe(key)
-    return None
+    return pd.DataFrame(columns=[])  # Return a .empty dataframe
 
 
 def normalize_date(this_date) -> datetime.date:

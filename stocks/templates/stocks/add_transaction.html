@@ -147,7 +147,10 @@
         });
     </script>
 
-    <h2>{{account.name}} - {{view_verb}} Transaction</h2>
+    <h2>{% if account.portfolio %}
+          Portfolio:{{account.portfolio.name}}
+        {% endif %} - {{account.name}}</h2>
+    <h3>{{view_verb}} Transaction</h3>
         <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
             <input type="hidden" name="success_url" value="{{ success_url }}">
