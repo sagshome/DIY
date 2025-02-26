@@ -12,7 +12,6 @@
             div.style.display = "none";
             }
         }
-
         function showDiv(divId) {
             var div = document.getElementById(divId);
             if (div === null) {
@@ -21,22 +20,50 @@
             div.style.display = "block";
             }
         }
-
         function show_hide() {
-            var action_value = $("#id_xa_action").val();
-            var repeat_value = $("#id_repeat").val();
-            if (action_value == 1 || action_value == 5 || action_value == 8 || action_value == 9 || action_value == 6 || action_value == 10 || action_value == 11) {
-                // This is a Funding type
+            /*  FUND = 1
+                BUY = 2
+                REDIV = 3
+                SELL = 4
+                REDEEM = 5
+                INTEREST = 6
+                FEES = 7
+                TRANS_IN = 8
+                TRANS_OUT = 9
+                VALUE = 10
+                BALANCE = 11 */
+            let action_value = $("#id_xa_action").val();
+            let repeat_value = $("#id_repeat").val();
+            let equity_value = $("#id_equity").val();
+            if (action_value == 1 || action_value == 5 || action_value == 6 || action_value == 7 || action_value == 10 || action_value == 11) {  // This is a Funding type
                 hideDiv('equityRow');
                 hideDiv('priceRow');
                 hideDiv('quantityRow');
+                hideDiv('toAccountRow');
                 showDiv('valueRow');
                 if (action_value == 1 || action_value == 5) {
                     showDiv('repeatRow');
                 } else {
                     hideDiv('repeatRow');
                }
-            } else if ((action_value == 2 || action_value == 3 || action_value == 4 || action_value == 7)) {
+            } else if (action_value == 8 || action_value == 9) {  // Transfer In/Out
+               if (action_value == 8) {
+                   update_cash(false);
+               } else {
+                   update_cash(true);
+               }
+               showDiv('equityRow');
+               hideDiv('priceRow');
+               hideDiv('repeatRow');
+               if (equity_value == "") {
+                    showDiv('valueRow');
+                    hideDiv('quantityRow')
+               } else {
+                    showDiv('quantityRow');
+                    hideDiv('valueRow')
+               }
+               showDiv('toAccountRow');
+            } else if ((action_value == 2 || action_value == 3 || action_value == 4 )) {
                 if (!investment) {
                     hideDiv('equityRow');
                     hideDiv('priceRow');
@@ -48,6 +75,7 @@
                     showDiv('quantityRow');
                     hideDiv('valueRow');
                 }
+                hideDiv('toAccountRow');
                 hideDiv('repeatRow')
             } else {
                 hideDiv('equityRow');
@@ -55,6 +83,7 @@
                 hideDiv('quantityRow');
                 hideDiv('valueRow');
                 hideDiv('repeatRow')
+                hideDiv('toAccountRow')
             }
             if (repeat_value == 'yes') {
                 showDiv('numberRow');
@@ -62,7 +91,6 @@
                 hideDiv('numberRow');
             }
         }
-
         function update_actions() {
             if (!doing_edit) {
                 $.ajax({                       // initialize an AJAX request
@@ -77,29 +105,45 @@
                 });
                 showDiv('actionRow')
             }
-
+        }
+        function update_cash(call_api) {
+            if (call_api) {
+                var account_value = $("#id_account").val();
+                var date_value = $("#id_real_date").val();
+                $.ajax({
+                    url: '{% url "cash_value" %}',
+                    async: false,  // make sure we wait for the update
+                    data: {
+                        'account_id': account_value,
+                        'date': date_value,
+                    },
+                    success: function (data) {   // `data` is the return of the `load_cities` view function
+                        document.getElementById('id_value').value = data['cash'];
+                    }
+                });
+            } else {
+                document.getElementById('id_value').value = 0
+            }
         }
         function update_equity() {
-
             var portfolio_value = $("#id_account").val();
             var action_value = $("#id_xa_action").val();
             var date_value = $("#id_real_date").val();
             var url = $("#XAForm").attr("equity-url");
 
-            $.ajax({                       // initialize an AJAX request
-                url: '{% url 'equity_list' %}',
+            $.ajax({
+                url: '{% url "equity_list" %}',
                 async: false,  // make sure we wait for the update
                 data: {
                     'action': action_value,
                     'portfolio_id': portfolio_value,
                     'date': date_value,
-            },
-            success: function (data) {   // `data` is the return of the `load_cities` view function
-              $("#id_equity").html(data);  // replace the contents of the city input with the data that came from the server
-            }
-          });
-          showDiv('equityRow')
-
+                },
+                success: function (data) {   // `data` is the return of the `load_cities` view function
+                    $("#id_equity").html(data);  // replace the contents of the equity with date/account values
+                }
+            });
+            showDiv('equityRow')
         }
         function update_values() {
 
@@ -109,7 +153,7 @@
             var equity_value = $("#id_equity").val();
 
             $.ajax({                       // initialize an AJAX request
-                url: '{% url 'xa_values' %}',
+                url: '{% url "xa_values" %}',
                 async: false,  // make sure we wait for the update
                 data: {
                     'action': action_value,
@@ -118,38 +162,42 @@
                     'equity_id': equity_value,
                 },
                 success: function (data) {
-                    // `data` is the return of the `load_cities` view function
                     document.getElementById('id_price').value = data['price'];
                     document.getElementById('id_quantity').value = data['shares'];
                 }
             });
+            if (equity_value == "") {
+                hideDiv('quantityRow')
+                showDiv('valueRow')
+            } else {
+                showDiv('quantityRow')
+                hideDiv('valueRow')
+            }
             showDiv('equityRow')
-
         }
-
     </script>
     <script>
         $(document).ready(function() {
-
-          var action_locked = '{{ action_locked }}';
-          if (typeof action_locked === 'undefined') {
+            let action_locked = '{{ action_locked }}';
+            if (typeof action_locked === 'undefined') {
                 action_locked = false
-          }
-          if (!action_locked) {
+            }
+            if (!action_locked) {
               update_actions();
               action_id = document.getElementById("id_xa_action")
               action_id.addEventListener("mouseup", show_hide);
               action_id.addEventListener("change", update_equity);
-          }
-          document.getElementById("id_equity").addEventListener("change", update_values);
-          document.getElementById("id_repeat").addEventListener("change", show_hide);
-          show_hide();
+            }
+            document.getElementById("id_equity").addEventListener("change", update_values);
+            document.getElementById("id_repeat").addEventListener("change", show_hide);
+            show_hide();
         });
     </script>
 
-    <h2>{% if account.portfolio %}
-          Portfolio:{{account.portfolio.name}}
-        {% endif %} - {{account.name}}</h2>
+    <h2>Account: {{account.name}}
+        {% if account.portfolio %}
+          <em>(Portfolio:{{account.portfolio.name}})</em>
+        {% endif %}</h2>
     <h3>{{view_verb}} Transaction</h3>
         <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
@@ -197,6 +245,11 @@
                     <td class="diy-label">{{ form.value.label_tag }}</td>
                     <td>{{ form.value }}</td>
                     <td>{{ form.value.errors }}</td>
+                </tr>
+                <tr id=toAccountRow style="display: block;">
+                    <td class="diy-label">{{ form.to_account.label_tag }}</td>
+                    <td>{{ form.to_account }}</td>
+                    <td>{{ form.to_account.errors }}</td>
                 </tr>
                 <tr id=repeatRow style="display: block;">
                     <td class="diy-label">{{ form.repeat.label_tag }}</td>

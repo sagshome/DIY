@@ -4,11 +4,15 @@ from . import views
 
 # Base is stocks/
 urlpatterns = [
-    path(r'', views.AccountView.as_view(), name='portfolio_home'),
+    path(r'', views.StocksMain.as_view(), name='portfolio_home'),
+
+    path(r'api/search/', views.search_equity, name='equity_search'),
+    path(r'api/search_new/', views.search_equity, name='equity_search_new'),
 
     path(r'api/equity_list/', views.get_equity_list, name='equity_list'),
     path(r'api/action_list/', views.get_action_list, name='action_list'),
     path(r'api/xa_values/', views.get_equity_values, name='xa_values'),
+    path(r'api/cash_value/', views.get_cash_value, name='cash_value'),
 
     path(r'api/cost_value/', views.cost_value_chart, name='cost_value_chart'),
     path(r'api/compare_chart/', views.compare_equity_chart, name='compare_equity_chart'),
@@ -18,9 +22,9 @@ urlpatterns = [
     path(r'api/equity_summary', views.equity_summary, name='equity_summary'),
 
     path(r'equity/add', views.add_equity, name='add_equity'),
-    path(r'equity/<key>/update/', views.equity_update, name='equity_update'),
+    path(r'equity/<id>/update/', views.equity_update, name='equity_update'),
 
-    path(r'account/', views.AccountView.as_view(), name='stocks_main'),
+    path(r'account/', views.StocksMain.as_view(), name='stocks_main'),
     path(r'account/add/', views.add_account, name='account_add'),
     path(r'account/<pk>/', views.AccountDetailView.as_view(), name='account_details'),
     path(r'account/<pk>/close/', views.AccountCloseView.as_view(), name='account_close'),
@@ -40,7 +44,6 @@ urlpatterns = [
 
     path(r'portfolio/add/', views.PortfolioAdd.as_view(), name='portfolio_add'),
     path(r'portfolio/<pk>/', views.PortfolioDetailView.as_view(), name='portfolio_details'),
-    path(r'portfolio/<pk>/data/', views.PortfolioDataView.as_view(), name='portfolio_data'),
     path(r'portfolio/<pk>/edit/', views.PortfolioEdit.as_view(), name='portfolio_edit'),
     path(r'portfolio/<pk>/delete/', views.PortfolioDeleteView.as_view(), name='portfolio_delete'),
     path(r'portfolio/<pk>/table/', views.PortfolioTableView.as_view(), name='portfolio_table'),

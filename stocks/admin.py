@@ -49,13 +49,17 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 class EquityEventAdmin(admin.ModelAdmin):
-    list_display = ("equity", "event_type", "date", "value", "source")
-    list_filter = ('date', 'equity__symbol', 'event_type')
+    list_display = ("equity", "event_type", "real_date", "value", "source", "api", "split_fixed")
+    list_filter = ('date', 'equity__symbol', 'event_type', 'api')
+
+    def source(self, obj: EquityValue):
+        return DataSource(obj.source).name
 
 
 class EquityValueAdmin(admin.ModelAdmin):
-    list_display = ("equity", "date", "price", "source")
-    list_filter = ("equity__symbol", 'date',)
+    list_display = ("equity", "real_date", "price", "source", "api", "split_fixed")
+    list_filter = ("equity__symbol", 'date', 'api')
+
     def source(self, obj: EquityValue):
         return DataSource(obj.source).name
 

@@ -40,7 +40,9 @@
                 {% endif %}
             {% endif %}
             <a href="{% url 'account_edit' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
-            <a href="{% url 'account_close' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
+            {% if not account.closed %}
+                <a href="{% url 'account_close' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
+            {% endif %}
             <a href="{% url 'account_delete' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
         {% else %}
            <a href="{% url 'stocks_main' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>

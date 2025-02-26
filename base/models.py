@@ -1,13 +1,16 @@
 import logging
 import requests
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from phonenumber_field.modelfields import PhoneNumberField
 from requests.exceptions import ConnectTimeout, ConnectionError
 from requests.models import Response
-
+from tzlocal import get_localzone
 from django.db import models
 from django.contrib.auth.models import User
+
+from .utils import BoolReason
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -21,8 +24,8 @@ CURRENCIES = (
 
 logger = logging.getLogger(__name__)
 
-COLORS = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe',
-          '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080',
+COLORS = ['#FF6F61', '#6B8E23', '#4A90E2', '#F5A623', '#46f0f0', '#9013FE', '#E4C1D9', '#8B572A',
+          '#FEC89A', '#F5E6CC', '#FFD8B1', '#B5EAD7', '#C3B1E1', '#FFF4B1', '#D4A5E6', '#CBE8F0', '#000075', '#808080', '#50E3C2',
           '#ffffff', '#000000']
 
 PALETTE = {'green': '#2ECC71',
@@ -32,8 +35,9 @@ PALETTE = {'green': '#2ECC71',
            'turquoise': '#50E3C2',
            'yellow': '#F5A623',
            'purple': '#9013FE',
-           'red': '#D0021B',
-           'brown': '#8B572A'
+           'rose': '#E4C1D9',
+           'brown': '#8B572A',
+           'orange': '#FEC89A',
            }
 
 # FF6F61 (Coral Red) and #6B8E23 (Olive Drab) are complementary because they are on opposite sides of the color wheel, creating a striking contrast.
@@ -43,6 +47,9 @@ PALETTE = {'green': '#2ECC71',
 
 COUNTRIES = [('CA', 'Canada'),
              ('US', 'United States'),]
+
+
+DIY_EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy working
 
 
 class Profile(models.Model):
@@ -62,15 +69,15 @@ class Profile(models.Model):
         return self.user.username
 
 
-class URL(models.Model):
+class API(models.Model):
     '''
     Support making an API offline and catch some traps and return a valid / invalid response
     '''
-
-    ERROR_SECONDS = 60 * 60 * 3  # Or 3 hours
-
+    DEFAULT_FAIL_LENGTH = 60 * 60 * 3  # 3 Hours
     name = models.CharField(primary_key=True, null=False, blank=False, max_length=32)
-    base = models.CharField(null=False, blank=False, max_length=132)
+    base = models.CharField(null=True, blank=True, max_length=132)
+    fail_reason = models.CharField(null=False, blank=False, max_length=132, default='Manual Suspension')  # Via the admin tool
+    fail_length = models.IntegerField(null=True, blank=True, default=DEFAULT_FAIL_LENGTH)  # Increase via admin tool if so desired
     _active = models.BooleanField(default=True)
     _last_fail = models.DateTimeField(null=True, blank=True)
 
@@ -79,55 +86,61 @@ class URL(models.Model):
         reason = ''
         try:
             url = cls.objects.get(name=name)
-            if url.ready_or_reset():
+            test = url.ready_or_reset()
+            if test:
                 try:
                     return requests.get(url.base + extra)
                 except ConnectTimeout:
                     reason = 'Connection Timeout'
                 except ConnectionError:
                     reason = 'Connection Error'
-                cls.pause(name)
-                url._active = False
-                url._last_fail = datetime.now()
-                url.save()
-
-        except URL.DoesNotExist:
+                cls.pause(name, reason)
+            else:
+                reason = str(test)
+        except API.DoesNotExist:
             reason = 'Configuration Error'
-
+        # API did not work,  return an error
         result = Response()
         result.status_code = 500
         result.reason = reason
         return result
 
-    def ready_or_reset(self):
-        if self._active:
-            return True
-        if self._last_fail < datetime.now() - timedelta(seconds=self.ERROR_SECONDS):
-            self._active = True
-            self.save()
-            return True
-        logger.debug("URL %s is paused since %s" % (self.name, self._last_fail))
-        return False
+    @property
+    def is_active(self):
+        return self._active
+
+    @property
+    def last_fail(self):
+        return DIY_EPOCH if not self._last_fail else self._last_fail
 
     @classmethod
-    def pause(cls, name):
+    def pause(cls, name, reason='Undefined'):
         try:
             url = cls.objects.get(name=name)
             if not url._active:
                 url._active = False
                 url._last_fail = datetime.now()
+                url.fail_length = cls.DEFAULT_FAIL_LENGTH
+                url.fail_reason = reason
                 url.save()
         except cls.DoesNotExist:
             logger.warning('Trying to pause invalid url named:' % name)
 
-'''
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        Profile.objects.create(user=instance)
+    def ready_or_reset(self):
+        if self.is_active:
+            return BoolReason(True, 'API is Active')
+        if self.last_fail < datetime.now(UTC) - timedelta(seconds=self.fail_length):
+            self._active = True
+            self.save()
+            return BoolReason(True, 'API has been reset')
 
+        return BoolReason(False, f'API is inactive since {self._last_fail.astimezone(get_localzone())}')
 
-@receiver(post_save, sender=User)
-def save_user_profile(sender, instance, **kwargs):
-    instance.profile.save()
-'''
+    @classmethod
+    def status(cls, name):
+        try:
+            api = cls.objects.get(name=name)
+            return api.ready_or_reset()
+        except API.DoesNotExist:
+            return BoolReason(False,'Configuration Error')
+

@@ -6,6 +6,7 @@ import os
 import json
 
 from datetime import datetime, date
+from os import P_ALL
 
 import plotly.io as pio
 import plotly.graph_objects as go
@@ -103,74 +104,7 @@ class TransactionDeleteView(BaseDeleteView):
         return context
 
 
-class PortfolioDataView(LoginRequiredMixin, DetailView):
-    model = Portfolio
-    template_name = 'stocks/portfolio_data.html'
-
-    def get_object(self):
-        return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        p: Portfolio = context['portfolio']
-
-        accounts = {}
-        all_dates = pd.DataFrame(columns=['Date'])
-        all_accounts = p.account_set.all().order_by('-_start')
-        for account in all_accounts:
-            logger.debug('Processing account:%s' % account)
-            funded = list(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')). \
-                          values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
-            redeemed = list(account.transactions.filter(xa_action=Transaction.REDEEM).annotate(month=TruncMonth('date')). \
-                            values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
-            funded = pd.DataFrame(funded,  columns=['Date', 'Funded'])
-            redeemed = pd.DataFrame(redeemed,  columns=['Date', 'Withdrawn'])
-            funded['Date'] = pd.to_datetime(funded['Date'])
-            redeemed['Date'] = pd.to_datetime(redeemed['Date'])
-            try:
-                df = account.e_pd.groupby('Date', as_index=False).sum('Value')[['Date', 'Value']]
-                try:
-                    df = df.merge(funded, on='Date', how='outer')
-                    df = df.merge(redeemed, on='Date', how='outer')
-
-                    df = df.replace(np.nan, 0)
-                    df = df.infer_objects(copy=False)
-
-                    df['Date'] = df['Date'].dt.date
-                    all_dates = all_dates.merge(df['Date'], on='Date', how='outer')
-                    # df = df[(df['Value'] != 0) & (df['Funded'] != 0) & (df['Withdrawn'] != 0)]
-                    accounts[account] = df
-                except ValueError:
-                    logger.error('Merge Error Portfolio:%s Account:%s' % (p, account))
-            except KeyError:
-                logger.error('Group Error Portfolio:%s Account:%s' % (p, account))
-        process_dates = all_dates['Date'].to_list()
-        process_dates.sort(reverse=True)
-        rows = {}
-        for this_date in process_dates:
-            rows[this_date] = []
-            for account in accounts:
-                matched = accounts[account].loc[accounts[account]['Date'] == this_date]
-                if matched.empty:
-                    rows[this_date].extend([None, None, None, None])
-                else:
-                    value = matched['Value'].item()
-                    funded = matched['Funded'].item()
-                    withdrawn = matched['Withdrawn'].item()
-                    if value == 0 and funded == 0 and withdrawn == 0:
-                        rows[this_date].extend([None, None, None, None])
-                    else:
-                        if account.account_type == 'Investment':
-                            rows[this_date].extend([value, funded, withdrawn, account.id])
-                        else:
-                            rows[this_date].extend([value, funded, withdrawn, None])
-
-        context['accounts'] = all_accounts
-        context['data'] = rows
-        return context
-
-
-class AccountView(LoginRequiredMixin, ListView):
+class StocksMain(LoginRequiredMixin, ListView):
     model = Account
     template_name = 'stocks/stocks_main.html'
 
@@ -205,7 +139,7 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
         end = myobj.end
         equity_data = myobj.e_pd.groupby('Date').agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).reset_index()
         if len(myobj.p_pd):
-            equity_data = pd.merge(equity_data, myobj.p_pd)
+            equity_data = pd.merge(equity_data, myobj.p_pd, how='right')
 
         equity_data.replace(np.nan, 0, inplace=True)  # Clear up any bad numbers
         equity_data.sort_values(by=['Date'], inplace=True, ascending=False)  # Sort by date in reverse order
@@ -244,7 +178,7 @@ class AccountTableView(ContainerTableView):
                 'equity_count': elist.count(),
                 'can_reconcile': True,
                 'object_type': 'Account',
-                'xas': a.transactions.all().order_by('-date'),
+                'xas': a.transactions.all().order_by('-real_date'),
                 }
 
 
@@ -281,7 +215,7 @@ class PortfolioTableView(ContainerTableView):
 
 class ContainerDetailView(LoginRequiredMixin, DetailView):
 
-    template_name = 'stocks/account_detail.html'
+    template_name = 'stocks/container_detail.html'
 
     @staticmethod
     def equity_data(myobj: BaseContainer):
@@ -831,12 +765,12 @@ def portfolio_update(request, pk):
     profile = Profile.objects.get(user=request.user)
     key = profile.av_api_key if profile.av_api_key else None
     for equity in portfolio.equities.filter(searchable=True):
-        equity.yp_update(daily=False)
+        equity.update(key=key, daily=False)
     return HttpResponse(status=200)
 
 
 @login_required
-def equity_update(request,  key):
+def equity_update(request,  id):
     """
 
     :param request:
@@ -844,12 +778,9 @@ def equity_update(request,  key):
     :param key:
     :return:
     """
-    profile = Profile.objects.get(user=request.user)
-    if not profile.av_api_key:
-        return HttpResponse(status=404)
 
-    equity = get_object_or_404(Equity, symbol=key)
-    equity.update(key=profile.av_api_key)
+    equity = get_object_or_404(Equity, id=id)
+    equity.update(daily=False)
     for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=equity).values_list('account', flat=True).distinct()):
         account.reset()
     return HttpResponse(status=200)
@@ -940,7 +871,10 @@ def reconcile_value(request, pk):
         Build the list of dictionaries for the forms based on existing data
         """
         first_value = FundValue.objects.filter(fund__symbol=account.f_key).earliest('date')
-        last_value = FundValue.objects.filter(fund__symbol=account.f_key).latest('date')
+        if account.end:
+            last_value = FundValue.objects.filter(fund__symbol=account.f_key, date__lte=account.end).latest('date')
+        else:
+            last_value = FundValue.objects.filter(fund__symbol=account.f_key).latest('date')
 
         funded = dict(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')).
                       values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
@@ -953,7 +887,7 @@ def reconcile_value(request, pk):
                 result.append({'date': redeemed_key, 'reported_date': redeemed_key, 'value': 0, 'source': None,
                                'deposited': 0, 'withdrawn': redeemed[redeemed_key]})
 
-        for record in FundValue.objects.filter(fund__symbol=account.f_key).order_by('-date'):
+        for record in FundValue.objects.filter(fund__symbol=account.f_key, date__lte=last_value.date).order_by('-date'):
             this_funded = funded[record.date] if record.date in funded else 0
             this_redeemed = redeemed[record.date] if record.date in redeemed else 0
             result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name,
@@ -1032,7 +966,8 @@ def reconcile_value(request, pk):
 
     initial = set_initial()  # This is called twice on POST since I may have changed the data.
     formset = SimpleReconcileFormSet(initial=initial)
-    return render(request, 'stocks/value_reconciliation.html', {'formset': formset, 'account': account})
+    return render(request, 'stocks/value_reconciliation.html',
+                  {'formset': formset, 'account': account, 'xas': account.transactions.order_by('real_date')})
 
 
 @login_required
@@ -1238,6 +1173,7 @@ def account_fund_details(request, container_type, pk, obj_type, id):
                    'compare_to': compare_to
                    })
 
+
 @login_required
 def account_equity_details(request, container_type, pk, obj_type, id):
     """
@@ -1362,13 +1298,14 @@ def get_action_list(request):
     value_map = {value:key for key, value in Transaction.TRANSACTION_TYPE}
     result = {}
     if account.account_type == 'Investment':
-        my_set = ('Deposit', 'Withdraw', 'Buy',  'Sell', 'Reinvested Dividend', 'Dividends/Interest')
+        my_set = ('Deposit', 'Withdraw', 'Buy',  'Sell', 'Reinvested Dividend', 'Dividends/Interest', 'Transferred Out')
     if account.account_type == 'Cash':
         my_set = ('Value',)
     if account.account_type == 'Value':
-        my_set = ('Deposit', 'Withdraw', 'Buy', 'Sell', 'Value')
+        my_set = ('Deposit', 'Withdraw', 'Buy', 'Sell', 'Value', 'Transfer Out')
     for item in my_set:
         result[value_map[item]] = item
+    return json
     return render(request, "generic_selection.html", {"values": result})
 
 
@@ -1395,7 +1332,7 @@ def get_equity_list(request):
 
     values = Equity.objects.filter(equity_type='Equity').exclude(deactived_date__lt=this_date)
 
-    if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES]:
+    if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES, Transaction.TRANS_OUT]:
         try:
             account = Account.objects.get(id=request.GET.get("portfolio_id"), user=request.user)
             this_date = np.datetime64(normalize_date(this_date))
@@ -1420,9 +1357,6 @@ def get_equity_values(request):
     API to get the proper set of equities base on the action, profile and date.
     For instance,  A Sell/Reinvest action can only affect the equities you hold on a specific date
     """
-    this_date = datetime.now()
-    action = None
-
 
     try:
         this_date = datetime.strptime(request.GET.get("date"), '%Y-%m-%d')
@@ -1434,21 +1368,21 @@ def get_equity_values(request):
         return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
     try:
-        action = int(request.GET.get('action'))
-    except ValueError:
-        logger.error("Received a non-numeric action %s" % request.GET.get("action"))
+        account = Account.objects.get(id=request.GET.get('account_id'), user=request.user)
+    except Account.DoesNotExist:
+        logger.error("No account provided with ID %s is not found." % request.GET.get("account_id"))
         return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
     try:
-        account = Account.objects.get(id=request.GET.get('account_id'), user=request.user)
-    except Account.DoesNotExist:
-        logger.error("Account with ID %s is not found." % request.GET.get("account_id"))
+        action = int(request.GET.get('action'))
+    except ValueError:
+        logger.error("No action provided with ID %s is not found." % request.GET.get("account_id"))
         return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
     try:
         equity = Equity.objects.get(id=request.GET.get('equity_id'))
     except Equity.DoesNotExist:
-        logger.error("Equity with ID %s is not found." % request.GET.get("equity_id"))
+        logger.error("No equity provided with ID %s is not found." % request.GET.get("account_id"))
         return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
     price = 0
@@ -1459,12 +1393,36 @@ def get_equity_values(request):
             pass
 
     shares = 0
-    if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES]:
+    if action in [Transaction.SELL, Transaction.REDIV, Transaction.FEES, Transaction.TRANS_OUT]:
         this_date = np.datetime64(normalize_date(this_date))
         shares = account.e_pd.loc[(account.e_pd['Date'] == this_date) & (account.e_pd['Equity'] == equity.key)]['Shares'].item()
 
     return JsonResponse({'shares': shares, 'price': price})
 
+
+@login_required
+def get_cash_value(request):
+    """
+    API to get the proper set of equities base on the action, profile and date.
+    For instance,  A Sell/Reinvest action can only affect the equities you hold on a specific date
+    """
+
+    try:
+        this_date = datetime.strptime(request.GET.get("date"), '%Y-%m-%d')
+    except ValueError:
+        logger.error("Received a ill formed date %s" % request.GET.get("date"))
+        return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+    except TypeError:
+        logger.error("Received a ill formed date %s" % request.GET.get("date"))
+        return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+    this_date = normalize_date(this_date)
+
+    try:
+        account = Account.objects.get(id=request.GET.get('account_id'), user=request.user)
+    except Account.DoesNotExist:
+        logger.error("No account provided with ID %s is not found." % request.GET.get("account_id"))
+        return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+    return JsonResponse({'cash': account.get_pattr('Cash', this_date)})
 
 @login_required
 def compare_equity_chart(request):
@@ -1621,11 +1579,13 @@ def acc_summary(request):
     user = request.user
     object_id = request.GET.get('object_id')
     object_type = request.GET.get('object_type')
-
+    this = None
     if object_type:
         if object_type == 'Account':
             accounts = Account.objects.filter(user=user, id=object_id)
+            this = Account.objects.get(id=object_id)
         else:
+            this = Portfolio.objects.get(id=object_id)
             accounts = Account.objects.filter(user=user, portfolio_id=object_id)
     else:
         accounts = Account.objects.filter(user=user)
@@ -1675,8 +1635,21 @@ def acc_summary(request):
                 'order': 1,
             })
             df = pd.concat([df, portfolio.p_pd]).groupby('Date', as_index=False).sum()
+    else:
+        datasets.append({
+            'label': 'Cash',
+            'fill': False,
+            'data': pd.concat([month_df, this.p_pd.loc[:, ['Date', 'Cash']]]).groupby('Date')['Cash'].sum().to_list(),
+            'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
+            'stack': 1,
+            'order': 1,
+        })
 
-    df['Cost'] = df['Funds'] - df['Redeemed']
+    if object_type == 'Account':
+        df['Cost'] = df['Funds'] + df['TransIn'] + df['Redeemed'] + df['TransOut']
+    else:
+        df['Cost'] = df['Funds'] + df['Redeemed']
+
     datasets.append({
         'label': 'Cost',
         'fill': False,
@@ -1694,7 +1667,6 @@ def equity_summary(request):
     colors = COLORS.copy()
     ci = 0
 
-    user = request.user
     object_id = request.GET.get('object_id')
     object_type = request.GET.get('object_type')
 
@@ -1718,22 +1690,34 @@ def equity_summary(request):
     month_df = pd.DataFrame({'Date': date_range, 'Value': 0})
 
     labels = [this_date.strftime('%Y-%b') for this_date in month_df['Date'].to_list()]
-    df = pd.DataFrame(columns=ACCOUNT_COL)
     datasets = []
+    datasets.append({
+        'label': 'Cash',
+        'fill': False,
+        'data': this.p_pd['Cash'].to_list(),
+        'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
+        'stack': 1,
+        'order': 1,
+    })
+    ci = 0
     for equity in this.equities:
         color = colors[ci]
         ci += 1
+        label = equity.symbol if equity.equity_type == 'Equity' else equity.equity_type
         datasets.append({
-            'label': equity.symbol,
+            'label': label,
             'fill': False,
             'data': pd.concat([month_df, this.e_pd.loc[this.e_pd['Object_ID'] == equity.id, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
             'boarderColor': color, 'backgroundColor': color,
             'stack': 1,
             'order': 1,
         })
-        df = pd.concat([df, this.p_pd]).groupby('Date', as_index=False).sum()
 
-    cost_df = this.p_pd['Funds'] - this.p_pd['Redeemed']
+    # Redeemed and TransOut are negative numbers so add them to subtract them.
+    if object_type == 'Account':
+        cost_df = this.p_pd['Funds'] + this.p_pd['TransIn'] + this.p_pd['Redeemed'] + this.p_pd['TransOut']
+    else:
+        cost_df = this.p_pd['Funds'] + this.p_pd['Redeemed']
 
     datasets.append({
         'label': 'Cost',
@@ -1810,3 +1794,21 @@ def wealth_summary_pie(request):
         option_links.append(reverse('portfolio_details', kwargs={'pk': portfolio.id}))
         labels.append(portfolio.name)
     return JsonResponse({'data': data, 'labels': labels, 'options_links': option_links, 'colors': COLORS})
+
+
+def search_equity(request):
+    query = request.GET.get('q', '')
+    if query:
+        items = Equity.objects.filter(equity_type='Equity', symbol__icontains=query)[:10]
+        results = [{"id": item.id, "name": str(item)} for item in items]
+        return JsonResponse(results, safe=False)
+    return JsonResponse([], safe=False)
+
+
+def search_equity_new(request):
+    query = request.GET.get('q', '')
+    if query:
+        items = Equity.objects.filter(equity_type='Investment', name__icontains=query)[:10]
+        results = [{"id": item.id, "name": str(item)} for item in items]
+        return JsonResponse(results, safe=False)
+    return JsonResponse([], safe=False)

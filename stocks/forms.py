@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from .models import DataSource, Equity, EquityValue, Account, Transaction, Portfolio, CURRENCIES
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
@@ -114,10 +115,11 @@ class TransactionForm(forms.ModelForm):
 
     repeat = forms.ChoiceField(choices=[('no', 'No'), ('yes', 'Yes'),])
     number = forms.IntegerField(label='Num. of Repeats', max_value=11, min_value=1, required=False)
+    to_account = forms.ModelChoiceField(Account.objects.all(), required=False)
 
     class Meta:
         model = Transaction
-        fields = ("user", "xa_action", "account", "equity", "real_date", "price", "quantity", "value", "repeat", "number")
+        fields = ("user", "xa_action", "account", "equity", "real_date", "price", "quantity", "value", "to_account", "repeat", "number")
         widgets = {
             'user': forms.HiddenInput(),
             'xa_action': forms.Select(),
@@ -134,6 +136,24 @@ class TransactionForm(forms.ModelForm):
         self.fields['value'].required = False
         self.fields['quantity'].required = False
         self.fields['equity'].queryset = Equity.objects.filter(equity_type='Equity').order_by('symbol')
+
+        account = user = None
+        try:
+            account =  self.instance.account
+        except Account.DoesNotExist:
+            if 'initial' in kwargs and 'account' in kwargs['initial']:
+                account = kwargs['initial']['account']
+            if 'initial' in kwargs and 'user' in kwargs['initial']:
+                user = kwargs['initial']['user']
+
+        if account:
+            self.fields['to_account'].queryset = Account.objects.filter(user=user).exclude(id=account.id)
+        else:
+            self.fields['to_account'].queryset = Account.objects.none()
+        #if self.instance.account.portfolio:
+        #    self.fields['to_account'].queryset = Account.objects.filter(user=self.instance.user, portfolio=self.instance.account.portfolio).exclude(id=self.instance.account.id)
+        #else:
+        #    self.fields['to_account'].queryset = Account.objects.filter(user=self.instance.user, portfolio__isnull=True).exclude(id=self.instance.account.id)
 
     def clean_equity(self):
         account = self.cleaned_data['account']
@@ -200,9 +220,11 @@ class TransactionEditForm(TransactionForm):
         self.fields["xa_action"].widget.attrs['readonly'] = True
         self.fields['equity'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["equity"].widget.attrs['readonly'] = True
-        self.fields['xa_action'].choices = [(self.initial['xa_action'], Transaction.TRANSACTION_MAP[self.initial['xa_action']])]
         self.fields['equity'].queryset = Equity.objects.filter(id=self.initial['equity'])
-
+        action_choices = Transaction.edit_choices(self.initial['xa_action'])
+        self.fields['xa_action'].choices = action_choices
+        if len(action_choices) == 1:
+            self.fields['xa_action'].widget.attrs['style'] = 'background-color:Wheat'
 
 class ManualUpdateEquityForm(forms.Form):
 

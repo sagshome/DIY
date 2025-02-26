@@ -10,6 +10,23 @@ Investment accounts can hold any number of Equity.equitys
 Cash accounts hold one equity.cash equity
 Value accounts hold on equity.value equity
 
+Accounts (and Portfolios) have 'Funds' and 'Gains'
+   Funds come from 'Deposit' actions making Fund records
+   Gains come from 'Transfer In' actions making TransIn records
+   
+   Withdraw actions
+       Remove Funds first then Gains
+       
+   Transfer To activities can be generated as Transactions or Closing of account
+   When Transfer to of Stocks
+        current value = x
+        avg cost value = y
+        1. Generate a Sell XA (at current value)  - Increases Cash by X
+        2. Reduce Funds (and/or Gains) by the current value      
+        3. Generate Funding (and/or Transfer in) of months market value
+        4. Generate a Buy XA (at current value)
+
+
 For Equity.Equity:
    Fund / Redeem Transaction are rolled up to EPD to calculate Funds, Redeemed, Effective (Funds - Redeemed)  Cost
    Buy / Sell create Transactions that allow us to rollup value based on shares * price at a date
@@ -46,8 +63,8 @@ from django.db.models import QuerySet, Sum, Avg, Q, F
 from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
 from django.urls import reverse
 
-from base.models import URL
-from base.utils import normalize_date, normalize_today, next_date, cache_dataframe, clear_cached_dataframe,  get_cached_dataframe, clear_simple_cache, get_simple_cache, set_simple_cache
+from base.models import API, DIY_EPOCH
+from base.utils import BoolReason,  normalize_date, normalize_today, next_date, cache_dataframe, clear_cached_dataframe,  get_cached_dataframe, clear_simple_cache, get_simple_cache, set_simple_cache
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +109,7 @@ CURRENCIES = (
     ('USD', 'US Dollar')
 )
 
-EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy working
+EPOCH = DIY_EPOCH
 
 AV_REGIONS = {'Toronto': {'suffix': 'TRT'},
               'United States': {'suffix': None},
@@ -124,7 +141,8 @@ EQUITY_COL = ['Date',
               ]
 # todo:  How do I do shares/Cost/Price for things that are transferred in/out.
 
-ACCOUNT_COL = ['Date', 'Funds', 'Redeemed', 'Cash', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
+#ACCOUNT_COL = ['Date', 'Funds', 'Withdraws', 'Cash', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
+ACCOUNT_COL = ['Date', 'Funds', 'Redeemed', 'TransIn', 'TransOut', 'NewCash', 'Cash', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'EffectiveCost',  ]
 
 
 def currency_factor(exchange_date: date, input_currency: str, my_currency: str) -> float:
@@ -143,18 +161,6 @@ def currency_factor(exchange_date: date, input_currency: str, my_currency: str) 
             else:
                 raise Exception(f'Unexpected input_currency {input_currency}')
     return 1
-
-
-class BoolReason():
-    def __init__(self, result: bool, reason: str=None):
-        self.result = result
-        self.reason = reason
-
-    def __bool__(self):
-        return self.result == True
-
-    def __str__(self):
-        return self.reason
 
 
 class ExchangeRate(models.Model):
@@ -241,7 +247,7 @@ class ExchangeRate(models.Model):
         value for the last month
         """
         first_str = EPOCH.strftime('%Y-%m-%d')
-        result = URL.get('BOC',f'FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc')
+        result = API.get('BOC', f'FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc')
 
         if not result.status_code == 200:  # pragma: no cover
             logger.error('BOC: failure: %s - %s' % (result.status_code, result.reason))
@@ -305,7 +311,7 @@ class Inflation(models.Model):
         first = EPOCH
         first_str = first.strftime('%Y-%m-%d')
 
-        result = URL.get('BOC',f'STATIC_INFLATIONCALC/json?start_date={first_str}')
+        result = API.get('BOC', f'STATIC_INFLATIONCALC/json?start_date={first_str}')
         if not result.status_code == 200:
             logger.error('BOC failure: %s - %s' % (result.status_code, result.reason))
         else:
@@ -338,7 +344,6 @@ class Inflation(models.Model):
         to_value = all_values[to_date] if to_date in all_values else 0
         from_value = all_values[from_date] if from_date in all_values else 0
         if to_value == 0 or from_value == 0:
-            logger.error("Could not get values for date: %s or date: %s" % (to_date, from_date))
             return value
         result = value + value * (to_value - from_value) / from_value
         return result
@@ -352,6 +357,11 @@ class Equity(models.Model):
     REGIONS = (('Canada', 'Canada'),
                ('US', 'US'))
 
+    # API sources
+    ypfinance = 1
+    alphavantage = 2
+    no_api = 99
+
     @classmethod
     def region_lookup(cls):
         result = {}
@@ -364,7 +374,7 @@ class Equity(models.Model):
     region: str = models.CharField(max_length=10, null=False, blank=False, default='Canada')
 
     name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
-    equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES)
+    equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES, default='Equity')
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='USD')
     last_updated: date = models.DateField(blank=True, null=True)
     deactived_date: date = models.DateField(blank=True, null=True)
@@ -377,14 +387,14 @@ class Equity(models.Model):
     @property
     def key(self):
         key = self.symbol
-        if self.equity_type == 'Investment':
+        if self.equity_type == 'Equity':
             if self.region == 'Canada':
                 key = self.symbol + '.TO'
         elif self.equity_type == 'Cash':
             key = f'Cash-Account:{self.id}'
         elif self.equity_type == 'Value':
             key = f'Value-Account:{self.id}'
-        return key  # US does not get a region decorator via AV_URL
+        return key  # US does not get a region decorator via APIs
 
     def __str__(self):
         if self.equity_type == 'Value' or self.equity_type == 'Cash':
@@ -417,10 +427,10 @@ class Equity(models.Model):
 
         super(Equity, self).save(*args, **kwargs)
         if self.searchable and do_update:
-            self.update_external_equity_data(False, None)
+            self.update_external_equity_data()
 
     def av_set_data(self):
-        request = URL.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
+        request = API.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
         if request.status_code == 200:
             self.validated = True
             data = request.json()
@@ -521,89 +531,164 @@ class Equity(models.Model):
             logger.error('No EquityValue data for:%s' % self)
         except FundValue.DoesNotExist:
             logger.error('No Fund data for %s' % self)
+        except EquityValue.DoesNotExist:
+            logger.error('No Equity value data for %s' % self)
 
-    def yp_update(self, daily=False):
-        if self.equity_type == 'Equity':
-            data = yf.Ticker(self.key).history().to_records()
-            if len(data):
-                for record in data:
-                    if len(record) >= 7:
-                        this_date = record[0].date()
-                        price = float(record[4])
-                        dividend = float(record[6])
-                        EquityValue.get_or_create(equity=self, source=DataSource.API.value,
-                                                  real_date=this_date, price=price)
-                        if dividend != 0:
-                            EquityEvent.get_or_create(equity=self, event_type='Dividend', real_date=this_date,
-                                                  value=dividend, source=DataSource.API.value)
-                        if daily:
-                            self.last_updated = datetime.today().date()
-                            self.save(update=False)
-                        return True
-            return False
-        return True
+    def get_dividend_dates(self) -> dict[date: date]:
+        if API.status('ypfinance'):
+            if self.equity_type == 'Equity':
+                series = yf.Ticker(self.key).get_dividends()
+                if isinstance(series, pd.Series) and not series.empty:
+                    return {normalize_date(dt.date()): dt.date() for dt in series.to_dict().keys()}
+        return {}
 
-    def av_update(self, force, key):
-        if key:
-            if self.equity_type == 'Equity' and self.searchable:
-                now = datetime.now().date()
-                if now == self.last_updated and not force:
-                    logger.info('%s - Already updated %s' % (self, now))
+    def yp_update(self, period='1y') -> Dict[date, List]:
+        """
+        Build a dictionary key on Date with two values [close price,  dividends per share]
+        kwargs
+            period: str default = "1y",   How many months of data to retrieve
+        """
+        result ={}
+        if API.status('ypfinance'):  # Currently set manually in admin tool
+            if self.equity_type == 'Equity':
+                df = yf.Ticker(self.key).history(interval='1mo', period=period, auto_adjust=False)
+                if isinstance(df, pd.DataFrame) and not df.empty:
+                    data = df[['Close', 'Dividends']].to_records()
+                    if len(data):
+                        for record in data:
+                            if len(record) == 3:
+                                result[record[0].date()] = (float(record[1]), float(record[2]))
+        else:
+            logger.info('ypfinance API is down:%s' % API.status('ypfinance'))
+        return result
+
+    def av_update(self, key: str, force:bool = False) -> Dict[date, List]:
+        """
+        Build a dictionary key on Date with two values [close price,  dividends per share]
+        args:
+            0 - api key, used for alphavantage
+        kwargs
+            force: bool default = False,   setting to True will force an update even if this equity was already updated today
+
+        """
+        results = {}
+        if key and self.equity_type == 'Equity' and self.searchable:
+            now = datetime.now().date()
+            if now == self.last_updated and not force:
+                logger.info('%s - Already updated %s' % (self, now))
+                return results
+            else:
+                data_key = 'Monthly Adjusted Time Series'
+                result = API.get('AVURL', f'TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={key}')
+                if not result.status_code == 200:
+                    logger.warning('AVURL Result is %s - %s' % (result.status_code, result.reason))
+                    return results
+                data = result.json()
+                if data_key in data:  # if not,  we timed out our API key
+                    for entry in data[data_key]:
+                        try:
+                            date_value = datetime.strptime(entry, '%Y-%m-%d').date()
+                        except ValueError:
+                            logger.error('Invalid date format in: %s' % entry)
+                            return results
+                        if date_value >= EPOCH:
+                            price = float(data[data_key][entry]['4. close'])
+                            dividend = float(data[data_key][entry]['7. dividend amount'])
+                            results[date_value] = (price, dividend)
                 else:
-                    data_key = 'Monthly Adjusted Time Series'
-                    result = URL.get('AVURL', f'TIME_SERIES_MONTHLY_ADJUSTED&symbol={self.key}&apikey={key}')
-
-                    if not result.status_code == 200:
-                        logger.warning('AVURL Result is %s - %s' % (result.status_code, result.reason))
-                        return
-
-                    data = result.json()
-                    if data_key in data:  # if not,  we timed out our API key
-                        for entry in data[data_key]:
-                            try:
-                                date_value = datetime.strptime(entry, '%Y-%m-%d').date()
-                            except ValueError:
-                                logger.error('Invalid date format in: %s' % entry)
-                                return
-
-                            if date_value >= EPOCH:
-                                EquityValue.get_or_create(equity=self, source=DataSource.API.value, real_date=date_value,
-                                                          price=float(data[data_key][entry]['4. close']))
-
-                                dividend = float(data[data_key][entry]['7. dividend amount'])
-                                if dividend != 0:
-                                    EquityEvent.get_or_create(equity=self, event_type='Dividend', real_date=date_value,
-                                                              value=dividend, source=DataSource.API.value)
-                        self.last_updated = now
-                        self.save(update=False)
+                    if 'Information' in data and data['Information'].startswith('Thank you for using'):
+                        logger.warning("Too many calls to AVURL")
+                        API.pause("AVURL")
                     else:
-                        if 'Information' in data and data['Information'].startswith('Thank you for using'):
-                            logger.warning("Too many calls to AVURL")
-                            URL.pause("AVURL")
-                        else:
-                            logger.warning('Invalid Response: %s' % data)
+                        logger.warning('Invalid Response: %s' % data)
+        return results
 
-    def update_external_equity_data(self, force, key):
+    def update_external_equity_data(self, force: bool = False, key: str = None, daily: bool = False):
+        """
+        Go to either Yahoo Finance or www.alphavantage to update equity and dividend data.
+
+        kwargs:
+           force: boolean default False, When True,  20 years of Yahoo Finance data is retrieved,
+                                         When True will also use alphavantage data even if we already update today.
+           key:  str default None, The API key for alphavantage if it is not provided then we will never try alphavantage
+           daily:  boolean default False,  When True will set the last update value (used to limit alphavantage API calls)
+
+        side effect:
+            All records (EquityValue and EquityEvent (Dividend) records not source by an API or lower, are deleted
+
+        safety check:
+            if not an equity,  or not searchable nothing is done
+        """
+
+        if self.equity_type != 'Equity' or not self.searchable:
+            logger.debug('Safety Valve: Can not update non "Equity" equities or not searchable values')
+            return
+
+        # Since this is searchable,  get rid of any data populated by means lesser than an API
         EquityEvent.objects.filter(equity=self, event_type='Dividend', source__gt=DataSource.API.value).delete()
         EquityValue.objects.filter(equity=self, source__gt=DataSource.API.value).delete()
-        if key:
-            self.av_update(force, key)
-        else:
-            self.yp_update(False)
 
-    def update(self, force: bool = False, key: str = None):
+        if force:
+            period = '20y'
+        else:
+            period = '1y'
+
+        results_api = self.ypfinance
+        results = self.yp_update(period=period)
+        if not results and key:
+            results_api = self.alphavantage
+            results = self.av_update(key, force=force)
+
+        if results:
+            existing_price = {e['date']: e for e in EquityValue.objects.filter(equity=self).values('date', 'price', 'api', 'split_fixed')}
+            existing_dividends = {e['date']: e for e in EquityEvent.objects.filter(equity=self, event_type='Dividend').values('date', 'real_date', 'value', 'api', 'split_fixed')}
+            dividend_dates = self.get_dividend_dates()
+            for result_key in results:
+                if result_key in existing_price:
+                    #  has not been 'fixed' and used api is better or equal to existing api AND existing price != new API price
+                    if not existing_price[result_key]['split_fixed'] and results_api <= existing_price[result_key]['api'] and results[result_key][0] != existing_price[result_key]['price']:
+                        EquityValue.objects.filter(date=result_key, equity=self).update(price=results[result_key][0], api=results_api)
+                else:
+                    EquityValue.objects.create(date=result_key, equity=self, real_date=result_key,
+                                               source=DataSource.API.value, api=results_api, price=results[result_key][0])
+
+                if result_key in existing_dividends:
+                    real_date = dividend_dates[result_key] if result_key in dividend_dates else existing_dividends[result_key]['real_date']  # If our search for a real_date worked,  use it else keep the same
+                    if not existing_dividends[result_key]['split_fixed'] and results_api <= existing_dividends[result_key]['api'] and results[result_key][1] != existing_dividends[result_key]['value']:
+                        EquityEvent.objects.filter(date=result_key, equity=self, event_type='Dividend').update(value=results[result_key][1], real_date=real_date, api=results_api)
+                    elif real_date != existing_dividends[result_key]['real_date']:
+                        EquityEvent.objects.filter(date=result_key, equity=self, event_type='Dividend').update(real_date=real_date)
+                else:  # This is a new record
+                    if results[result_key][1] != 0:  # if we got a useful dividend - aka not 0
+                        real_date = dividend_dates[result_key] if result_key in dividend_dates else result_key  # If our search for a real_date worked, use it else use the normalized date
+                        EquityEvent.objects.create(date=result_key, equity=self, event_type='Dividend', api=results_api,
+                                                   real_date=real_date, source=DataSource.API.value, value=results[result_key][1])
+            if daily:
+                self.last_updated = datetime.now().date()
+                self.save()
+
+    def update(self, force: bool = False, key: str = None, daily=True):
         """
-        For simplification,  I will change the closing date (each month) to the first of the next month.  This
-        provides consistency later on when processing transactions (which will also be processed on the first of the
-        next month).
+        Update the stocks closing price for the last day of the month (current day of current month)
+        Update the dividend paid per share
+        kwargs:
+           force: boolean Default False - Add the force attribute.
+                Force with alphavantage will try the update even if it is the same date as today
+                Force with yfinance will try and take 20 years of data instead of 1 year.
+           key: string Default None - the alphavantage API key
+           daily: boolean Default True - Update the last update value on the equity
+
+        The yfinance API is always tried first
+
         """
-        if key:
+        logger.debug('Updating %s' % self)
+        if self.equity_type == 'Equity':
             if not self.validated:
                 self.set_equity_data()
                 self.save()
             elif self.searchable:
-                self.update_external_equity_data(force, key)
-        self.fill_equity_value_holes()
+                self.update_external_equity_data(force=force, key=key, daily=daily)
+            self.fill_equity_value_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
         queryset = EquityEvent.objects.filter(equity=self)
@@ -679,12 +764,14 @@ class EquityValue(models.Model):
     Track an equities value
     """
 
-    equity = models.ForeignKey(Equity, on_delete=models.CASCADE, limit_choices_to={'equity_type': 'Investment'})
+    equity = models.ForeignKey(Equity, on_delete=models.CASCADE, limit_choices_to={'equity_type': 'Equity'})
     real_date: date = models.DateField(verbose_name='Recorded Date', null=True)
     date: date = models.DateField(verbose_name='Normalized Date')
 
     price: float = models.FloatField()
     source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ESTIMATE.value)
+    api: int = models.IntegerField(default=Equity.no_api)
+    split_fixed: bool = models.BooleanField(default=False)
 
     def __str__(self):
         output = f'{self.equity} - {self.date}: {self.price} {DataSource(self.source).name}'
@@ -718,7 +805,8 @@ class EquityValue(models.Model):
                     logger.debug('Same Date price change- Updated %s' % obj)
                     obj.price = kwargs['price']
                     obj.save()
-
+            else:
+                logger.debug('Update is not worthy of a change')
         except EquityValue.DoesNotExist:
             kwargs['date'] = norm_date
             obj = cls.objects.create(**kwargs)
@@ -913,12 +1001,13 @@ class FundValue(models.Model):
 class EquityEvent(models.Model):
     """
     Track an equities dividends
+    Issue is alphavantage honour original price but adjusts Dividends
+    whereas yahoo adjusts both.   I think I need to update the records Event/Value to record who set this value.
+
     """
 
-    objects = None
     EVENT_TYPES = (('Dividend', 'Dividend'),  # Automatically created as part of 'Update' action
-                   ('SplitAD', 'Stock Split with Adjusted Dividends'),  # Historic dividends adjusted
-                   ('Split', 'Stock Split'))
+                   ('Split', 'Stock Split Dividend and Pricing will be adjusted based on API used'))
 
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE)
     real_date: date = models.DateField(verbose_name='Recorded Date', null=True)
@@ -927,6 +1016,8 @@ class EquityEvent(models.Model):
     value = models.FloatField()
     event_type = models.TextField(max_length=10, choices=EVENT_TYPES)
     source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ADMIN.value)
+    api: int = models.IntegerField(default=Equity.no_api)
+    split_fixed: bool = models.BooleanField(default=False)
 
     def __str__(self):
         return f'{self.equity} - {self.date}:{self.event_type} {DataSource(self.source).name}'
@@ -964,17 +1055,16 @@ class EquityEvent(models.Model):
     def save(self, *args, **kwargs):
         self.date = normalize_date(self.real_date)
         super(EquityEvent, self).save(*args, **kwargs)
-        if self.event_type == 'SplitAD':
+        if self.event_type == 'Split':
             logger.info('Adjusting Dividends for %s' % self.equity)
-            for event in EquityEvent.objects.filter(equity=self.equity, event_type='Dividend', date__lt=self.date):
-                event.value = event.value * self.value
+            for event in EquityEvent.objects.filter(equity=self.equity, event_type='Dividend', date__lt=self.date, api=Equity.ypfinance, split_fixed=False):
+                event.value *= self.value
+                event.split_fixed = True
                 event.save()
-        if self.event_type.startswith('Split'):
-            logger.info('Adjusting Shares for %s' % self.equity)
-            for transaction in Transaction.objects.filter(equity=self.equity, date__lt=self.date):
-                Transaction.objects.create(account=transaction.account,
-                                           equity=self.equity, price=0,
-                                           quantity=transaction.quantity, xa_action=Transaction.BUY, real_date=self.real_date)
+            for value in EquityValue.objects.filter(equity=self.equity, date__lt=self.date, api=Equity.ypfinance, split_fixed=False):
+                value.price *= self.value
+                value.split_fixed = True
+                value.save()
 
 
 class BaseContainer(models.Model):
@@ -987,6 +1077,9 @@ class BaseContainer(models.Model):
         abstract = True
 
     def __str__(self):
+        if self.__class__.__name__ == 'Account':
+            return self.name
+
         return '%s:%s' % (self.__class__.__name__, self.name)
 
     @property
@@ -1040,6 +1133,7 @@ class BaseContainer(models.Model):
     @property
     def e_pd(self) -> DataFrame:
         raise NotImplementedError
+
 
     @property
     def summary(self) -> dict:
@@ -1300,8 +1394,9 @@ class Account(BaseContainer):
 
         funded = dict(xas.filter(xa_action__in=[Transaction.FUND,]).annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
         redeemed = dict(xas.filter(xa_action__in=[Transaction.REDEEM,]).annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
-        dividends = dict(EquityEvent.objects.filter(date__gte=first, equity=equity, event_type='Dividend').values_list('date', 'value'))
-
+        dividends = dict(EquityEvent.objects.filter(real_date__gte=first, equity=equity, event_type='Dividend').values_list('date', 'value'))
+        equity_dividends = {e['date']: e for e in EquityEvent.objects.filter(equity=equity, event_type='Dividend').values('date', 'real_date', 'value')}
+        shares_df = self.shares_df(equity)
         if len(redivs) > 0 and not self.managed:
             logger.error('Account %s has REDIVS but is not managed - The realized gains may be double counted')
 
@@ -1316,6 +1411,7 @@ class Account(BaseContainer):
             if entry.date in trade_dates:  # We did something on this normalized day
                 for trade in trades.filter(date=entry.date):  # Over each trade on this day
                     shares += trade.quantity
+                    logger.debug('Date:%s Equity:%s Trade:%s ID:%s Shares:%s' % (entry.date, equity, trade.quantity, trade.id, shares))
                     if trade.currency_value > 0:
                         total_spend += trade.currency_value
                     else:
@@ -1328,7 +1424,11 @@ class Account(BaseContainer):
 
             # Step 3, Update Dividends for non-managed
             if not self.managed:
-                dividend = dividends[entry.date] * cf * shares if entry.date in dividends else 0
+                if entry.date in equity_dividends:
+                    shares = self.shares_on_date(shares_df, equity_dividends[entry.date]['real_date'])
+                    dividend = equity_dividends[entry.date]['value'] * cf * shares
+                else:
+                    dividend = 0
                 total_dividends += dividend
                 realized_gain += dividend
             else:
@@ -1411,6 +1511,7 @@ class Account(BaseContainer):
     def p_pd(self) -> DataFrame:
         '''
         Regardless of the equities,  how is the account doing based on money in,  money out
+
         :return:
         '''
 
@@ -1425,46 +1526,62 @@ class Account(BaseContainer):
         if not self.transactions:  # Account is new/empty
             return df
 
+        # From chatgpt - most efficient method to build a dictionary of dividends received.
+        dividends_df = self.e_pd.groupby('Date', as_index=False)['Dividends'].sum()
+        dividends_df['Date'] = dividends_df['Date'].dt.date
+        dividends = dict(zip(dividends_df['Date'], dividends_df['Dividends']))
+
         this_date = self.transactions.earliest('date').date
         final_date = normalize_date(self.end) if self.end else normalize_today()
         xas = self.transactions
         xa_dates = list(self.transactions.values_list('date', flat=True).distinct())
-        funding = redeemed = cash = effective = 0
+        funds = trans_in = withdraw = trans_out = cash = 0
         last_date = None
         while this_date <= final_date:
-            new_effective = 0
-            if this_date in xa_dates:
-                funds = xas.filter(xa_action=Transaction.FUND, date=this_date).aggregate(Sum('value'))['value__sum']
-                new_cash = xas.filter(xa_action=Transaction.INTEREST, date=this_date).aggregate(Sum('value'))['value__sum']
-                trans_in = xas.filter(xa_action=Transaction.TRANS_IN, date=this_date).aggregate(Sum('value'))['value__sum']
-                withdraw = xas.filter(xa_action=Transaction.REDEEM, date=this_date).aggregate(Sum('value'))['value__sum']
-                trans_out = xas.filter(xa_action=Transaction.TRANS_OUT, date=this_date).aggregate(Sum('value'))['value__sum']
-                delta = xas.filter(xa_action__in=[Transaction.BUY, Transaction.SELL], date=this_date).aggregate(Sum('value'))['value__sum']
+            new_cash = delta = 0
+            if this_date in xa_dates:  # Maybe this should be more explicit since REDEEM on some accounts is monthly
+                new_funds = xas.filter(xa_action=Transaction.FUND, date=this_date).aggregate(Sum('value'))['value__sum'] or 0
+                new_cash = xas.filter(xa_action=Transaction.INTEREST, date=this_date).aggregate(Sum('value'))['value__sum'] or 0
+                new_trans_in = xas.filter(xa_action=Transaction.TRANS_IN, date=this_date).aggregate(Sum('value'))['value__sum'] or 0
+                new_withdraw = xas.filter(xa_action=Transaction.REDEEM, date=this_date).aggregate(Sum('value'))['value__sum'] or 0
+                new_trans_out = xas.filter(xa_action=Transaction.TRANS_OUT, date=this_date).aggregate(Sum('value'))['value__sum'] or 0
+                delta = xas.filter(xa_action__in=[Transaction.BUY, Transaction.SELL], date=this_date).aggregate(Sum('value'))['value__sum'] or 0
 
-                funds = funds if funds else 0
-                new_cash = new_cash if new_cash else 0
-                trans_in = trans_in if trans_in else 0
-                withdraw = withdraw if withdraw else 0
-                trans_out = trans_out if trans_out else 0
-                delta = delta * -1 if delta else 0  # delta is used to calculate cash,  and since buy is + and sell is - when need to negate the results
+                funds += new_funds
+                trans_in += new_trans_in
+                withdraw += new_withdraw
+                trans_out += new_trans_out
+                delta *= -1  # delta is used to calculate cash,  and since buy is + and sell is - when need to negate the results
+                new_cash += new_funds + new_trans_in + new_withdraw + new_trans_out + delta
 
-                funding += funds + trans_in
-                redeemed += withdraw + trans_out
-                cash += new_cash + funds - withdraw + delta
-                new_effective = new_cash + funds + trans_in - withdraw - trans_out
+                #new_gain = trans_in - trans_out
+                #new_funding = funds - withdraw
+                #cash += new_cash + new_gain + new_funding + delta
+
+                #funding += new_funding
+                #if funding < 0:
+                #    gains += funding
+                #    funding = 0
+                #gains += new_gain
+            dividend = dividends[this_date] if this_date in dividends else 0
+            new_cash += dividend
+            cash += new_cash
+            logger.debug('%s:funds:%s trans_in:%s withdraw:%s transout:%s delta:%s new:%s dividends: %s cash:%s' % (this_date, funds, trans_in, withdraw, trans_out, delta, new_cash, dividend, cash))
             # Clear up floating errors
-            cash = 0 if cash < 1 else cash
-            logger.debug('%s %s %s %s' % (this_date, funding, redeemed, cash))
-            if funding or redeemed or cash:
-                if last_date:
-                    effective = Inflation.inflated(effective, last_date, this_date)
-                last_date = this_date
-                effective += new_effective
-                df.loc[len(df.index)] = [this_date, funding, redeemed, cash,  effective]
+            cash = 0 if (0 < cash < 1) or self.account_type != 'Investment' else cash
+            # if funds or gains or cash:  # Skip empty rows
+            #    if last_date:
+            #        eff_funding = Inflation.inflated(eff_funding, last_date, this_date)
+            #        eff_gains = Inflation.inflated(eff_gains, last_date, this_date)
+            #    last_date = this_date
+            #    eff_funding += new_funding
+            #    eff_gains += new_gain
+            #    # ['Date', 'Funds', 'Redeemed', 'TransIn', 'TransOut', 'NewCash', 'Cash', 'Effective']  # From Equities -> 'TotalDividends',  'Value',  Calculated: 'Effe
+            df.loc[len(df.index)] = [this_date, funds, withdraw, trans_in, trans_out, new_cash, cash,  delta ]
             this_date = next_date(this_date)
 
         df['Date'] = pd.to_datetime(df['Date'])
-        df = df.merge(self.e_pd.groupby(['Date']).agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).reset_index(), on='Date',
+        df = df.merge(self.e_pd.groupby(['Date']).agg({'Cost': 'sum', 'TotalDividends': 'sum', 'Dividends': 'sum', 'Value': 'sum'}).reset_index(), on='Date',
                                  how='left')
         df.replace(np.nan, 0, inplace=True)
         df['Actual'] = df['Cash'] + df['Value']
@@ -1475,7 +1592,6 @@ class Account(BaseContainer):
         super(Account, self).reset()
         if self.portfolio:
             self.portfolio.reset()
-        self.update_static_values()
 
     def save(self, *args, **kwargs):
         if not self.account_name:
@@ -1508,14 +1624,44 @@ class Account(BaseContainer):
             return BoolReason(False, "This account has not been setup correctly")
         return BoolReason(True)
 
+    def shares_on_date(self, shares_df: DataFrame, on_date=datetime.now().date()) -> float:
+        """
+        Based on a shares_df,  which is dataframe with a index thats a date and a value which is the number of shares on that date,  return the value for you
+        """
+        if shares_df.empty or on_date < shares_df.head(1).index.item():
+            return 0
+
+        try:
+            return shares_df[shares_df.index <= on_date].iloc[-1].item()
+        except IndexError:
+            return 0
+
+    def shares_df(self, equity: Equity) -> DataFrame:
+        """
+        Create a DataFrame based on number of shares held on each day of share trades
+        Accessed with 'shares_on_date(shares_df, date=normalize_today)
+        """
+        result = {}
+        shares = 0
+        for xa in self.transactions.filter(equity=equity, quantity__isnull=False).order_by('real_date'):
+            shares += xa.quantity
+            result[xa.real_date] = shares
+        if result:
+            return pd.DataFrame.from_dict(result, orient='index')
+        else:
+            return pd.DataFrame()
+
     @property
     def start(self):
-        if self._start:
-            return self._start
-        if len(self.p_pd) != 0:
-            return self.p_pd['Date'].min()
-        if len(self.e_pd) != 0:
-            return self.e_pd['Date'].min()
+        try:
+            return self.transactions.earliest('date').date
+        except Transaction.DoesNotExist:
+            if self._start:
+                return self._start
+            if len(self.p_pd) != 0:
+                return self.p_pd['Date'].min()
+            if len(self.e_pd) != 0:
+                return self.e_pd['Date'].min()
         return normalize_today()
 
     @property
@@ -1555,9 +1701,12 @@ class Account(BaseContainer):
         Ensure that each of my equities is updated
         :return:
         """
-        for equity in self.equities:
-            if equity.update():
+        key = self.user.av_api_key if self.user.av_api_key else None
+        for equity in Equity in self.equities:
+            if equity.update(force=False, key=key):
                 sleep(2)  # Any faster and my free API will fail
+        self.reset()
+
 
     def update_static_values(self):
         """
@@ -1591,15 +1740,15 @@ class Transaction(models.Model):
     Track changes made to an equity on a account
     """
 
-    FUND = 1
+    FUND = 1  # Actual Contributions
     BUY = 2
     REDIV = 3
     SELL = 4
-    REDEEM = 5
+    REDEEM = 5  # Money removed from Funding
     INTEREST = 6  # Used for anything that alters cash balance but is not tied an equity
     FEES = 7
-    TRANS_IN = 8
-    TRANS_OUT = 9
+    TRANS_IN = 8  # Money moved in but not a contribution
+    TRANS_OUT = 9  # Money moved out but not from contributions
     VALUE = 10
     BALANCE = 11
 
@@ -1646,12 +1795,12 @@ class Transaction(models.Model):
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
     estimated = models.BooleanField(default=False)
 
-    @classmethod
-    def transaction_value(cls, xa_string: str) -> int:
-        for key, value in cls.TRANSACTION_TYPE:
-            if value == xa_string:
-                return key
-        raise AssertionError(f'Invalid transaction string: {xa_string}')
+    def __str__(self):
+        try:
+            xa_str = self.TRANSACTION_MAP[self.xa_action]
+        except KeyError:
+            xa_str = 'DATA CORRUPTION'
+        return f'{self.account}:{self.equity}:{self.real_date.strftime("%Y-%m-%d")}:{xa_str}: {self.price} {self.quantity} {self.value}'  # pragma: no cover
 
     @property
     def action_str(self):
@@ -1661,13 +1810,27 @@ class Transaction(models.Model):
             value = 'Unknown'
         return value
 
-    def __str__(self):
-        try:
-            xa_str = self.TRANSACTION_MAP[self.xa_action]
-        except KeyError:
-            xa_str = 'DATA CORRUPTION'
-
-        return f'{self.account}:{self.equity}:{self.date.strftime("%Y-%m-%d")}:{xa_str}: {self.price} {self.quantity} {self.value}'  # pragma: no cover
+    @classmethod
+    def edit_choices(cls, input_action):
+        """
+        Used by the TransactionForm,  only certain actions are changeable
+        """
+        if input_action == cls.FUND or input_action == cls.TRANS_IN:
+            return [(cls.FUND, cls.TRANSACTION_MAP[cls.FUND]),
+                    (cls.TRANS_IN, cls.TRANSACTION_MAP[cls.TRANS_IN])]
+        if input_action == cls.BUY or input_action == cls.TRANS_IN:
+            return [(cls.BUY, cls.TRANSACTION_MAP[cls.BUY]),
+                    (cls.TRANS_IN, cls.TRANSACTION_MAP[cls.TRANS_IN])]
+        if input_action == cls.SELL or input_action == cls.TRANS_OUT:
+            return [(cls.SELL, cls.TRANSACTION_MAP[cls.SELL]),
+                    (cls.TRANS_OUT, cls.TRANSACTION_MAP[cls.TRANS_OUT])]
+        if input_action == cls.REDEEM or input_action == cls.TRANS_OUT:
+            return [(cls.REDEEM, cls.TRANSACTION_MAP[cls.REDEEM]),
+                    (cls.TRANS_OUT, cls.TRANSACTION_MAP[cls.TRANS_OUT])]
+        if input_action:
+            return [(input_action, cls.TRANSACTION_MAP[input_action])]
+        else:
+            return []
 
     @property
     def is_major(self) -> bool:
@@ -1701,14 +1864,12 @@ class Transaction(models.Model):
 
         self.price = 0 if not self.price else abs(self.price)
         self.quantity = 0 if not self.quantity else abs(self.quantity)
-        if not self.value:
-            self.value = self.price * self.quantity
+        self.value = abs(self.value) if self.value else abs(self.price * self.quantity)
 
         # Everything is positive
-
         if self.xa_action == self.REDIV:
             self.price = 0  # On Dividends
-        elif self.xa_action in [self.SELL, self.TRANS_OUT, self.FEES]:
+        elif self.xa_action in [self.SELL, self.REDEEM, self.TRANS_OUT, self.FEES]:
             self.quantity *= -1
             self.value *= -1
 
@@ -1739,3 +1900,10 @@ class Transaction(models.Model):
         else:
             if do_reset:
                 self.account.reset()
+
+    @classmethod
+    def transaction_value(cls, xa_string: str) -> int:
+        for key, value in cls.TRANSACTION_TYPE:
+            if value == xa_string:
+                return key
+        raise AssertionError(f'Invalid transaction string: {xa_string}')

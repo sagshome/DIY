@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Profile, URL
+from .models import Profile, API
 
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "currency", "av_api_key")
@@ -8,7 +8,7 @@ class ProfileAdmin(admin.ModelAdmin):
 
 class URLAdmin(admin.ModelAdmin):
     list_display = ("name", "_active")
-    fields = ["name", "base", "_active", "_last_fail"]
+    fields = ["name", "base", "_active", "_last_fail", "fail_reason", "fail_length"]
 
 admin.site.register(Profile, ProfileAdmin)
-admin.site.register(URL, URLAdmin)
+admin.site.register(API, URLAdmin)

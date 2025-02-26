@@ -1,3 +1,105 @@
+# Tracking Wealth #
+* Contributions are used to calculate Growth
+* Contributions + TransIn (Funding) is used to calculate rates of returns
+ 
+* Withdraw requests always remove Contributions first
+  * If Contributions is 0
+ 
+* Transfer requests generate Redeem until Funding is Depleted
+* If the transfer cases Redeem then make a Funding request
+* If the transfer causes TransOut then make a TransIn request 
+
+* Transfer of actual shares,  cause a SELL,  BUY, based on AvgPrice
+  * Redeem/Fund or TransOut/TransIn
+
+## Portfolios ##
+Cost is based on funds that are directly contributed into accounts
+that make up the portfolio.   When money moves from account to account,  growth that
+funded the new account should not be counted as new funds.
+
+## Accounts ##
+Cost is based on funds that were contributed or transferred
+into the account.
+
+Funding = Contributions + TransIn (TransIn can be positive or negative)
+
+## Equities ##
+Cost and Effective cost are based on actual purchase and sale of equities
+
+
+# Use Cases #
+Tracking wealth
+
+Funds - are comprised of 
+* Contributions (1:1 mapping of direct payments)
+* Transfers In (Gains or Losses from a previous account)
+* Interest/Dividends (From equities or savings held in this account)
+* Dividends (from)
+
+New money comes into an account via.
+1) Stock Transfer
+2) Money Transfer
+3) Interest
+4) 
+
+## Use Case 1 - Transfer Account - Net Gain - Same Portfolio ##
+Account 1 (acc1) - is closed out and moved to Account 2 (acc2).   acc1 Present Funding is 
+tf1 (10K) and value when closed cv1 (15K).   
+
+I expect acct to have tf2 of 10k,  and a transferred value tv2 of 5K.   
+
+If I look at a portfolio view,  I would see seamless funding to the 10K mark.
+If I look at the acc1 view I would see it closed off with an obvious 5K in gain
+If I look at the acc2 view,  I would see a funding of 10K and a starting value of 15K,  but 
+on the datatable side,  I should only calculate the gains/losses based on the 15K starting
+value.
+
+### Notes ###
+* When I close an account,  I would need to reedem the PV funded and transfer
+out/in the differance between the funding and value it could be negative
+  * xa1 - Redeem acc1 - tf1
+  * xa2 - Fund acc2 - tf1
+  * xa2 - TransIn acc2 (cv1 - tf1)
+* when producting an account chart,  the 'funding' value would be based on transfer-in and funding
+  * account.p_pd['ActualFunding] = account.p_pd['Funds] + account.p_pd['TransIn]
+* when producing a portfolio chart,  only on the funding value
+* I need to change the account dataframe to reflect the differance
+  * New column TransIn (calculated on demand) ?
+* or do I do it in the actual chart view.
+* How do I prevent squacking when building a dataframe and the redeem is more then I have
+  * Add a column TransOut to compare to  Reedemed <= (TransOut + Funding)  9000 <= (-1000 + 10000)
+
+## Use Case 2 - Transfer Account - Net Gain - Differant Portfolio ##
+Account 1 (acc1) - is closed out and moved to Account 2 (acc2).   acc1 total funding is
+tf1 (10K) and value when closed cv1 (15K).
+
+I expect acct to have tf2 of 10k,  and a transferred value tv2 of 5K.
+
+* If I look at a portfolio view,  I would see seamless funding drop by 10k on close date.
+* If I look at the acc1 view I would see it closed off with an obvious 5K in gain
+* If I look at the acc2 view,  I would see a funding of 10K and a starting value of 15K,  but
+on the datatable side,  I should only calculate the gains/losses based on the 15K starting
+value.
+
+### Notes ###
+Same as UseCase 1
+
+## Use Case 3 - Transfer some stock - Different Portfolio ##
+Account 1 (acc1) - moves X shares of Y Account 2.  
+* The value of the trade is removed from funding
+* The value of the trade is added to funding
+
+
+* If I look at a portfolio view,  I would see seamless funding drop by 10k on close date.
+* If I look at the acc1 view I would see it closed off with an obvious 5K in gain
+* If I look at the acc2 view,  I would see a funding of 10K and a starting value of 15K,  but
+  on the datatable side,  I should only calculate the gains/losses based on the 15K starting
+  value.
+
+### Notes ###
+Same as UseCase 1
+
+# Notes and such #
 docker run --name redis-container -p 6379:6379 -d redis
 docker exec -it redis-container redis-cli
 PING  

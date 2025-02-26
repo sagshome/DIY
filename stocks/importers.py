@@ -363,11 +363,11 @@ class StockImporter:
             equity = Equity.objects.create(symbol=symbol, name=name, region=region, currency=currency)
             if not equity.equity_type:
                 if equity.name.find(' ETF') != -1:
-                    equity.equity_type = 'ETF'
+                    equity.equity_type = 'Equity'
             elif not managed:
                 equity.equity_type = 'Equity'
             elif name.find('%') != -1 or name.find('SAVINGS') != -1:
-                equity.equity_type = 'MM'
+                equity.equity_type = 'Cash'
             else:
                 equity.equity_type = 'MF'
             equity.save()
@@ -496,10 +496,6 @@ class ManulifeWealth(StockImporter):
 
     def csv_xa_type(self, row) -> int:
         csv_value = row[self.mappings['XAType']]
-        #if csv_value in ['Conversion',]:
-        #    if row[self.mappings['Quantity']] == 0:
-        #        return INT
-        #    return TRANSFER_IN
         if csv_value in ['Buy', ]:
             return BUY
         if csv_value == 'Transfer Out - External':  # Do not know,  we have not ever withdrawn funds

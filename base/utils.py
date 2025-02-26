@@ -18,6 +18,18 @@ class DIYImportException(Exception):
     pass
 
 
+class BoolReason():
+    def __init__(self, result: bool, reason: str=None):
+        self.result = result
+        self.reason = reason
+
+    def __bool__(self):
+        return self.result == True
+
+    def __str__(self):
+        return self.reason
+
+
 class DateUtil:
     '''
     A class to set step and start date based on period and span
@@ -240,5 +252,14 @@ def next_date(input_date: date) -> date:
 def normalize_today() -> datetime.date:
     return datetime.today().replace(day=1).date()
 
+
 def tempdir() -> Path:
     return Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir())
+
+def aggregate_or_0(expression):
+    """
+    Evaluate and express
+    """
+    value = expression
+    value = value if value else 0
+    return value
