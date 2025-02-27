@@ -35,7 +35,7 @@ urlpatterns = [
 
     path(r'account/<pk>/table/', views.AccountTableView.as_view(), name='account_table'),
     path(r'account/<pk>/update/', views.account_update, name='account_update'),
-    path(r'account/<container_type>/<pk>/<obj_type>/<id>/details/', views.account_equity_details, name='account_equity_details'),
+    path(r'account/<container_type>/<pk>/<id>/details/', views.account_equity_details, name='account_equity_details'),
 
     path(r'account/<pk>/<symbol>/compare/', views.account_compare, name='portfolio_compare'),
     path(r'account/<p_pk>/<e_pk>/<date_str>/update', views.account_equity_date_update, name='update_by_date'),

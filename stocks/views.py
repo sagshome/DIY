@@ -1175,7 +1175,7 @@ def account_fund_details(request, container_type, pk, obj_type, id):
 
 
 @login_required
-def account_equity_details(request, container_type, pk, obj_type, id):
+def account_equity_details(request, container_type, pk, id):
     """
 
     :param request:
@@ -1188,73 +1188,23 @@ def account_equity_details(request, container_type, pk, obj_type, id):
 
     """
     if container_type in ['Account']:
-        account = get_object_or_404(Account, pk=pk, user=request.user)
+        container = get_object_or_404(Account, pk=pk, user=request.user)
     else:
-        account = get_object_or_404(Portfolio, pk=pk, user=request.user)
+        container = get_object_or_404(Portfolio, pk=pk, user=request.user)
 
     equity = get_object_or_404(Equity, id=id)
-    fund = None
-    key = equity.key
+    df = container.equity_dataframe(equity)
+    df.sort_values(by='Date', ascending=False, inplace=True)
+    df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%b')
 
-    compare_to = None
-    total_dividends = 0
-    data = []
-    new_df = account.e_pd.sort_values(by='Date').loc[account.e_pd['Equity'] == key]
-    new_df.sort_values(by='Date', ascending=False, inplace=True, kind='quicksort')
-    for element in new_df.to_records():
-        extra_data = ''
-        this_date = pd.Timestamp(element['Date'])
-        if obj_type == 'Fund':
-            quantity = price = 0
-        else:
-            if this_date in account.trade_dates(equity):
-                quantity, price = account.trade_details(equity, this_date)
-                if quantity < 0:
-                    extra_data = f'Sold {quantity} shares at ${price}'
-                else:
-                    if price == 0:
-                        extra_data = f'Received {quantity} shares (DRIP or Split)'
-                    else:
-                        extra_data = f'Bought {quantity} shares at ${price}'
+    xas = container.transactions.filter(equity=equity).order_by('-date')
 
-            if element['Shares'] == 0:
-                total_dividends = equity_growth = 0
-            else:
-                total_dividends = element['TotalDividends']
-                equity_growth = element['Value'] - element['Cost'] + total_dividends
-
-        data.append({'date': this_date,
-                     'shares': element['Shares'],
-                     'value': element['Value'],
-                     'cost': element['Cost'],
-                     'loss': element['Cost'] - element['Value'] > 0,
-                     'total_dividends': total_dividends,
-                     'price': element['Price'],
-                     'avgcost': element['AvgCost']})
-    if obj_type == 'Fund':
-        funded = 0
-    else:
-        funded = account.transactions.filter(equity=equity, xa_action__in=(Transaction.BUY, Transaction.SELL)).aggregate(Sum('value'))['value__sum']
-
-    profit = False
-    if funded and funded < 0:
-        profit = True
-        funded = funded * -1
-
-
-    xas = account.transactions.filter(equity=equity).order_by('-date')
-
-    return render(request, 'stocks/portfolio_equity_detail.html',
-                  {'context': data,
+    return render(request, 'stocks/account_equity_detail.html',
+                  {'data': json.loads(df.to_json(orient='records')),
                    'account_type': container_type,
-                   'object_type': obj_type,
-                   'account': account,
+                   'container': container,
                    'equity': equity,
-                   'funded': funded,
-                   'profit': profit,
-                   'dividends': total_dividends,
                    'xas': xas,
-                   'compare_to': compare_to
                    })
 
 
@@ -1499,7 +1449,7 @@ def compare_equity_chart(request):
 @login_required
 def cost_value_chart(request):
     """
-    The cost value chart is displayed with accounts,  portfolio and equities (in an account)
+    The cost value chart is displayed with accounts,  portfolio and equities
     """
 
     colors = COLORS.copy()
@@ -1516,7 +1466,6 @@ def cost_value_chart(request):
             my_object = Portfolio.objects.get(id=object_id, user=request.user)
         except Portfolio.DoesNotExist:
             return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-
     else:
         try:
             my_object = Account.objects.get(id=object_id, user=request.user)
@@ -1528,15 +1477,9 @@ def cost_value_chart(request):
             equity = Equity.objects.get(id=equity_id)
         except Equity.DoesNotExist:
             return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-        if not my_object:
-            return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-        df = my_object.e_pd.loc[(my_object.e_pd['Equity'] == equity.key) & (my_object.e_pd['Shares'] != 0)]
-        try:
-            df['adjusted_value'] = df['Value'] + df['TotalDividends']
-        except ValueError:   # No data it would appear
-            return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-        label1 = 'Cost'
 
+        df = my_object.equity_dataframe(equity)
+        label1 = 'Cost'
     else:  # Portfolio or Account
         df = my_object.p_pd
         de = my_object.e_pd.groupby('Date', as_index=False).sum('Value')
@@ -1557,13 +1500,15 @@ def cost_value_chart(request):
     if df.empty:
         chart_data = {}
     else:
-        df['Date'] = df['Date'].dt.date
-        chart_data['labels'] = sorted(df['Date'].unique())
-        chart_data['datasets'].append({'label': label1, 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': colors[2], 'backgroundColor': colors[2], 'tension': 0.1})
-        chart_data['datasets'].append({'label': 'Value', 'fill': False,'data': df['Value'].tolist(),'borderColor': colors[1], 'backgroundColor': colors[1]})
+        df.sort_values(by='Date', ascending=True, inplace=True)
+        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%b')
+
+        chart_data['labels'] = df['Date'].to_list()
+        chart_data['datasets'].append({'label': label1, 'fill': False, 'data': df['Cost'].tolist(), 'borderColor': PALETTE['cost'], 'backgroundColor': PALETTE['cost'], 'tension': 0.1})
+        chart_data['datasets'].append({'label': 'Value', 'fill': False,'data': df['Value'].tolist(),'borderColor': PALETTE['value'], 'backgroundColor': PALETTE['value']})
         if equity_id:
             chart_data['datasets'].append(
-                {'label': 'Value w/ Dividends', 'fill': False, 'data': df['adjusted_value'].tolist(), 'borderColor': colors[3], 'backgroundColor': colors[3]})
+                {'label': 'Value w/ Dividends', 'fill': False, 'data': df['AdjValue'].tolist(), 'borderColor': PALETTE['dividends'], 'backgroundColor': PALETTE['dividends']})
 
     return JsonResponse(chart_data)
 

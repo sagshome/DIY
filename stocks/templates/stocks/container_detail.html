@@ -61,13 +61,12 @@
 <div class="w3-container">
     {% include 'stocks/includes/account_summary_list.html' %}
 </div>
-
-{% if object_type == 'Portfolio' or object_type == 'Account' and object.account_type == 'Investment' %}
-<div class="w3-row">
-    <div class="w3-container">
-        {% include 'stocks/includes/equity_summary_list.html' %}
+{% if object_type == 'Portfolio' or object_type == 'Account' and account.account_type == 'Investment' %}
+    <div class="w3-row">
+        <div class="w3-container">
+            {% include 'stocks/includes/equity_summary_list.html' %}
+        </div>
     </div>
-</div>
 {% endif %}
 {% endblock content %}
 

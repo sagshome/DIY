@@ -38,6 +38,9 @@ PALETTE = {'green': '#2ECC71',
            'rose': '#E4C1D9',
            'brown': '#8B572A',
            'orange': '#FEC89A',
+           'cost': '#000000',
+           'value': '#2ECC71',
+           'dividends': '#4A90E2',
            }
 
 # FF6F61 (Coral Red) and #6B8E23 (Olive Drab) are complementary because they are on opposite sides of the color wheel, creating a striking contrast.

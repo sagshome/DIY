@@ -24,9 +24,9 @@
                 <tr>
                     <td class="w3-left-align w3-small ">
                         {% if object_type == 'Account' %}
-                            <a href="{% url 'account_equity_details' object_type object.id item.Object_Type item.Object_ID %}">{{ item.Equity }}</a>
+                            <a href="{% url 'account_equity_details' object_type account.id item.Object_ID %}">{{ item.Equity }}</a>
                         {% else %}
-                            {{ item.Equity }}
+                        <a href="{% url 'account_equity_details' object_type account.id item.Object_ID %}">{{ item.Equity }}</a>
                         {% endif %}
                     </td>
                     <td class="w3-right-align w3-small">

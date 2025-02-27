@@ -1134,7 +1134,6 @@ class BaseContainer(models.Model):
     def e_pd(self) -> DataFrame:
         raise NotImplementedError
 
-
     @property
     def summary(self) -> dict:
         """
@@ -1172,6 +1171,15 @@ class BaseContainer(models.Model):
     @property
     def transactions(self):
         raise NotImplementedError
+
+    def equity_dataframe(self, equity: Equity) -> DataFrame:
+        df = self.e_pd.loc[self.e_pd['Object_ID'] == equity.id].groupby(['Date']).agg(
+            {'Shares': 'sum', 'Cost': 'sum', 'Price': 'max', 'TotalDividends': 'sum', 'TBuy': 'sum', 'TSell': 'sum'}).reset_index()
+        df['Value'] = df['Shares'] * df['Price']
+        df['AvgCost'] = df['Cost'] / df['Shares']
+        df['UnRelGain'] = df['Value'] - df['Cost']
+        df['AdjValue'] = df['Value'] + df['TotalDividends']
+        return df
 
 
 class Portfolio(BaseContainer):
