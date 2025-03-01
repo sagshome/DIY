@@ -188,7 +188,7 @@ def clear_simple_cache(key):
         cache.delete(key)
 
 
-def cache_dataframe(key, dataframe, timeout=3600):
+def cache_dataframe(key, dataframe, timeout=36000):
     """
     Cache a Pandas DataFrame.
 

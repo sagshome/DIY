@@ -121,6 +121,7 @@ class TransactionForm(forms.ModelForm):
         model = Transaction
         fields = ("user", "xa_action", "account", "equity", "real_date", "price", "quantity", "value", "to_account", "repeat", "number")
         widgets = {
+            'equity': forms.Select(attrs={'class': 'select2-field'}),  # Enable Select2)
             'user': forms.HiddenInput(),
             'xa_action': forms.Select(),
             'account': forms.HiddenInput(),
@@ -135,7 +136,7 @@ class TransactionForm(forms.ModelForm):
         self.fields['price'].required = False
         self.fields['value'].required = False
         self.fields['quantity'].required = False
-        self.fields['equity'].queryset = Equity.objects.filter(equity_type='Equity').order_by('symbol')
+        self.fields['equity'].queryset = Equity.objects.none()
 
         account = user = None
         try:
@@ -150,10 +151,6 @@ class TransactionForm(forms.ModelForm):
             self.fields['to_account'].queryset = Account.objects.filter(user=user).exclude(id=account.id)
         else:
             self.fields['to_account'].queryset = Account.objects.none()
-        #if self.instance.account.portfolio:
-        #    self.fields['to_account'].queryset = Account.objects.filter(user=self.instance.user, portfolio=self.instance.account.portfolio).exclude(id=self.instance.account.id)
-        #else:
-        #    self.fields['to_account'].queryset = Account.objects.filter(user=self.instance.user, portfolio__isnull=True).exclude(id=self.instance.account.id)
 
     def clean_equity(self):
         account = self.cleaned_data['account']
@@ -221,10 +218,12 @@ class TransactionEditForm(TransactionForm):
         self.fields['equity'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["equity"].widget.attrs['readonly'] = True
         self.fields['equity'].queryset = Equity.objects.filter(id=self.initial['equity'])
+
         action_choices = Transaction.edit_choices(self.initial['xa_action'])
         self.fields['xa_action'].choices = action_choices
         if len(action_choices) == 1:
             self.fields['xa_action'].widget.attrs['style'] = 'background-color:Wheat'
+
 
 class ManualUpdateEquityForm(forms.Form):
 

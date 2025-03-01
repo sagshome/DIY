@@ -1,25 +1,26 @@
 from django.urls import path
 
-from . import views
+from . import views, apis, charts
 
 # Base is stocks/
 urlpatterns = [
     path(r'', views.StocksMain.as_view(), name='portfolio_home'),
 
-    path(r'api/search/', views.search_equity, name='equity_search'),
-    path(r'api/search_new/', views.search_equity, name='equity_search_new'),
+    path(r'api/search/', apis.search_equity, name='equity_search'),
+    path(r'api/search_add/', apis.search_equity_add, name='equity_search_add'),
 
-    path(r'api/equity_list/', views.get_equity_list, name='equity_list'),
-    path(r'api/action_list/', views.get_action_list, name='action_list'),
-    path(r'api/xa_values/', views.get_equity_values, name='xa_values'),
-    path(r'api/cash_value/', views.get_cash_value, name='cash_value'),
+    path(r'api/equity_list/', apis.get_equity_list, name='equity_list'),
+    path(r'api/action_list/', apis.get_action_list, name='action_list'),
+    path(r'api/xa_values/', apis.get_equity_values, name='xa_values'),
+    path(r'api/cash_value/', apis.get_cash_value, name='cash_value'),
 
-    path(r'api/cost_value/', views.cost_value_chart, name='cost_value_chart'),
-    path(r'api/compare_chart/', views.compare_equity_chart, name='compare_equity_chart'),
-    path(r'api/wealth', views.wealth_summary_chart, name='wealth_chart'),
-    path(r'api/wealth_pie', views.wealth_summary_pie, name='wealth_pie'),
-    path(r'api/wealth_summary', views.acc_summary, name='wealth_summary'),
-    path(r'api/equity_summary', views.equity_summary, name='equity_summary'),
+    path(r'api/cost_value/', charts.cost_value_chart, name='cost_value_chart'),
+    path(r'api/compare_chart/', charts.compare_equity_chart, name='compare_equity_chart'),
+    path(r'api/wealth', charts.wealth_summary_chart, name='wealth_chart'),
+    path(r'api/wealth_pie', charts.wealth_summary_pie, name='wealth_pie'),
+    path(r'api/wealth_summary', charts.acc_summary, name='wealth_summary'),
+    path(r'api/equity_summary', charts.equity_summary, name='equity_summary'),
+    path(r'api/<pk>/<orig_id>/<compare_id>/compare/', charts.account_equity_compare, name='portfolio_equity_compare_chart'),
 
     path(r'equity/add', views.add_equity, name='add_equity'),
     path(r'equity/<id>/update/', views.equity_update, name='equity_update'),
@@ -37,10 +38,8 @@ urlpatterns = [
     path(r'account/<pk>/update/', views.account_update, name='account_update'),
     path(r'account/<container_type>/<pk>/<id>/details/', views.account_equity_details, name='account_equity_details'),
 
-    path(r'account/<pk>/<symbol>/compare/', views.account_compare, name='portfolio_compare'),
     path(r'account/<p_pk>/<e_pk>/<date_str>/update', views.account_equity_date_update, name='update_by_date'),
     path(r'account/<a_pk>/<date_str>/update', views.reconciliation, name='update_account_date'),
-    path(r'account/<pk>/<orig_id>/<compare_id>/compare/', views.account_equity_compare, name='portfolio_equity_compare'),
 
     path(r'portfolio/add/', views.PortfolioAdd.as_view(), name='portfolio_add'),
     path(r'portfolio/<pk>/', views.PortfolioDetailView.as_view(), name='portfolio_details'),

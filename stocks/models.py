@@ -387,10 +387,7 @@ class Equity(models.Model):
     @property
     def key(self):
         key = self.symbol
-        if self.equity_type == 'Equity':
-            if self.region == 'Canada':
-                key = self.symbol + '.TO'
-        elif self.equity_type == 'Cash':
+        if self.equity_type == 'Cash':
             key = f'Cash-Account:{self.id}'
         elif self.equity_type == 'Value':
             key = f'Value-Account:{self.id}'
@@ -436,7 +433,6 @@ class Equity(models.Model):
             data = request.json()
             if 'bestMatches' in data and len(data['bestMatches']) > 0 and data['bestMatches'][0]['9. matchScore'] == '1.0000':
                 self.name = data['bestMatches'][0]['2. name']
-                self.equity_type = data['bestMatches'][0]['3. type']
                 for region in self.REGIONS:
                     if data['bestMatches'][0]['4. region'] == region[1]:
                         self.region = region[0]
@@ -445,18 +441,18 @@ class Equity(models.Model):
                 return True
 
     def yp_set_data(self):
-        data = yf.Ticker(self.key).info
-        if 'country' in data:
-            if data['country'] == 'Canada':
-                self.region = 'Canada'
-            else:
-                self.region = 'US'
-            if 'currency' in data:
-                self.currency = data['currency']
-            if 'shortName' in data:
-                self.name = data['shortName']
-            return True
-        return False
+        try:
+            data = yf.Ticker(self.key).info
+        except AttributeError:  # Call to yf failed
+            return False
+        try:
+            self.region = data['country'] if 'country' in data else data['region']  # What do you expect with free data
+            self.currency = data['currency']
+            self.name = data['shortName']
+        except KeyError:
+            logger.error('Lookup via YF failed on %s' % self.key)
+            return False
+        return True
 
     def set_equity_data(self):
         set_data = self.yp_set_data()

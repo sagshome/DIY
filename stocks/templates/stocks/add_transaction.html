@@ -1,6 +1,10 @@
 ﻿{% extends "base.html" %}
 {% block title %}IOOM Transaction{% endblock %}
 {% block content %}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+
     <script>
         const doing_edit =  "{{ view_verb }}" == "Edit";
         const investment = "{{ account.account_type }}" == "Investment";
@@ -131,16 +135,23 @@
             var date_value = $("#id_real_date").val();
             var url = $("#XAForm").attr("equity-url");
 
-            $.ajax({
-                url: '{% url "equity_list" %}',
-                async: false,  // make sure we wait for the update
-                data: {
-                    'action': action_value,
-                    'portfolio_id': portfolio_value,
-                    'date': date_value,
-                },
-                success: function (data) {   // `data` is the return of the `load_cities` view function
-                    $("#id_equity").html(data);  // replace the contents of the equity with date/account values
+            $("#id_equity").select2({
+                placeholder: "Select or type to search...",
+                ajax: {
+                    url: '{% url "equity_list" %}',
+                    dataType: "json",
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            'q': params.term,
+                            'action': action_value,
+                            'portfolio_id': portfolio_value,
+                            'date': date_value,
+                        }
+                    },
+                    processResults: function (data) {
+                        return {results: data.results};
+                    }
                 }
             });
             showDiv('equityRow')
@@ -193,13 +204,52 @@
             show_hide();
         });
     </script>
+    <script>
+        document.addEventListener("change", function(event) {
+            if (event.target && event.target.type === "checkbox") {
+                $.ajax({
+                    url: '{% url "equity_search_add" %}',
+                    data: {
+                        'symbol': event.target.value,
+                    },
+                    async: true,  // no need to wait
+                });
+            }
+        });
 
-    <h2>Account: {{account.name}}
-        {% if account.portfolio %}
-          <em>(Portfolio:{{account.portfolio.name}})</em>
-        {% endif %}</h2>
-    <h3>{{view_verb}} Transaction</h3>
-        <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
+
+        async function fetchOptions(query) {
+            if (query.length < 2) return; // Avoid unnecessary API calls
+
+            const response = await fetch(`/stocks/api/search/?q=${query}`);
+            const data = await response.json();
+
+            const container = document.getElementById("checkbox-container");
+            container.innerHTML = ""; // Clear previous results
+
+            data.results.forEach(item => {
+                const label = document.createElement("label");
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = item.symbol;
+                checkbox.name = "options";
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(" " + item.symbol + " " + item.shortname));
+                container.appendChild(label);
+                container.appendChild(document.createElement("br"));
+            });
+        }
+    </script>
+    <div class="w3-row">
+        <h2>Account: {{account.name}}
+            {% if account.portfolio %}
+              <em>(Portfolio:{{account.portfolio.name}})</em>
+            {% endif %}</h2>
+    </div>
+    <div class="w3-cell-row">
+        <div class="w3-cell">
+            <h3>{{view_verb}} Transaction</h3>
+                <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
             {% csrf_token %}
             <input type="hidden" name="success_url" value="{{ success_url }}">
             {% for error in form.non_field_errors %}
@@ -228,7 +278,10 @@
                 </tr>
                 <tr id=equityRow style="display: block;">
                     <td class="diy-label">{{ form.equity.label_tag }}</td>
-                    <td>{{ form.equity}}</td>
+                    <td><select id="id_equity" name="equity" style="width: 100%;">
+                            <option value="">Select an option...</option>
+                        </select>
+                    </td>
                     <td>{{ form.equity.errors }}</td>
                 </tr>
                 <tr id=priceRow style="display: block;">
@@ -281,4 +334,11 @@
                 </div>
             </div>
         </form>
+        </div>
+        <div class="w3-cell">
+            <h3>Add Equity/ETF/Fund</h3>
+            <input type="text" id="search" oninput="fetchOptions(this.value)" placeholder="Type to search...">
+            <div id="checkbox-container"></div>
+        </div>
+    </div>
 {% endblock content %}
