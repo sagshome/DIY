@@ -38,9 +38,9 @@
             <thead class="w3-margin-bottom" style="background:#eee;">
                 <tr>
                     <th class="w3-container w3-small w3-left-align">Name</th>
+                    <th class="w3-container w3-small w3-right-align">Value</th>
                     <th class="w3-container w3-small w3-right-align">Total Cost</th>
                     <th class="w3-container w3-small w3-right-align w3-hide-small">Effective<br>Cost</th>
-                    <th class="w3-container w3-small w3-right-align">Value</th>
                     <th class="w3-container w3-small w3-right-align w3-hide-small">Total<br>Dividends</th>
                     <th class="w3-container w3-small w3-right-align">Realized<br>Gain</th>
                     <th class="w3-container w3-small w3-right-align w3-hide-medium w3-hide-small">Realized<br>Percent</th>
@@ -61,13 +61,14 @@
                             {% endif %}
                         {% endif %}
                     </td>
-                    <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
-                    <td class="w3-right-align w3-small w3-hide-small">-</td>
                     {% if item.Value == 0 %}
                         <td></td>
                     {% else %}
                         <td class="w3-right-align w3-small">${{ item.Value | floatformat:'0g'}}</td>
                     {% endif %}
+
+                    <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
+                    <td class="w3-right-align w3-small w3-hide-small">-</td>
                     {% if item.TotalDividends == 0 %}
                         <td class="w3-hide-small"></td>
                     {% else %}

@@ -111,15 +111,15 @@ class StockImporter:
                 last_import = this_date  # This has been pre-ordered by date
 
                 if xa_action == FUND:
-                    Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND, quantity=0, price=0).save()
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND, quantity=0, price=0).save(source=DataSource.UPLOAD.value)
                 elif xa_action == REDEEM:
-                    Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM, quantity=0, price=0).save()
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM, quantity=0, price=0).save(source=DataSource.UPLOAD.value)
                 elif xa_action == JUNK:
                     pass
                 elif xa_action == INT:
-                    Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=INT, quantity=quantity, price=price).save()
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=INT, quantity=quantity, price=price).save(source=DataSource.UPLOAD.value)
                 elif xa_action == FEES:
-                    Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=FEES, quantity=quantity, price=price).save()
+                    Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=FEES, quantity=quantity, price=price).save(source=DataSource.UPLOAD.value)
 
                 elif xa_action in [DIV, DIV_VALUE, VALUE]:
                     equity = self.equity_lookup(symbol, self.pd_description(prow), region)
@@ -152,7 +152,7 @@ class StockImporter:
 
                             action = Transaction.BUY if xa_action != REINVESTED else Transaction.REDIV
                             amount = amount if amount else price * quantity
-                            Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=action, quantity=quantity, price=price).save()
+                            Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=action, quantity=quantity, price=price).save(source=DataSource.UPLOAD.value)
 
                         elif xa_action in [SELL, TRANSFER_OUT]:
                             if amount and quantity:
@@ -161,18 +161,18 @@ class StockImporter:
                                 price = price if price else EquityValue.lookup_price(equity, this_date)
 
                             amount = amount if amount else price * quantity
-                            Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1, xa_action=SELL, quantity=quantity * -1, price=price).save()
+                            Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1, xa_action=SELL, quantity=quantity * -1, price=price).save(source=DataSource.UPLOAD.value)
                         elif xa_action == TFSA_TRANSFER:
                             price = EquityValue.lookup_price(equity, normalize_date(this_date))
                             amount = amount if amount else price * quantity
                             if quantity < 0:
                                 Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount * -1 , xa_action=SELL,
-                                                           quantity=quantity * -1, price=price).save()
-                                Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM).save()
+                                                            quantity=quantity * -1, price=price).save(source=DataSource.UPLOAD.value)
+                                Transaction(real_date=this_date, account=account, user=self.user, value=amount * -1, xa_action=REDEEM).save(source=DataSource.UPLOAD.value)
                             elif quantity > 0:
                                 Transaction(real_date=this_date, account=account, equity=equity, user=self.user, value=amount, xa_action=BUY,
-                                                           quantity=quantity, price=price).save()
-                                Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND).save()
+                                                           quantity=quantity, price=price).save(source=DataSource.UPLOAD.value)
+                                Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND).save(source=DataSource.UPLOAD.value)
                         else:
                             raise DIYImportException(f'Unexpected Activity type {xa_action}')
 
@@ -332,20 +332,19 @@ class StockImporter:
         return existing
 
     def equity_lookup(self, symbol: str, name: str, region: str):
-        lookup = symbol + '.' + region
-        if lookup not in self.equities:
+        if symbol not in self.equities:
             try:
-                equity = Equity.objects.get(symbol=symbol, region=region)
+                equity = Equity.objects.get(symbol=symbol)
             except Equity.DoesNotExist:
                 try:
-                    alias = EquityAlias.objects.get(symbol=lookup)
+                    alias = EquityAlias.objects.get(symbol=symbol)
                     equity = alias.equity
                 except EquityAlias.DoesNotExist:
                     equity = EquityAlias.find_equity(name, region)
                     if not equity:
                         raise DIYImportException(f'Failed to lookup {symbol} - {name} @ {region}')
-            self.equities[lookup] = equity
-        return self.equities[lookup]
+            self.equities[equity] = equity
+        return self.equities[equity]
 
     def get_or_create_equity(self, symbol: str, name: str, currency: str, region: str, managed: bool):
         """

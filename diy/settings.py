@@ -33,6 +33,9 @@ try:
 except KeyError:
     DIY_LOCALDB = False
 
+ACRONYM = 'IOOM'
+FULL_NAME = 'Its Only Our Money'
+
 ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 

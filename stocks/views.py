@@ -657,7 +657,10 @@ def set_transaction(request, account_id, action):
                 raise Http404('Action %s is not supported for account type' % (action, account.account_type))
             if valid:
                 account.reset()
-                return HttpResponseRedirect(form.cleaned_data['success_url'])
+                if 'success_url' in form.cleaned_data:
+                    return HttpResponseRedirect(form.cleaned_data['success_url'])
+                else:
+                    return HttpResponseRedirect(reverse('stocks_main'))
         else:
             pass
     else:
@@ -715,6 +718,7 @@ def account_update(request, pk):
     for equity in account.equities.filter(searchable=True):
         equity.yp_update(daily=False)
     return HttpResponse(status=200)
+
 
 @login_required
 def portfolio_update(request, pk):

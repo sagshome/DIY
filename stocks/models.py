@@ -684,7 +684,7 @@ class Equity(models.Model):
                 self.save()
             elif self.searchable:
                 self.update_external_equity_data(force=force, key=key, daily=daily)
-            self.fill_equity_value_holes()
+        self.fill_equity_value_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
         queryset = EquityEvent.objects.filter(equity=self)
@@ -1060,7 +1060,7 @@ class EquityEvent(models.Model):
             for value in EquityValue.objects.filter(equity=self.equity, date__lt=self.date, api=Equity.ypfinance, split_fixed=False):
                 value.price *= self.value
                 value.split_fixed = True
-                value.save()
+                value.save
 
 
 class BaseContainer(models.Model):
@@ -1429,8 +1429,8 @@ class Account(BaseContainer):
             # Step 3, Update Dividends for non-managed
             if not self.managed:
                 if entry.date in equity_dividends:
-                    shares = self.shares_on_date(shares_df, equity_dividends[entry.date]['real_date'])
-                    dividend = equity_dividends[entry.date]['value'] * cf * shares
+                    on_date = self.shares_on_date(shares_df, equity_dividends[entry.date]['real_date'])
+                    dividend = equity_dividends[entry.date]['value'] * cf * on_date
                 else:
                     dividend = 0
                 total_dividends += dividend
@@ -1705,8 +1705,8 @@ class Account(BaseContainer):
         Ensure that each of my equities is updated
         :return:
         """
-        key = self.user.av_api_key if self.user.av_api_key else None
-        for equity in Equity in self.equities:
+        key = self.user.profile.av_api_key if self.user.profile.av_api_key else None
+        for equity in self.equities:
             if equity.update(force=False, key=key):
                 sleep(2)  # Any faster and my free API will fail
         self.reset()
