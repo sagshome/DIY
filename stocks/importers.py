@@ -608,16 +608,13 @@ class QuestTrade(StockImporter):
 
     def csv_symbol(self, row) -> str:
         symbol = super().csv_symbol(row)
+        symbol_currency = row[self.mappings['Currency']]
+
         if symbol and symbol[0] == '.':  # Dividends are often reported as '.symbol'
             symbol = symbol[1:]
 
-        parts = symbol.split('.')
-        parts_cnt = len(parts)
-        if parts_cnt > 1 and parts[parts_cnt - 1] == 'TO':
-            prefix = '-'.join(parts[:parts_cnt - 1])
-            symbol = prefix
-        else:
-            symbol = '-'.join(parts)
+        if symbol_currency == 'CAD' and not symbol.endswith('.TO'):
+            symbol += '.TO'
         return symbol
 
     def csv_description(self, row):

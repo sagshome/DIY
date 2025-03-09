@@ -427,8 +427,8 @@ class SimpleReconcileForm(forms.Form):
         return self.cleaned_data['deposited']
 
     def clean_withdrawn(self):
-        if self.cleaned_data['withdrawn'] < 0:
-            raise ValidationError('Withdrawn must be a positive value')
+        if self.cleaned_data['withdrawn'] > 0:
+            raise ValidationError('Withdrawn must be a negative value')
         return self.cleaned_data['withdrawn']
 
 

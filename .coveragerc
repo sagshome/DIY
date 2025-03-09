@@ -1,6 +1,6 @@
 [run]
 branch = False
-source = stocks
+source = stocks, expenses, base
 omit =
     *tests*
     *migrations*

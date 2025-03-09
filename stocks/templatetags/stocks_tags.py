@@ -1,5 +1,4 @@
 import logging
-import pandas as pd
 from babel.numbers import format_decimal
 from datetime import datetime, date
 from django import template

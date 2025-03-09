@@ -12,6 +12,7 @@ from expenses.models import Item, Category, SubCategory, Template
 
 logger = logging.getLogger(__name__)
 
+
 class DefaultData(TestCase):
     def setUp(self):
         super().setUp()

@@ -353,24 +353,6 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
             self.initial['_end'] = self.object.id
         return self.initial
 
-    def form_valid(self, form):
-        # Access the updated form instance
-        updated_data = form.cleaned_data
-        funded = self.object.get_pattr('Funds', normalize_date(self.object.end))
-        value = self.object.get_eattr('Value', normalize_date(self.object.end))
-
-        if value != 0:
-            if updated_data['accounts']:
-                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=value - funded,
-                                           xa_action=Transaction.TRANS_OUT, account=self.object.account)
-                Transaction.objects.create(user=self.request.user, real_date=updated_data['_end'], price=0, quantity=0, value=funded,
-                                           xa_action=Transaction.TRANS_IN, account=updated_data['accounts'])
-            else:
-                Transaction.objects.create(user=self.request.user, real_date=self.object.end, price=0, quantity=0, value=funded,
-                                       xa_action=Transaction.REDEEM, account=self.object)
-        return super().form_valid(form)
-
-
 class PortfolioEdit(PortfolioView, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

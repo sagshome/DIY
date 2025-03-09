@@ -256,6 +256,7 @@ def normalize_today() -> datetime.date:
 def tempdir() -> Path:
     return Path("/tmp" if platform.system() == "Darwin" else tempfile.gettempdir())
 
+
 def aggregate_or_0(expression):
     """
     Evaluate and express

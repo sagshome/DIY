@@ -40,6 +40,19 @@ ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 
+
+# print('Using a remote DB')
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ['MYSQL_DATABASE'],
+        'USER': os.environ['MYSQL_USER'],
+        'PASSWORD': os.environ['MYSQL_PASSWORD'],
+        'HOST': os.environ['DATABASE_HOST'],  # 172.20.0.10 See comments in database/Dockerfile
+        'PORT': 3306,
+    }
+}
+
 if ('test' in sys.argv  # set with manage.py test
         or 'test' in sys.argv[0]  # set with pytest
         or ('PYTEST_RUN_CONFIG' in os.environ and os.environ['PYTEST_RUN_CONFIG'])
@@ -49,18 +62,6 @@ if ('test' in sys.argv  # set with manage.py test
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-else:
-    # print('Using a remote DB')
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.environ['MYSQL_DATABASE'],
-            'USER': os.environ['MYSQL_USER'],
-            'PASSWORD': os.environ['MYSQL_PASSWORD'],
-            'HOST': os.environ['DATABASE_HOST'],  # 172.20.0.10 See comments in database/Dockerfile
-            'PORT': 3306,
         }
     }
 

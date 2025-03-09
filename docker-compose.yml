@@ -101,7 +101,7 @@ services:
     networks:
       ioom_network:
         ipv4_address: 172.20.0.31
-    command: celery -A diy worker --loglevel=debug
+    command: celery -A diy worker --loglevel=info
     restart: always
     volumes:
       - .:/app
@@ -120,7 +120,7 @@ services:
     networks:
       ioom_network:
         ipv4_address: 172.20.0.32
-    command: celery -A diy beat --loglevel=debug
+    command: celery -A diy beat --loglevel=info
     restart: always
     volumes:
       - .:/app
