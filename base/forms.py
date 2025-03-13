@@ -1,19 +1,8 @@
 from django import forms
-from django.contrib.auth.models import User
-from django.contrib.auth.forms import PasswordResetForm
-from django.core.exceptions import ValidationError
-from django.contrib.auth.tokens import default_token_generator
-from django.contrib.sites.shortcuts import get_current_site
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from phonenumber_field.formfields import PhoneNumberField, SplitPhoneNumberField
-from localflavor.us.forms import USZipCodeField
-from localflavor.ca.forms import CAPostalCodeField
-from base.models import Profile, CURRENCIES, COUNTRIES
+from phonenumber_field.formfields import PhoneNumberField
+from base.models import CURRENCIES, COUNTRIES
 from localflavor.ca.ca_provinces import PROVINCE_CHOICES
 from localflavor.us.us_states import STATE_CHOICES
-
-
 
 
 class MainForm(forms.Form):
@@ -77,4 +66,3 @@ class ProfileForm(BaseProfileForm):
         super().__init__(*args, **kwargs)
         self.fields["email"].widget.attrs['readonly'] = True
         self.fields["email"].widget.attrs['style'] = 'background-color:Wheat'
-

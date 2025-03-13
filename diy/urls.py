@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, re_path, path
-from base.views import diy_main, sites_up, NewAccountConfirmView, NewAccountDoneView
+from base.views import diy_main, NewAccountConfirmView, NewAccountDoneView
 
 
 urlpatterns = [
@@ -34,5 +34,4 @@ urlpatterns = [
     re_path('stocks/', include('stocks.urls')),
     re_path('expenses/', include('expenses.urls')),
     re_path("base/", include('base.urls')),
-    path("sites_up", sites_up, name="health_check")
 ]

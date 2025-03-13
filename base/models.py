@@ -1,7 +1,7 @@
 import logging
 import requests
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, UTC, date
 from phonenumber_field.modelfields import PhoneNumberField
 from requests.exceptions import ConnectTimeout, ConnectionError
 from requests.models import Response
@@ -11,12 +11,7 @@ from django.contrib.auth.models import User
 
 from .utils import BoolReason
 
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
-
-# We can not import CURRENCIES since it will be a import loop - from stocks.models import CURRENCIES
+# We can not import CURRENCIES since it will be an import loop - from stocks.models import CURRENCIES
 CURRENCIES = (
     ('CAD', 'Canadian Dollar'),
     ('USD', 'US Dollar')
@@ -56,7 +51,7 @@ DIY_EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy wo
 
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user: User = models.OneToOneField(User, on_delete=models.CASCADE)
     phone_number = PhoneNumberField(blank=False, null=False)
     currency = models.CharField(max_length=3, choices=CURRENCIES, default='CAD')
     address1 = models.CharField(max_length=100, blank=True, null=True)
@@ -73,20 +68,19 @@ class Profile(models.Model):
 
 
 class API(models.Model):
-    '''
+    """
     Support making an API offline and catch some traps and return a valid / invalid response
-    '''
-    DEFAULT_FAIL_LENGTH = 60 * 60 * 3  # 3 Hours
+    """
+    DEFAULT_FAIL_LENGTH: int = 60 * 60 * 3  # 3 Hours
     name = models.CharField(primary_key=True, null=False, blank=False, max_length=32)
     base = models.CharField(null=True, blank=True, max_length=132)
     fail_reason = models.CharField(null=False, blank=False, max_length=132, default='Manual Suspension')  # Via the admin tool
-    fail_length = models.IntegerField(null=True, blank=True, default=DEFAULT_FAIL_LENGTH)  # Increase via admin tool if so desired
+    fail_length: int = models.IntegerField(null=True, blank=True, default=DEFAULT_FAIL_LENGTH)  # Increase via admin tool if so desired
     _active = models.BooleanField(default=True)
-    _last_fail = models.DateTimeField(null=True, blank=True)
+    _last_fail: date = models.DateTimeField(null=True, blank=True)
 
     @classmethod
     def get(cls, name, extra=None):   # return a get.result or None
-        reason = ''
         try:
             url = cls.objects.get(name=name)
             test = url.ready_or_reset()
@@ -144,6 +138,5 @@ class API(models.Model):
         try:
             api = cls.objects.get(name=name)
             return api.ready_or_reset()
-        except API.DoesNotExist:
-            return BoolReason(False,'Configuration Error')
-
+        except cls.DoesNotExist:
+            return BoolReason(False, 'Configuration Error')

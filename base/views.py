@@ -1,31 +1,26 @@
-import localflavor
 import logging
 from django.core.mail import EmailMultiAlternatives
 from django.template import loader
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 
 from django.shortcuts import render
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import UpdateView
 from django.contrib.auth.views import PasswordContextMixin
 
 from django.http import JsonResponse
 
 from localflavor.ca.ca_provinces import PROVINCE_CHOICES
 from localflavor.us.us_states import STATE_CHOICES
-from django.contrib.auth.views import PasswordResetView, PasswordResetConfirmView, PasswordResetCompleteView
+from django.contrib.auth.views import PasswordResetConfirmView, PasswordResetCompleteView
 from django.views.generic.base import TemplateView
-from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 
 
-from expenses.models import Item
 from base.forms import MainForm, ProfileForm, BaseProfileForm
 from base.models import Profile
 from stocks.tasks import add_to_cache
@@ -50,11 +45,7 @@ def diy_main(request):
         form = MainForm(initial={'years': span, 'period': period, 'show_trends': 'Hide'})
         if request.user:
             add_to_cache.delay(request.user.id)  # Update the redis cache for the accounts owned by this user.
-    return render(request, "base/diy_main.html",{'form': form, 'span': span, 'period': period, 'trends': trends})
-
-
-def sites_up(request):
-    return JsonResponse({'up': True})
+    return render(request, "base/diy_main.html", {'form': form, 'span': span, 'period': period, 'trends': trends})
 
 
 class NewAccountConfirmView(PasswordResetConfirmView):
@@ -99,15 +90,15 @@ def profile_create(request):
                                        last_name=last_name)
 
             Profile.objects.create(user=user,
-                                    country = form.cleaned_data['country'],
-                                    phone_number = form.cleaned_data['phone'],
-                                    address1 = form.cleaned_data['address_1'],
-                                    address2 = form.cleaned_data['address_2'],
-                                    city = form.cleaned_data['city'],
-                                    state = form.cleaned_data['state'],
-                                    postal_code = form.cleaned_data['postal_code'],
-                                    currency = form.cleaned_data['currency'],
-                                    av_api_key = form.cleaned_data['av_api_key'],
+                                   country=form.cleaned_data['country'],
+                                   phone_number=form.cleaned_data['phone'],
+                                   address1=form.cleaned_data['address_1'],
+                                   address2=form.cleaned_data['address_2'],
+                                   city=form.cleaned_data['city'],
+                                   state=form.cleaned_data['state'],
+                                   postal_code=form.cleaned_data['postal_code'],
+                                   currency=form.cleaned_data['currency'],
+                                   av_api_key=form.cleaned_data['av_api_key'],
                                    )
 
             current_site = get_current_site(request)
@@ -135,7 +126,6 @@ def profile_create(request):
         form = BaseProfileForm()
 
     return render(request, "base/profile.html", {"form": form, 'verb': 'Create'})
-
 
 
 @login_required
@@ -194,4 +184,3 @@ def get_state(request):
     else:
         choices = []
     return render(request, "base/state_list_options.html", {"subcat": choices})
-

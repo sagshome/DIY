@@ -179,11 +179,14 @@ def acc_summary(request):
         accounts = Account.objects.filter(user=user)
 
     if accounts.exists():
-        start = accounts.filter(_start__isnull=False).earliest('_start')._start.strftime('%Y-%m-%d')
-        if accounts.filter(_end__isnull=True).exists():
-            end = normalize_today().strftime('%Y-%m-%d')
-        else:
-            end = accounts.latest('_end')._end.strftime('%Y-%m-%d')
+        try:
+            start = accounts.filter(_start__isnull=False).earliest('_start')._start.strftime('%Y-%m-%d')
+            if accounts.filter(_end__isnull=True).exists():
+                end = normalize_today().strftime('%Y-%m-%d')
+            else:
+                end = accounts.latest('_end')._end.strftime('%Y-%m-%d')
+        except Account.DoesNotExist:
+            return JsonResponse({'labels': [], 'datasets': []})
     else:
         return JsonResponse({'labels': [], 'datasets': []})
 

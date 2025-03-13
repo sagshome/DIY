@@ -136,7 +136,7 @@ class TransactionForm(forms.ModelForm):
         self.fields['price'].required = False
         self.fields['value'].required = False
         self.fields['quantity'].required = False
-        self.fields['equity'].queryset = Equity.objects.none()
+        self.fields['equity'].queryset = Equity.objects.filter(equity_type='Equity')
 
         account = user = None
         try:

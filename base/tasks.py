@@ -1,7 +1,6 @@
 import logging
 import random
 
-from celery import shared_task
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from phonenumbers import PhoneNumber
@@ -9,12 +8,12 @@ from phonenumbers import PhoneNumber
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import Sum
-from django.db.models.functions import TruncMonth, TruncYear
+from django.db.models.functions import TruncYear
 
 from base.models import Profile
 from base.utils import normalize_date
 from expenses.models import Item, Category, SubCategory
-from stocks.models import Inflation, Portfolio, Account, Equity, Transaction, EquityValue, Equity, Inflation, ExchangeRate, Account, EquityEvent, FundValue
+from stocks.models import Portfolio, Transaction, EquityValue, Equity, Inflation, Account, FundValue
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,7 @@ def create_expenses(user: User):
     """
     Rebuild 10 years of expense data.
     - Using inflation values to make it more dynamic
-    - Using django bulk create was causing issues so I stop it.  This is much slower but since it runs late in the evening.  Its not a big deal I guess
+    - Using django bulk create was causing issues, so I stopped it.  This is much slower but since it runs late in the evening.  It's not a big deal I guess
 
     """
     # Your cleanup logic here
@@ -71,7 +70,7 @@ def create_expenses(user: User):
     logger.debug('Cleaning old expenses')
     Item.objects.filter(user=user).delete()
     logger.debug('Creating new expenses')
-    seed_date = datetime(2024,10,1).date()
+    seed_date = datetime(2024, 10, 1).date()
     end_date = datetime.today().date()
     start_date = end_date.replace(year=end_date.year-10)
     for entry in seed_data:
@@ -95,15 +94,14 @@ def create_expenses(user: User):
 
         while next_date < end_date:
             if lower_limit != 0:
-                newvalue = random.randint(lower_limit, upper_limit)
+                new_value = random.randint(lower_limit, upper_limit)
             else:
-                newvalue = value
+                new_value = value
 
-            newvalue = Inflation.inflated(newvalue, seed_date, next_date.replace(day=1))
+            new_value = Inflation.inflated(new_value, seed_date, next_date.replace(day=1))
 
-            logger.debug(f'user={user}, category={cat}, subcategory={sub}, date={next_date}, amount={newvalue}')
-            Item.objects.create(user=user, category=cat, subcategory=sub, date=next_date, amount=newvalue, description='Random Data')
-
+            logger.debug(f'user={user}, category={cat}, subcategory={sub}, date={next_date}, amount={new_value}')
+            Item.objects.create(user=user, category=cat, subcategory=sub, date=next_date, amount=new_value, description='Random Data')
 
             if entry_type == 'day':
                 next_date = next_date + timedelta(days=interval)
@@ -133,7 +131,6 @@ def create_salary(user: User):
             sal1 += sal1 * (random.randint(0, 6) / 100)
         elif next_date.month == 5:
             sal2 += sal2 * (random.randint(0, 4) / 100)
-
 
         Item.objects.create(user=user, category=cat, subcategory=sub, date=next_date.replace(day=1), amount=sal1, description='Dan')
         Item.objects.create(user=user, category=cat, subcategory=sub, date=next_date.replace(day=15), amount=sal1, description='Dan')
@@ -174,14 +171,11 @@ def _process_value(account, fund, user, pay_date, starting, new, change):
 
 
 def create_portfolios(user: User):
-    end_date = datetime.today().date()
-    start_date = end_date.replace(year=end_date.year-10)
 
     logger.debug('Start Investing')
     Portfolio.objects.filter(user=user).delete()
     Account.objects.filter(user=user).delete()
     portfolio1 = Portfolio.objects.create(user=user, name='Company Retirement', currency='CAD')
-    portfolio1_equities = [Equity.objects.get(symbol='BMO'), Equity.objects.get(symbol='BCE'), Equity.objects.get(symbol='XDIV')]
     account1 = Account.objects.create(user=user, name="Dan's Account", account_type='Value', currency='CAD', account_name='Foo_007', managed=True, portfolio=portfolio1)
     account2 = Account.objects.create(user=user, name="Debbie's Account", account_type='Value', currency='CAD', account_name='Bar_007', managed=True, portfolio=portfolio1)
     Equity.objects.create(symbol=account1.f_key, currency=account1.currency, name=account1.f_key, equity_type='Value')
@@ -200,25 +194,6 @@ def create_portfolios(user: User):
         change = random.uniform(-10, 25) / 24 / 100
         value = float(pay.amount) * 16 / 100
         money = _process_value(account2, fund, user, pay.date, money, value, change)
-
-
-    '''money = 0
-    for pay in Item.objects.filter(user=user, description__icontains='Dan', subcategory__name='Salary'):
-        value = float(pay.amount) * 16 / 100
-        logger.debug('%s Dan - Pay Amount is: %s - Contribution Value is %s' % (pay.date, pay.amount, value))
-        money = _process_pay(user, account1, pay.date, money, value, portfolio1_equities)
-
-    money = 0
-    for pay in Item.objects.filter(user=user, description__icontains='Debbie', subcategory__name='Salary'):
-        value = float(pay.amount) * 8 / 100
-        logger.debug('%s Debbie - Pay Amount is: %s - Contribution Value is %s' % (pay.date, pay.amount, value))
-        money = _process_pay(user, account2, pay.date, money, value, portfolio1_equities)
-
-    # Add in DRIP
-    for account in Account.objects.ftiler(user=user):
-        for equity in account.equities:
-            shares = 0
-            for event in EquityEvent.objects.filter(equity=equity).order_by('date'):'''
 
     for account in Account.objects.filter(user=user):
         account.reset()
@@ -240,5 +215,3 @@ def daily_refresh():
 
     create_expenses(user)
     create_salary(user)
-
-

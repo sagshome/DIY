@@ -3,7 +3,7 @@ import platform
 import pandas as pd
 import tempfile
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from io import StringIO
 from pathlib import Path
@@ -18,8 +18,8 @@ class DIYImportException(Exception):
     pass
 
 
-class BoolReason():
-    def __init__(self, result: bool, reason: str=None):
+class BoolReason:
+    def __init__(self, result: bool, reason: str = None):
         self.result = result
         self.reason = reason
 
@@ -31,10 +31,10 @@ class BoolReason():
 
 
 class DateUtil:
-    '''
+    """
     A class to set step and start date based on period and span
     This keeps our code DRY
-    '''
+    """
 
     def __init__(self, period: str = 'QTR', span: int = 3):
         self.period = period if period else 'QTR'
@@ -220,6 +220,7 @@ def get_cached_dataframe(key):
     """
     # Retrieve the binary data from the cache
     if not settings.NO_CACHE:
+        logger.debug('going after the cache')
         try:
             json_data = cache.get(key)
             if json_data:
