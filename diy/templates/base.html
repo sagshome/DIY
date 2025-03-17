@@ -14,29 +14,12 @@
   <style>
     body {font-family: "Lato", sans-serif}
   </style>
+  <script src="{% static 'chart.js/dist/chart.js' %}"></script>
+  <script src="{% static 'jquery/dist/jquery.js' %}"></script>
+  <script src="{% static 'diy.js' %}"></script>
 
-  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.1/chart.min.js"></script>
 </head>
 <body>
-  <script>
-    function show_hide_small() {
-      var x = document.getElementById("navSmall");
-      if (x.className.indexOf("w3-show") == -1) {
-        x.className += " w3-show";
-      } else {
-        x.className = x.className.replace(" w3-show", "");
-      }
-    }
-    function toggle_help() {
-      var help_page = document.getElementById('DIYHelpContent');
-      if (help_page.style.display == 'none') {
-        help_page.style.display='block';
-      } else {
-        help_page.style.display='none';
-      }
-    }
-  </script>
   {% block navbar %}
     <div class="w3-top">
       <div class="w3-bar w3-black w3-card">
@@ -66,7 +49,6 @@
           {% if request.user.is_authenticated %}
             <a href="{% url 'profile' %}" class="w3-bar-item w3-button w3-padding-large w3-hide-small">Profile</a>
           {% endif %}
-
         </div>
         <div class="w3-hide-medium w3-hide-large">
           <div class="w3-dropdown-hover">
@@ -96,10 +78,16 @@
       <div id="DIYHelpContent" style="display:none">
         <div>
           {% block help_content %}
-            {% include 'base/blahblah.html' %}
-            <p> No "Help" is provided for this page.  If you have any questions please contact me at
-              <a href="itsonlyourmoney@gmail.com">ItsOnlyOurMoney@gmail.com</a>.
-            </p>
+              <div class="w3-margin-left w3-small">
+                  {% if help_file %}
+                    {% include help_file %}
+                  {% else %}
+                    {% include 'base/blahblah.html' %}
+                    <p> No "Help" is provided for this page.  If you have any questions please contact me at
+                        <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">ItsOnlyOurMoney@gmail.com</a>.
+                    </p>
+                  {% endif %}
+              </div>
           {% endblock %}
         </div>
         <div>
@@ -113,8 +101,19 @@
     </div>
   </div>
   {% block footer %}
-  <div class="w3-botton w3-container w3-grey">
-      <container class="w3-container w3-center"><p>© 2025 <a href="mailto:itsonlyourmoney@gmail.com">Scott Sargent</a><br>Rainy Day Development</p></container>
+  <div class="w3-margin-top w3-grey w3-row">
+      <div class="w3-container w3-third w3-small w3-margin-top">{% include 'base/blahblah.html' %}</div>
+      <div class="w3-container w3-third w3-center"><p>© 2025 <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">Scott Sargent</a><br>Rainy Day Development</p></div>
+      <div class="w3-container w3-third w3-small">
+          <h5>Useful Links</h5>
+                    <ul>
+                        <li><a href="https://finance.yahoo.com/">Yahoo Finance</a></li>
+                        <li><a href="https://www.alphavantage.co/">Alpha Vantage</a></li>
+                        <li><a href="https://www.morningstar.ca/ca/">Morning Star</a></li>
+                        <li><a href="https://www.bankofcanada.ca/rates/related/inflation-calculator/">Inflation Calculator</a></li>
+                    </ul>
+      </div>
+
   </div>
   {% endblock footer %}
 </body>

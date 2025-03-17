@@ -133,6 +133,10 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
             return equity_data[equity_data['Date'] <= pd.to_datetime(end)]
         return equity_data
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['help_file'] = 'stocks/help/account_table.html'
+        return context
 
 class AccountTableView(ContainerTableView):
     model = Account
@@ -148,24 +152,21 @@ class AccountTableView(ContainerTableView):
         ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
         """
         context = super().get_context_data(**kwargs)
-        a: Account = context['account']
-        elist = a.equities.order_by('symbol')
-        summary_data = self.container_data(a)
+        context['equities'] = context['account'].equities.order_by('symbol')
+        summary_data = self.container_data(context['account'])
         try:
             summary_data['Date'] = summary_data['Date'].dt.strftime('%b-%Y')
             summary_data = json.loads(summary_data.to_json(orient='records'))
         except AttributeError:
             summary_data = {}
         # Build the table data as [date, (shares, value), (shares, value)... total_value
-        return {'account': a,
-                'summary_data': summary_data,
-                'equities': elist,
-                'view_type': 'Data',
-                'equity_count': elist.count(),
-                'can_reconcile': True,
-                'object_type': 'Account',
-                'xas': a.transactions.all().order_by('-real_date'),
-                }
+        context['summary_data'] = summary_data
+        context['view_type'] = 'Data'
+        context['equity_count'] = context['equities'].count()
+        context['can_reconcile'] = True
+        context['object_type'] = 'Account'
+        context['xas'] = context['account'].transactions.all().order_by('-real_date')
+        return context
 
 
 class PortfolioTableView(ContainerTableView):
@@ -182,21 +183,19 @@ class PortfolioTableView(ContainerTableView):
         ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
         """
         context = super().get_context_data(**kwargs)
-        p: Portfolio = context['portfolio']
-        elist = p.equities.order_by('symbol')
-        summary_data = self.container_data(p)
-        summary_data['Date'] = summary_data['Date'].dt.strftime('%b-%Y')
+        context['account'] = context['portfolio']
+        context['equities'] = context['account'].equities.order_by('symbol')
 
-        # Build the table data as [date, (shares, value), (shares, value)... total_value
-        return {'account': p,
-                'account_list': p.account_set.all().order_by('-_start'),
-                'summary_data': json.loads(summary_data.to_json(orient='records')),
-                'equities': elist,
-                'view_type': 'Data',
-                'equity_count': elist.count(),
-                'object_type': 'Portfolio',
-                'can_reconcile': False
-                }
+        summary_data = self.container_data(context['account'])
+        summary_data['Date'] = summary_data['Date'].dt.strftime('%b-%Y')
+        context['summary_data'] =  json.loads(summary_data.to_json(orient='records'))
+        context['account_list'] = context['account'].account_set.all().order_by('-_start')
+        context['view_type'] = 'Data'
+        context['equity_count'] = context['equities'].count()
+        context['can_reconcile'] = False
+        context['object_type'] = 'Portfolio'
+        context['xas'] = context['account'].transactions.all().order_by('-real_date')
+        return context
 
 
 class ContainerDetailView(LoginRequiredMixin, DetailView):
@@ -216,6 +215,36 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
         equity_data.sort_values(by=['Value'], inplace=True, ascending=False)
         return equity_data
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        if 'portfolio' in context:
+            context['account'] = context['portfolio']
+            context['object_type'] = 'Portfolio'
+            context['can_update'] = False
+        else:  # context['account'] is already set.
+            context['object_type']  = 'Account'
+            context['can_update'] = True
+
+        funded = context['account'].transactions.filter(xa_action=Transaction.FUND)
+        redeemed = context['account'].transactions.filter(xa_action=Transaction.REDEEM)
+        if funded.count() == 0:
+            context['funded'] = 0
+        else:
+            context['funded'] = funded.aggregate(Sum('value'))['value__sum']
+        if redeemed.count() == 0:
+            context['redeemed'] = 0
+        else:
+            context['redeemed'] = redeemed.aggregate(Sum('value'))['value__sum'] * -1
+
+        equity_data = self.equity_data(context['account'])
+        context['equity_list_data'] = json.loads(equity_data.to_json(orient='records'))
+
+        context['xas'] = context['account'].transactions.all().order_by('-real_date', 'xa_action')
+        context['view_type'] = 'Chart'
+        context['help_file'] = 'stocks/help/container_detail.html'
+        return context
+
 
 class PortfolioDetailView(ContainerDetailView):
     model = Portfolio
@@ -223,83 +252,12 @@ class PortfolioDetailView(ContainerDetailView):
     def get_object(self):
         return super().get_object(queryset=Portfolio.objects.filter(user=self.request.user))
 
-    def get_context_data(self, **kwargs):
-        """
-        Add a list of all the equities in this account
-        :param kwargs:
-        :return:
-        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
-        """
-        context = super().get_context_data(**kwargs)
-        p: Portfolio = context['portfolio']
-
-        funded = p.transactions.filter(xa_action=Transaction.FUND)
-        redeemed = p.transactions.filter(xa_action=Transaction.REDEEM)
-        if funded.count() == 0:
-            funded = 0
-        else:
-            funded = funded.aggregate(Sum('value'))['value__sum']
-        if redeemed.count() == 0:
-            redeemed = 0
-        else:
-            redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
-
-        account_list_data = []
-        for account in Account.objects.filter(user=self.request.user, portfolio=p):
-            account_list_data.append(account.summary)
-        account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
-        context['account_list_data'] = account_list_data
-
-        return {'account': p,
-                'account_list_data': account_list_data,
-                'xas': p.transactions.order_by('-real_date', 'xa_action'),
-                'can_update': False,
-                'funded': funded,
-                'redeemed': abs(redeemed),
-                'view_type': 'Chart',
-                'equity_list_data': json.loads(self.equity_data(p).to_json(orient='records')),
-                'object_type': 'Portfolio',
-                }
-
 
 class AccountDetailView(ContainerDetailView):
     model = Account
 
     def get_object(self):
         return super().get_object(queryset=Account.objects.filter(user=self.request.user))
-
-    def get_context_data(self, **kwargs):
-        """
-        Add a list of all the equities in this account
-        :param kwargs:
-        :return:
-        ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
-        """
-        context = super().get_context_data(**kwargs)
-        profile = Profile.objects.get(user=self.request.user)
-        can_update = True if profile.av_api_key else False
-        account: Account = context['account']
-
-        funded = account.transactions.filter(xa_action=Transaction.FUND)
-        redeemed = account.transactions.filter(xa_action=Transaction.REDEEM)
-        if funded.count() == 0:
-            funded = 0
-        else:
-            funded = funded.aggregate(Sum('value'))['value__sum']
-        if redeemed.count() == 0:
-            redeemed = 0
-        else:
-            redeemed = redeemed.aggregate(Sum('value'))['value__sum'] * -1
-
-        return {'account': account,
-                'xas': account.transactions.order_by('-real_date', 'xa_action'),
-                'can_update': can_update,
-                'funded': funded,
-                'redeemed': redeemed,
-                'view_type': 'Chart',
-                'equity_list_data': json.loads(self.equity_data(account).to_json(orient='records')),
-                'object_type': 'Account',
-                }
 
 
 class PortfolioView(LoginRequiredMixin):
@@ -314,6 +272,11 @@ class PortfolioView(LoginRequiredMixin):
         super().get_initial()
         self.initial['user'] = self.request.user.id
         return self.initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['help_file'] = 'stocks/help/portfolio.html'
+        return context
 
 
 class PortfolioAdd(PortfolioView, CreateView):
@@ -414,6 +377,7 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Edit'
+        context['help_file'] = 'stocks/help/add_account.html'
         return context
 
 
@@ -688,7 +652,8 @@ def account_equity_date_update(request, p_pk, e_pk, date_str):
             pass
     else:
         form = ManualUpdateEquityForm(initial={'account': account.id, 'equity': equity.id, 'report_date': this_date, 'shares': shares, 'value': value, 'price': price})
-    return render(request, 'stocks/account_equity_date_update.html', context={'form': form, 'account': account, 'equity': equity})
+    return render(request, 'stocks/account_equity_date_update.html', context={'form': form, 'account': account, 'equity': equity,
+                                                                              'help_file': 'stocks/help/account_equity_date_update.html'})
 
 
 @login_required
@@ -728,7 +693,6 @@ def equity_update(request,  id):
     for account in Account.objects.filter(id__in=Transaction.objects.filter(equity=equity).values_list('account', flat=True).distinct()):
         account.reset()
     return HttpResponse(status=200)
-
 
 
 
@@ -838,7 +802,8 @@ def reconcile_value(request, pk):
     initial = set_initial()  # This is called twice on POST since I may have changed the data.
     formset = SimpleReconcileFormSet(initial=initial)
     return render(request, 'stocks/value_reconciliation.html',
-                  {'formset': formset, 'account': account, 'xas': account.transactions.order_by('real_date')})
+                  {'formset': formset, 'account': account, 'xas': account.transactions.order_by('real_date'),
+                   'help_file': 'stocks/help/value_reconciliation.html'})
 
 
 @login_required
@@ -964,9 +929,10 @@ def reconciliation(request, a_pk, date_str):
             formset_errors = formset.errors
     else:
         formset = ReconciliationFormSet(initial=initial)
-    return render(request, 'stocks/data_list.html', {'formset': formset, 'errors': formset_errors,
+    return render(request, 'stocks/reconciliation.hml', {'formset': formset, 'errors': formset_errors,
                                                      'account': account, 'date_str': date_str,
                                                      'xas': account.transactions.filter(date=view_date),
+                                                         'help_file': 'stocks/help/reconciliation.html',
                                                      'success_url': request.META.get('HTTP_REFERER', '/')})
 
 
@@ -1076,6 +1042,7 @@ def account_equity_details(request, container_type, pk, id):
                    'container': container,
                    'equity': equity,
                    'xas': xas,
+                   'help_file': 'stocks/help/account_equity_detail.html'
                    })
 
 

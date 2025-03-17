@@ -13,7 +13,7 @@ if [ ! -e manage.py ]; then
   exit 1
 fi
 
-source "${HOME}/${base}_ENV/bin/activate"
+source "${HOME}/.venv/bin/activate"
 
 # start fresh
 rm -fr node_modules
@@ -23,7 +23,7 @@ rm -fr static/w3-css ; mkdir static/w3-css
 rm -fr static/\@kurkle ; mkdir -p static/\@kurkle/color
 
 
-npm install jquery   ; cp -R node_modules/jquery/dist/* static/jquery/
+npm install jquery@3.5   ; cp -R node_modules/jquery/dist/* static/jquery/
 npm install chart.js ; cp -R node_modules/chart.js/dist/* static/chart.js/
                        cp -R node_modules/\@kurkle/color/dist/* static/\@kurkle/color/
 npm install w3-css   ; cp -R node_modules/w3-css/* static/w3-css/

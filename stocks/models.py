@@ -861,9 +861,9 @@ class FundValue(models.Model):
             _, account_id = self.fund.symbol.split('-')
             return Account.objects.get(id=account_id)
         except Account.DoesNotExist:
-            logger.error('%s - value set to 0 get account %s based on fund %s' % (self, account_id, self.fund.equity.symbol))
+            logger.error('%s - value set to 0 get account based on fund %s' % (self, self.fund.symbol))
         except ValueError:
-            logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.fund.equity.symbol))
+            logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.fund.symbol))
         return None
 
     @classmethod

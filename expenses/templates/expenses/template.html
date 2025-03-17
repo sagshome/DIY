@@ -1,31 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Expense Assignment{% endblock %}
 {% load expenses_tags %}
-
-{% block script %}
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-    <script>
-        $(document).ready(function() {
-          var url = $("#itemForm").attr("data-subcategories-url");
-
-          var category_id = document.getElementById("id_category")
-          var subcategory_id = document.getElementById("id_subcategory")
-
-          subcategory_id.addEventListener("mousedown", function() {
-            var category = $(category_id).val()
-            $.ajax({
-              url: url,
-              data: {
-                'category': category,
-              },
-              success: function (data) {
-                $(subcategory_id).html(data);  // replace the contents
-              }
-            });
-          });
-        });
-    </script>
-{% endblock script %}
+{% load static %}
 
 {% block content %}
     <div class="w3-row">
@@ -48,10 +24,16 @@
             </div>
             <div class="w3-row w3-margin-top">
                 <h2>Expense List</h2>
-                    {% include 'expenses/expenses_list.html' %}
+                    {% include 'expenses/includes/expenses_list.html' %}
             </div>
         </form>
-    </div>
+
+    <script src="{% static 'expenses.js' %}"></script>
+    <script>
+        $(document).ready(function() {
+            get_subcategory_choices()
+        });
+    </script>
 {% endblock content %}
 
 {% block help_content %}

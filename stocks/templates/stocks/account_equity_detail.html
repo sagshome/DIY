@@ -1,96 +1,52 @@
 {% extends "base.html" %}
 {% block title %}Account Equity Details{% endblock %}
+{% load static %}
 {% block content %}
-    <script>
-        var lineChart = ''
-        $(document).ready(function() {
-          $.ajax({
-            url: "{% url 'cost_value_chart' %}",
-            data: {'object_id': '{{ container.id }}',
-                   'object_type': '{{ account_type }}',
-                   'symbol': '{{ equity.id }}' },
-            success: function(data) {
-              lineChart = new Chart("lineChart", {
-                type: "line",
-                data: data,
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        },
-                    },
-                    elements: {
-                        point:{
-                            radius: 2
-                        }
-                    },
-
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    title: {
-                      display: true,
-                      text: "Return vs Cost"
-                    },
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'center'
-                    },
-                }
-              });
-            }
-          });
-        });
-
-    </script>
 
     <div class="w3-container">
-        <h2 class="w3-margin">{{equity.key}} - {{equity.name}}</h2>
-        {% if account_type == 'Account' %}
-            <h3 class="w3-margin">Details for {{account_type}} <a href="{% url 'account_details' container.id %}">{{container.name}}</a></h3>
-        {% else %}
-            <h3 class="w3-margin">Details for portfolio <a href="{% url 'portfolio_details' container.id %}">{{container.name}}</a></h3>
-        {% endif %}
+        <h2 class="w3-margin">{{ equity.key }} - {{ equity.name }}</h2>
+        <p class="w3-margin-left">Last updated : {{ equity.last_updated }}
+            {% if account_type == 'Account' %}
+                <h3 class="w3-margin">Details for {{ account_type }} <a
+                        href="{% url 'account_details' container.id %}">{{ container.name }}</a></h3>
+            {% else %}
+                <h3 class="w3-margin">Details for portfolio <a
+                        href="{% url 'portfolio_details' container.id %}">{{ container.name }}</a></h3>
+            {% endif %}
 
-        <div  class="w3-row">
+        <div class="w3-row">
             <div style="height:350px;" class="w3-container">
                 <canvas id="lineChart" class="w3-card-2"></canvas>
             </div>
         </div>
-    <!--
-    <div class="w3-margin">
-        Select Equity for comparison chart: {{form.equity}}
-        <a href="{% url 'account_details' container.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Chart View</button></a>
-        <a href="{% url 'account_table' container.id %}"><button class="w3-button-medium w3-round-large w3-orange"> Table View</button></a>
-    </div>
-    -->
 
         <div class="w3-row">
             <div class="w3-half w3-container w3-margin-top w3-mobile">
                 <table class="w3-table w3-stripped">
                     <caption class="w3-wide w3-padding-16">Equity Values</caption>
                     <thead class="w3-margin-bottom" style="background:#eee;">
-                        <th style="width:100px">Date</th>
-                        <th class="w3-hide-small">Shares</th>
-                        <th class="w3-hide-small">Cost</th>
-                        <th class="w3-hide-small">Value</th>
-                        <th class="w3-hide-small">Dividends</th>
-                        <th>Price</th>
-                        <th>Avg Cost</th>
+                    <th style="width:100px">Date</th>
+                    <th class="w3-hide-small">Shares</th>
+                    <th class="w3-hide-small">Cost</th>
+                    <th class="w3-hide-small">Value</th>
+                    <th class="w3-hide-small">Dividends</th>
+                    <th>Price</th>
+                    <th>Avg Cost</th>
                     </thead>
                     {% for item in data %}
                         {% if item.Shares != 0 %}
                             <tr>
                                 <td>{{ item.Date }}</td>
-                                <td class="w3-hide-small">{{item.Shares|floatformat:'0g'}}</td>
-                                <td class="w3-hide-small">${{item.Cost|floatformat:'2g'}}</td>
-                                <td class="w3-hide-small">${{item.Value|floatformat:'2g'}}</td>
-                                <td class="w3-hide-small">{% if item.TotalDividends != 0 %} ${{item.TotalDividends|floatformat:'2g'}} {% endif %}</td>
-                                <td>${{item.Price|floatformat:'2g'}}</td>
-                                <td>${{item.AvgCost|floatformat:'2g'}}</td>
+                                <td class="w3-hide-small">{{ item.Shares|floatformat:'0g' }}</td>
+                                <td class="w3-hide-small">${{ item.Cost|floatformat:'2g' }}</td>
+                                <td class="w3-hide-small">${{ item.Value|floatformat:'2g' }}</td>
+                                <td class="w3-hide-small">{% if item.TotalDividends != 0 %} $
+                                    {{ item.TotalDividends|floatformat:'2g' }} {% endif %}</td>
+                                <td>${{ item.Price|floatformat:'2g' }}</td>
+                                <td>${{ item.AvgCost|floatformat:'2g' }}</td>
                             </tr>
                         {% endif %}
-                   {% endfor %}
+                    {% endfor %}
                 </table>
             </div>
 
@@ -99,5 +55,12 @@
             </div>
         </div>
     </div>
+
+    <script src="{% static 'stocks.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            cost_value_chart("{% url 'cost_value_chart' %}", "{{ container.id }}", "{{ account_type }}", "{{ equity.id }}")
+        });
+    </script>
 
 {% endblock content %}

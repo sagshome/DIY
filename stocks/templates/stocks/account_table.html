@@ -1,97 +1,33 @@
 {% extends "base.html" %}
 {% block title %}IOOM Data{% endblock %}
 {% load stocks_tags %}
-    <style>
-        .tcright {
+<style>
+    .tcright {
         text-align: right;
-        }
-    </style>
-
+    }
+</style>
 {% block content %}
-
-
-<script>
-    $(document).ready(function() {
-
-      $.ajax({
-        url: "{% url 'cost_value_chart' %}",
-        data: {'account_id': {{ account.id }},
-               'account_type': 'Error'}}},
-        success: function (data) {
-          new Chart("lineChart", {
-            type: "line",
-            data: data,
-            options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        },
-                    },
-                elements: {
-                   point:{
-                       radius: 2
-                  }
-                },
-                responsive: true,
-                maintainAspectRatio: false,
-                title: {
-                  display: true,
-                  text: "Return vs Cost"
-                },
-                legend: {
-                    display: true,
-                    position: 'top',
-                    align: 'center'
-                },
-            }
-          });
-        }
-      });
-    });
-</script>
-
-<h2 class="w3-margin">Data view for {{object_type}}:{{account.name}}</h2>
-<div class="w3-cell-row w3-border">
-    <div class="w3-cell w3-border">
-        {% include 'stocks/includes/account_actions.html' %}
-        {% if account_list  %}
-            <h2>Account(s) List</h2>
-            <div class="w3-row>">
-                <table class="w3-table w3-striped w3-boarder w3-padding-top w3-padding-bottom">
-                    {% include 'stocks/includes/account_header.html' %}
-                    {% include 'stocks/includes/account_list.html' %}
-                </table>
+    <h2 class="w3-margin">Data view for {{ object_type }}:{{ account.name }}</h2>
+    <div class="w3-cell-row w3-border">
+        <div class="w3-cell w3-border">
+            {% include 'stocks/includes/account_actions.html' %}
+            {% if account_list %}
+                <h2>Account(s) List</h2>
+                <div class="w3-row>">
+                    <table class="w3-table w3-striped w3-boarder w3-padding-top w3-padding-bottom">
+                        {% include 'stocks/includes/account_header.html' %}
+                        {% include 'stocks/includes/account_list.html' %}
+                    </table>
+                </div>
+            {% endif %}
+            <div class="w3-container">
+                {% include 'stocks/includes/value_summary_list.html' %}
+            </div>
+        </div>
+        {% if xas %}
+            <div>
+                {% include "stocks/includes/transaction_list.html" %}
             </div>
         {% endif %}
-        <div class="w3-container">
-            {% include 'stocks/includes/value_summary_list.html' %}
-        </div>
     </div>
-    {% if xas %}
-        <div>
-            {% include "stocks/includes/transaction_list.html" %}
-        </div>
-    {% endif %}
-</div>
-
-
 {% endblock content %}
-
-{% block help_content %}
-<p>
-    <b>Account Table</b>.  This page tables every equity you owned and for the duration of the account.   You can alter the data for that month.  That would
-    typically be done when trying to compare to a statement received by the institution.   You can alter the number of shares owned by you can can only
-    alter the price if the value was estimated.   We estimate values when we have months between to reported values with no data.  The share price is
-    color coded to match the source of the equity price.
-</p>
-<p> The sources and their color codes are</p>
-<ol>
-    <li class="w3-text-black">Admin update</li>
-                                                <li class="w3-text-red">Manually Adjusted</li>
-                                                <li class="w3-text-blue">The system update the value via an  API into a external vendor</li>
-                                                <li class="w3-text-green">Set by you uploading a file with transactions</li>
-                                                <li class="w3-text-purple">Set by you doing a modification (via this page)</li>
-                                               <li class="w3-text-orange">This system estimated the price</li>
-                                   <li class="w3-text-yellow">No idea where this came from!</li>
-</ol>
-{% endblock %}

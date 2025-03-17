@@ -1,0 +1,105 @@
+<div class="w3-cell-row">
+      <div class="w3-container w3-cell">
+
+<p>
+    <h3>Welcome to "Cash"</h3>  Track your expenses and income over time.   This is as close as we get to a budget application.
+    Coming soon will be the ability to compare your expenses to national averages.
+    <!-- todo: You can also compare your spending vs national averages and aggregated data from other users -->
+</p>
+<p>
+    <b>A few basics before we start</b>.  One of the desktop actions is "Import",  this is the only sane way to use the cash application.
+    I import my credit card and bank statements, I rarely use cash but if I do I can add a single item with
+    the "New Entry" action.  Both of this are under the CASH drop down on the top of you screen.   The
+    formats I support are based on my bank,  CIBC. If you want me to add yours you got to
+    <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">send me</a> a faked up CSV file.
+</p>
+<h4>The Data</h4>
+<p>
+    This page by default shows the last 7 years of none hidden data.  You can change the date range (or clear the values) using the
+    filters and then hitting "Reapply Filter".   The concept behind hidden records is some expense data you may not want
+    to process.  For example,  when I pay bills it shows up on my banks statement,  I do not want to add that as an
+    expense since I already have the expense via my credit card bill.  So I "hide" it.
+    I could delete <i class="fa fa-trash"></i> it, but if I ever reimport
+    that data it will show up again.
+    The other filters are pretty self-explanatory the only caveat to point out is description will search that string
+    anywhere in the description or in the notes.  It is also case-insensitive so searching on "ottawa",  will find both "Ottawa Hydro" and
+    "the ottawa Little theatre" One <em>bug/feature</em> is that doing the reapply filter will also process and
+    records in the table below the charts.
+</p>
+<h4>The Charts</h4>
+<p>I provide two charts,  the first is a pie chart.  It is breakdown of all expenses in the selected time period,  below
+that chart you will see how much you spend in that time period. <b>Yikes!</b><br>The second chart is a breakdown
+month over month on your spending by category.  If you filter on category,  you will get the month over month on
+subcategory.</p>
+<h4>The Table</h4>
+<p>The table is a list of the expenses, matching the filters order by date.   You can reassign categories,  you can deside to hide
+    the record,  you can add notes and even delete the record.   If you select (click in) the description you can preform
+    extra actions on the expense.  These include <b>Split</b> and <b>Level</b>.  Help on that is on the action itself.
+</p>
+      </div>
+    <div class="w3-container w3-cell">
+    <h3>Consumer Price Index (CPI) Categories</h3>
+
+    <p>
+        Our categories and subcategories are designed to reflect a Consumer Price Index (CPI) which is a key measure used to track changes in the price level of
+        a basket of goods and services typically purchased by households. To calculate the CPI, expenses are categorized into major groups that
+        reflect typical consumer spending patterns. Here are the main expense categories used to calculate the CPI:
+    </p>
+    <h4>1. Housing (Shelter)</h4>
+    <ul>
+        <li><strong>Rent:</strong> The cost of renting a home or apartment.</li>
+        <li><strong>Owners' Equivalent Rent:</strong> The estimated cost of owning a home, which is treated as the rental equivalent (since homeowners don’t directly pay rent).</li>
+        <li><strong>Utilities:</strong> Expenses related to electricity, water, natural gas, heating, and garbage collection.</li>
+        <li><strong>Household Maintenance:</strong> Costs for repairs, maintenance, and improvement of homes.</li>
+    </ul>
+
+    <h4>2. Food and Beverages</h4>
+    <ul>
+        <li><strong>Food at Home:</strong> The cost of groceries, including items like bread, dairy, meats, fruits, vegetables, etc.</li>
+        <li><strong>Food Away from Home:</strong> The cost of dining out, including restaurant meals, fast food, and takeout.</li>
+        <li><strong>Beverages:</strong> Non-alcoholic drinks like coffee, tea, juice, and bottled water.</li>
+    </ul>
+
+    <h4>3. Transportation</h4>
+    <ul>
+        <li><strong>Vehicle Purchases:</strong> The cost of buying new and used cars, trucks, and other vehicles.</li>
+        <li><strong>Gasoline and Fuel:</strong> Prices for gasoline, diesel, and other vehicle fuels.</li>
+        <li><strong>Public Transportation:</strong> The cost of bus, subway, train, and other forms of public transit.</li>
+        <li><strong>Vehicle Maintenance and Repair:</strong> Costs for maintaining and repairing cars, trucks, and other vehicles.</li>
+    </ul>
+
+    <h4>4. Medical Care</h4>
+    <ul>
+        <li><strong>Prescription Drugs:</strong> The cost of medications prescribed by doctors.</li>
+        <li><strong>Medical Services:</strong> Expenses related to doctor visits, hospital stays, surgery, dental care, and other healthcare services.</li>
+        <li><strong>Health Insurance:</strong> Premiums, co-pays, and out-of-pocket expenses for health insurance plans.</li>
+    </ul>
+
+    <h4>5. Recreation</h4>
+    <ul>
+        <li><strong>Leisure Goods and Services:</strong> Expenses on recreational equipment (e.g., sports goods, hobbies), entertainment (e.g., movies, concerts), and cultural activities.</li>
+        <li><strong>Travel:</strong> Costs associated with vacations, including airfares, lodging, and other travel-related expenses.</li>
+    </ul>
+
+    <h4>6. Education and Communication</h4>
+    <ul>
+        <li><strong>Tuition:</strong> The cost of education, including college and private school tuition fees.</li>
+        <li><strong>Books and Supplies:</strong> Expenses for educational materials.</li>
+        <li><strong>Communication:</strong> The cost of services like internet, phone bills (landline and mobile), and related communication services.</li>
+    </ul>
+
+    <h4>7. Apparel (Clothing)</h4>
+    <ul>
+        <li><strong>Clothing:</strong> The cost of purchasing clothes, shoes, and accessories for men, women, and children.</li>
+        <li><strong>Laundry and Dry Cleaning:</strong> Expenses related to cleaning clothes.</li>
+    </ul>
+
+    <h4>8. Other Goods and Services</h4>
+    <ul>
+        <li><strong>Personal Care:</strong> Expenses for personal hygiene products, haircuts, cosmetics, and grooming services.</li>
+        <li><strong>Tobacco and Smoking Products:</strong> The cost of cigarettes, cigars, and other tobacco products.</li>
+        <li><strong>Miscellaneous Goods:</strong> Other goods not covered in the above categories, such as personal electronics, jewelry, or pets.</li>
+        <li><strong>Insurance and Pensions:</strong> Costs for life insurance, home insurance, and retirement plan contributions that are not part of other specific categories.</li>
+    </ul>
+    </div>
+</div>

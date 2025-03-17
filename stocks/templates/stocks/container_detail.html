@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}IOOM Details{% endblock %}
 {% load stocks_tags %}
+{% load static %}
 {% block content %}
 <script>
     $(document).ready(function() {
       var object_type = '{{account.container_type}}'
-      var url = "{% url 'wealth_summary' %}"
+      var url = "/stocks/api/wealth_summary"
       if (object_type == 'Account') {
-          url = "{% url 'equity_summary' %}"
+          url = "/stocks/api/equity_summary"
       }
       $.ajax({
             url: url,
@@ -68,22 +69,11 @@
         </div>
     </div>
 {% endif %}
-{% endblock content %}
+        <script src="{% static 'stocks.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            summary_chart("{{ account.container_type }}", "{{ account.id }}")
+        });
+    </script>
 
-{% block help_content %}
-<p>
-    <b>Portfolio Details</b>.  This somewhat busy page is likely the most important.   The main summary is the first line,
-    it has the total funding and the total funds redeemed.  That is what I refer to as the Effective Cost.
-</p>
-<h4>Return vs Cost</h4>
-<b>Inflated cost</b>,  takes into account
-    what inflation does to the value of your funds.   A 10K investment overtime should continually drop since inflation
-    eats away at the value.   <b>Effective Cost</b> Is the total of Invested Funds less any dividends withdrawn regardless
-    of inflation.  It should be higher than the value, or you are really loosing money.   Lastly <b>Value</b> is the
-    actual value,  again regardless of inflation.
-<h4>Equity Summary</h4>
-This table is any equity you ever had in this portfolio.   It has the current share
-<h4>Portfolio Transaction</h4>
-This is the pertinent activities.  I don't include dividends, but you can see them as well as historic prices by selecting
-the equity in the equity summary table.
-{% endblock %}
+{% endblock content %}

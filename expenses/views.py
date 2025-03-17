@@ -39,6 +39,8 @@ class ItemAdd(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['action'] = 'Add'
+        context['help_file'] = "expenses/help/item.html"
+
         return context
 
 
@@ -67,6 +69,7 @@ class ItemEdit(LoginRequiredMixin, UpdateView):
 
         if self.object.split_from:
             context['split_from'] = self.object.split_from.all()
+        context['help_file'] = "expenses/help/item.html"
         return context
 
 
@@ -225,6 +228,7 @@ def expense_main(request):
         'formset': formset,
         'search_form': search_form,
         'total': total,
+        'help_file': 'expenses/help/main.html'
     })
 
 
@@ -270,7 +274,8 @@ def assign_expenses(request):
 
     return render(request, "expenses/assign_category.html", {"formset": formset,
                                                              "search_form": search_form,
-                                                             "count": count})
+                                                             "count": count,
+                                                             "help_file": "expenses/help/assign_category.html"})
 
 
 @login_required
@@ -336,7 +341,7 @@ def load_subcategories(request):
         choices = SubCategory.objects.filter(category=category).order_by('name')
     else:
         choices = SubCategory.objects.none()
-    return render(request, "expenses/subcategory_list_options.html", {"subcat": choices})
+    return render(request, "expenses/includes/subcategory_list_options.html", {"subcat": choices})
 
 
 def load_subcategories_search(request):
@@ -358,7 +363,7 @@ def load_subcategories_search(request):
     for category in search.order_by('name').distinct().values_list('name', flat=True):
         default.append((category, category))
 
-    return render(request, "expenses/search_options.html", {"options": default})
+    return render(request, "expenses/includes/search_options.html", {"options": default})
 
 
 def load_categories_search(request):
@@ -368,7 +373,7 @@ def load_categories_search(request):
             default.append((category, category))
     default.append(('', '------'))
     default.append(('Income', 'Income'))
-    return render(request, "expenses/search_options.html", {"options": default})
+    return render(request, "expenses/includes/search_options.html", {"options": default})
 
 
 @login_required

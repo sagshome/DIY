@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}IOOM Account Data{% endblock %}
+{% load stocks_tags %}
+{% block content %}
+    <div class="w3-cell-row w3-border">
+        <div class="w3-cell w3-border">
+            {% if formset.errors.errors %}
+                <div class="w3-panel w3-red w3-border">
+                    {% for dict in formset.error_messages %}
+                        {% for error in dict.values %}
+                            {{ error }}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <!-- my_template.html -->
+            <form method="post">
+                {% csrf_token %}
+                {{ formset.management_form }}
+                <input type="hidden" name="success_url" value="{{ success_url }}">
+                <table class="w3-table w3-striped">
+                    <caption class="w3-wide">{{ account.name }}<br><br>{{ date_str }} Reconciliation Table</caption>
+                    <thead class="w3-margin-bottom" style="background:#eee;">
+                    <tr>
+                        <th class="w3-container w3-small w3-left-align">Symbol</th>
+                        <th class="w3-container w3-small w3-right-align">Cost</th>
+                        <th class="w3-container w3-small w3-right-align">Value</th>
+                        <th class="w3-container w3-small w3-right-align">Shares</th>
+                        <th class="w3-container w3-small w3-right-align">Month Close<br>Price</th>
+                        </th>
+                        <th class="w3-container w3-small w3-right-align">Dividend per<br>Share</th>
+                        </th>
+                        <th class="w3-container w3-small w3-right-align">Total<br>Dividends</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    {% for form in formset %}
+                        {% for hidden_field in form.hidden_fields %}
+                            <div class="w3-row w3-blue">
+                                {{ hidden_field.errors }}
+                                {{ hidden_field }}
+                            </div>
+                        {% endfor %}
+                        <tr>
+                            {% for field in form.visible_fields %}
+                                {% if field.name == 'Equity' %}
+                                    <td class="w3-small w3-left-align">{{ field.value }}</td>{% endif %}
+                                {% if field.name == 'Cost' %}
+                                    <td class="w3-small w3-right-align">${{ field.value | floatformat:'2g' }}</td>
+                                {% endif %}
+                                {% if field.name == 'Value' %}
+                                    <td class="w3-small w3-right-align">${{ field.value | floatformat:'2g' }}</td>
+                                {% endif %}
+                                {% if field.name == 'Shares' %}
+                                    <td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
+                                {% if field.name == 'Price' %}
+                                    <td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
+                                {% if field.name == 'Dividends' %}
+                                    <td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
+                                {% if field.name == 'TotalDividends' %}
+                                    <td class="w3-small w3-right-align">{{ field.value | floatformat:'2g' }}</td>
+                                {% endif %}
+                            {% endfor %}
+                            <td>
+                                {% if form.errors %}
+                                    <td class="w3-small w3-red">{{ form.errors }}</td>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </table>
+                <div class="w3-container w3-margin">
+                    <button type="submit" class="3-button-small w3-round-xlarge diy-button diy-green">Submit</button>
+                    - or -
+                    <a href="{{ success_url }}">
+                        <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel
+                        </button>
+                    </a>
+                </div>
+
+            </form>
+        </div>
+        <div class="w3-cell w3-border">
+            {% include "stocks/includes/transaction_list.html" %}
+        </div>
+    </div>
+{% endblock content %}

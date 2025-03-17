@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Manual Account Update{% endblock %}
 {% block content %}
-<!--
-    We need a form that respects the users abilty to check the API
-    - We can upload a price file
-    - if we have a AV Key we can check the
-    - Can we search current price via yahoo or morning star
- -->
-<h2>Manual Account Update</h2>
-    <p>Force an update to the number of shares and the value of your position.   This is usually based on a statement from your provider.</p>
+    <!--
+        We need a form that respects the users abilty to check the API
+        - We can upload a price file
+        - if we have a AV Key we can check the
+        - Can we search current price via yahoo or morning star
+     -->
+    <h2>Manual Account Update</h2>
+    <p>Force an update to the number of shares and the value of your position. This is usually based on a statement from
+        your provider.</p>
     <form method="post" id="FixForm" novalidate>
         {% csrf_token %}
         {% for error in form.non_field_errors %}
@@ -22,14 +23,14 @@
                 {{ hidden_field }}
             </div>
         {% endfor %}
-         <div class="w3-row w3-margin-bottom">
-                <div class="w3-col w3-container l1">Account:</div>
-                <div class="w3-col w3-container m4">{{account.name}}</div>
-         </div>
+        <div class="w3-row w3-margin-bottom">
+            <div class="w3-col w3-container l1">Account:</div>
+            <div class="w3-col w3-container m4">{{ account.name }}</div>
+        </div>
 
         <div class="w3-row w3-margin-bottom">
             <div class="w3-col w3-container l1">Equity:</div>
-            <div class="w3-col w3-container m4">{{equity}}</div>
+            <div class="w3-col w3-container m4">{{ equity }}</div>
         </div>
 
         <div class="w3-row w3-margin-bottom">
@@ -57,27 +58,19 @@
         </div>
 
 
-
         <div class="w3-row">
             <div class="w3-col w3-container m2">
-                <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" name="submit" value="Submit">
+                <input type="submit" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green"
+                       name="submit" value="Submit">
             </div>
             <div class="w3-col w3-container m2">
                 <a href="{% url 'account_table' account.id %}">
-                    <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-light-blue" type="button">Cancel</button>
+                    <button class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-light-blue" type="button">
+                        Cancel
+                    </button>
                 </a>
             </div>
         </div>
     </form>
 
-{% endblock %}
-{% block help_content %}
-<p>
-    The Manual Account Update allows you to correct/update data.  Typically, this is only needed if your statement does not match the data presented here.  The
-    changes will a transaction in your account.   This transaction can later be deleted.   Report Data and Value are always read-only and only presented to
-    provide context.<br><br>
-    The Price can only be updated if the equity in question is not updated via an API or the price has not been estimated based on other uploaded transactions.
-    <br><br>
-    The Shares can always be updated.   The value you enter should be the number of shares your think you had at the end of this report date month.
-</p>
 {% endblock %}

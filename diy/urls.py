@@ -22,7 +22,6 @@ from base.views import diy_main, NewAccountConfirmView, NewAccountDoneView
 
 urlpatterns = [
     path("", diy_main, name='home_page'),
-    # path("help/<path:fakepath>", diy_help, name='diy_help'),
     path("accounts/login/", auth_views.LoginView.as_view(), name='login_view'),
     path("accounts/logout/", auth_views.LogoutView.as_view()),
 

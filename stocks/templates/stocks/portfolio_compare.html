@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Account Details{% endblock %}
-{% block content %}
-        <div class="w3-container">
-            <h1 class="w3-margin">Account compare: {{account}}</h1>
-            <h2 class="w3-margin">Target is: {{compare_to.name}}</h2>
-        </div>
-        <div>{{ chart|safe }}</div>
-{% endblock content %}

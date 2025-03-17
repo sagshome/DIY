@@ -1,0 +1,26 @@
+    <h2>Help using Assign Expense Page</h2>
+    <h3>General</h3>
+    <p>This page allows you to quickly categorize expenses. Any expense that is not assigned categories or explicitly
+        told
+        to "hide" will be listed. Categories are pre-defined and are used for graphing and comparing to national
+        standards.
+    </p>
+    <h3>Filters</h3>
+    <p>Filters allow you to get a subset of unassigned expenses, The first three Hidden, Category and Subcategory don't
+        really make any sense <em>on THIS page</em> so don't use them. The others are date ranges, amounts and
+        Description. The Description will
+        search for the string in the description. If I put ottawa in the description if would show me both Ottawa Hydro
+        and Ottawa Public Library. It also ignores case.</p>
+    <h3>Shortcuts</h3>
+    <p>Single click assignment. Maybe someday you will be able to define your own but for now it is my favorites. The
+        <i class="fa fa-trash"></i> will bring up the delete record, maybe you really just want to hide it though.</p>
+    <h3>Templates</h3>
+    <p>Templates may be the most important part of this page, it allows the system on future imports to remember you
+        decision.
+        I can best illustrate this with an example. I have one that anything starting with Ottawa Hydro, will
+        automatically
+        assign the category Utilities, Electricity. Wait, isn't Hydro == Water - Ha ha, not in Ottawa.</p>
+    <p>One warning ! Templates are greedy, be as explict as possible. If my example above, if I had just said Ottawa,
+        it would also assign Utilities, Electricity when I came across Ottawa Public Library. You can see all your
+        existsing
+        templates in the <a href="{% url 'expenses_templates' %}">Templates</a> page.</p>

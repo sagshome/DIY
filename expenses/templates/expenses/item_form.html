@@ -1,98 +1,79 @@
 {% extends "base.html" %}
 {% block title %}Expense Assignment{% endblock %}
 {% load expenses_tags %}
+{% load static %}
 {% block content %}
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-    <script>
-    $(document).ready(function(){
-        $("#id_category").change(function () {
-          var url = $("#itemForm").attr("data-subcategories-url");
-          var categoryId = $(this).val();  // get the selected Category ID from the HTML input
-
-          $.ajax({                       // initialize an AJAX request
-            url: url,    // set the url of the request (= localhost:8000/expenses/ajax/load-subcategories/)
-            data: {
-              'category': categoryId       // add the country id to the GET parameters
-            },
-            success: function (data) {   // `data` is the return of the `load_cities` view function
-              $("#id_subcategory").html(data);  // replace the contents of the city input with the data that came from the server
-            }
-          });
-        });
-    });
-    </script>
-
-    <h2>{{action}} Expense Item</h2>
+    <h2>{{ action }} Expense Item</h2>
     <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
-    {% csrf_token %}
-    {% for error in form.non_field_errors %}
-        <div class="w3-row w3-red">
-            {{ error }}
-        </div>
-    {% endfor %}
-    {% for hidden_field in form.hidden_fields %}
-        <div class="w3-row w3-blue">
-            {{ hidden_field.errors }}
-            {{ hidden_field }}
-        </div>
-    {% endfor %}
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}
+            <div class="w3-row w3-red">
+                {{ error }}
+            </div>
+        {% endfor %}
+        {% for hidden_field in form.hidden_fields %}
+            <div class="w3-row w3-blue">
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
+            </div>
+        {% endfor %}
 
-    {% if object.amortized %}
-        <p class="w3-margin=left">This expense was amortized from <a href="{% url 'expense_edit' object.amortized.id %}">{{object.amortized.description}}</a></p>
-    {% endif %}
+        {% if object.amortized %}
+            <p class="w3-margin=left">This expense was amortized from <a
+                    href="{% url 'expense_edit' object.amortized.id %}">{{ object.amortized.description }}</a></p>
+        {% endif %}
 
-    {% if object.split %}
-        <p class="w3-margin=left">This expense was split from <a href="{% url 'expense_edit' object.split.id %}">{{object.split.description}}</a></p>
-    {% endif %}
-    <table>
-
-
-        <tr>
-            <td class="w3-container w3-margin w3-right-align">{{ form.date.label_tag }}</td>
-            <td> {{ form.date }}</td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td>{{ form.date.errors }}</td>
-        </tr>
-        <tr>
-            <td class="w3-container w3-margin w3-right-align">{{ form.amount.label_tag }}</td>
-            <td> {{ form.amount }}</td>
-            <td class="w3-container w3-margin w3-right-align">{{ form.description.label_tag }}</td>
-            <td> {{ form.description }}</td>
-            <td></td>
-            <td></td>
-            <td>{{ form.amount.errors }} {{ form.description.errors }}</td>
-        </tr>
-        <tr>
-            <td class="w3-container w3-margin w3-right-align">{{ form.category.label_tag }}</td>
-            <td> {{ form.category }}</td>
-            <td class="w3-container w3-margin w3-right-align">{{ form.subcategory.label_tag }}</td>
-            <td> {{ form.subcategory }}</td>
-            <td class="w3-container w3-margin w3-right-align">{{ form.ignore.label_tag }}</td>
-            <td> {{ form.ignore }}</td>
-            <td>{{ form.category.errors }} {{ form.subcategory.errors }} {{ form.ignore.errors }}</td>
-        </tr>
-        <tr>
-            <td class="w3-container w3-margin w3-right-align">{{ form.amortize_months.label_tag }}</td>
-            <td> {{ form.amortize_months }}</td>
-            <td class="w3-container w3-margin w3-right-align">{{ form.amortize_type.label_tag }}</td>
-            <td> {{ form.amortize_type }}</td>
-            <td></td>
-            <td></td>
-            <td>{{ form.amortize_months.errors }} {{ form.amortize_type.errors }}</td>
-        </tr>
-        <tr>
-            <td class="w3-container w3-margin w3-right-align">Split Expense Amount:</td>
-            <td> {{ form.s_amount }}</td>
-            <td class="w3-container w3-margin w3-right-align">New Description:</td>
-            <td> {{ form.s_description }}</td>
-            <td></td>
-            <td></td>
-            <td>{{ form.s_amount.errors }} {{ form.description.errors }}</td>
-        </tr>
-        <!--
+        {% if object.split %}
+            <p class="w3-margin=left">This expense was split from <a
+                    href="{% url 'expense_edit' object.split.id %}">{{ object.split.description }}</a></p>
+        {% endif %}
+        <table>
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">{{ form.date.label_tag }}</td>
+                <td> {{ form.date }}</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>{{ form.date.errors }}</td>
+            </tr>
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">{{ form.amount.label_tag }}</td>
+                <td> {{ form.amount }}</td>
+                <td class="w3-container w3-margin w3-right-align">{{ form.description.label_tag }}</td>
+                <td> {{ form.description }}</td>
+                <td></td>
+                <td></td>
+                <td>{{ form.amount.errors }} {{ form.description.errors }}</td>
+            </tr>
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">{{ form.category.label_tag }}</td>
+                <td> {{ form.category }}</td>
+                <td class="w3-container w3-margin w3-right-align">{{ form.subcategory.label_tag }}</td>
+                <td> {{ form.subcategory }}</td>
+                <td class="w3-container w3-margin w3-right-align">{{ form.ignore.label_tag }}</td>
+                <td> {{ form.ignore }}</td>
+                <td>{{ form.category.errors }} {{ form.subcategory.errors }} {{ form.ignore.errors }}</td>
+            </tr>
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">{{ form.amortize_months.label_tag }}</td>
+                <td> {{ form.amortize_months }}</td>
+                <td class="w3-container w3-margin w3-right-align">{{ form.amortize_type.label_tag }}</td>
+                <td> {{ form.amortize_type }}</td>
+                <td></td>
+                <td></td>
+                <td>{{ form.amortize_months.errors }} {{ form.amortize_type.errors }}</td>
+            </tr>
+            <tr>
+                <td class="w3-container w3-margin w3-right-align">Split Expense Amount:</td>
+                <td> {{ form.s_amount }}</td>
+                <td class="w3-container w3-margin w3-right-align">New Description:</td>
+                <td> {{ form.s_description }}</td>
+                <td></td>
+                <td></td>
+                <td>{{ form.s_amount.errors }} {{ form.description.errors }}</td>
+            </tr>
+            <!--
         {% for field in form.visible_fields %}
             <tr>
                 <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>
@@ -105,87 +86,69 @@
             </tr>
         {% endfor %}
         -->
-    </table>
-    <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green" type="submit">Submit</button>
+        </table>
+        <button style="width:125px" class="w3-margin w3-button-medium w3-round-large w3-margin-top w3-green"
+                type="submit">Submit
+        </button>
     </form>
 
     {% if children %}
-         <table class="w3-margin">
-             <caption class="w3-wide w3-padding-16">Amortized Item List</caption>
-             <thead>
-             <tr>
-                 <th>Amortized Date</th>
-                 <th>Amount</th>
-                 <th>Description</th>
-                 <th>Category</th>
-                 <th>Subcategory</th>
-                 <th>Ignored</th>
-             </tr>
-             </thead>
+        <table class="w3-margin">
+            <caption class="w3-wide w3-padding-16">Amortized Item List</caption>
+            <thead>
+            <tr>
+                <th>Amortized Date</th>
+                <th>Amount</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Subcategory</th>
+                <th>Ignored</th>
+            </tr>
+            </thead>
             {% for child in children %}
                 <tr>
-                    <td style="width:95px">{{child.date | date:'Y-m-d'}}</td>
-                    <td>${{child.amount | floatformat:2 }}</td>
-                    <td><a href="{% url 'expense_edit' child.id %}">{{child.description}}</a></td>
-                    <td>{{child.category}}</td>
-                    <td>{{child.subcategory}}</td>
-                    <td>{{child.ignore}}</td>
+                    <td style="width:95px">{{ child.date | date:'Y-m-d' }}</td>
+                    <td>${{ child.amount | floatformat:2 }}</td>
+                    <td><a href="{% url 'expense_edit' child.id %}">{{ child.description }}</a></td>
+                    <td>{{ child.category }}</td>
+                    <td>{{ child.subcategory }}</td>
+                    <td>{{ child.ignore }}</td>
                 </tr>
             {% endfor %}
         </table>
     {% endif %}
 
     {% if split_from %}
-         <table class="w3-margin">
-             <caption class="w3-wide w3-padding-16">Split Item List</caption>
-             <thead>
-             <tr>
-                 <th></th>
-                 <th>Date</th>
-                 <th>Amount</th>
-                 <th>Description</th>
-                 <th>Category</th>
-                 <th>Subcategory</th>
-                 <th>Ignored</th>
-             </tr>
-             </thead>
+        <table class="w3-margin">
+            <caption class="w3-wide w3-padding-16">Split Item List</caption>
+            <thead>
+            <tr>
+                <th></th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Subcategory</th>
+                <th>Ignored</th>
+            </tr>
+            </thead>
             {% for child in split_from %}
                 <tr>
                     <td></td>
-                    <td style="width:95px">{{child.date | date:'Y-m-d'}}</td>
-                    <td>${{child.amount | floatformat:2 }}</td>
-                    <td><a href="{% url 'expense_edit' child.id %}">{{child.description}}</a></td>
-                    <td>{{child.category}}</td>
-                    <td>{{child.subcategory}}</td>
-                    <td>{{child.ignore}}</td>
+                    <td style="width:95px">{{ child.date | date:'Y-m-d' }}</td>
+                    <td>${{ child.amount | floatformat:2 }}</td>
+                    <td><a href="{% url 'expense_edit' child.id %}">{{ child.description }}</a></td>
+                    <td>{{ child.category }}</td>
+                    <td>{{ child.subcategory }}</td>
+                    <td>{{ child.ignore }}</td>
                 </tr>
             {% endfor %}
         </table>
     {% endif %}
-{% endblock %}
-{% block help_content %}
-<p>
-    <b>Expense Form</b>.  This form is used to Add a new expense or alter an existing one.   The behaviours differ, so
-    I will document both of them for you.
-</p>
-<h4>Add Expense Item</h4>
-When Adding a new expense you must provide the Date,  the Amount,  the Description.  You may assign categories or even
-set it to be ignored.
-<h4>Edit Expense Item</h4>
-When Editing an expense you can not alter the Date,  the Amount,  or the Description.  You may assign categories or
-set it to be ignored/hidden.<br><br>
-<b>Amortize</b> Some expense are so large they skew that charts.   My best example of this is buying a car (with cash),
-this causes that month to go through the roof,  making all other months data impossible to read.   The two obvious
-solutions are <ol><li>Ignore/Hide the record - Fixes the charts, but it would then skew how much I spend on transportation</li>
-<li>Amortize It - Spreed the joy out over a longer period of time</li></ol>The choice is yours.  With amortization, you
-can spread the "payments" over the past months the future months or both.   My personal preference is to spread it out
-over the past months like I had been saving up for it all along.   Actually I was but that's not the point here.
-<br><br>
-<b>Split</b> Sometimes you may want to assign multiple categories to an expense.  This can be done via the split
-action.   Enter the amount you want to split-off and give it a new description.   This will make two new items and
-automatically hide the first.
-<br><br>
-In both cases elect the <button class="w3-button-small w3-round-large w3-green">Submit</button>
-to have the record processed.
-
+    <script src="{% static 'expenses.js' %}"></script>
+    <script>
+        $(document).ready(function() {
+            get_subcategory_choices()
+        });
+    </script>
 {% endblock %}

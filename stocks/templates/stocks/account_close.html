@@ -1,53 +1,54 @@
 {% extends "base.html" %}
 {% block title %}Close Account{% endblock %}
 {% block content %}
-  <h1 class="w3-margin">Close Account</h1>
+    <h1 class="w3-margin">Close Account</h1>
     <div class="w3-row">
         <div style="height:350px;" class="w3-half w3-container">
-          <form action="" method="post">
-            {% csrf_token %}
-              <input type="hidden" name="success_url" value="{{ success_url }}">
+            <form action="" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="success_url" value="{{ success_url }}">
 
-            {% for error in form.non_field_errors %}
-                <div class="w3-row w3-red">
-                    {{ error }}
-                </div>
-            {% endfor %}
-            {% for hidden_field in form.hidden_fields %}
-                <div class="w3-row w3-blue">
-                    {{ hidden_field.errors }}
-                    {{ hidden_field }}
-                </div>
-            {% endfor %}
-            <table>
-                {% for field in form.visible_fields %}
-                    <tr>
-                        <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>
-                        <td class="w3-container w3-margin"> {{ field }}</td>
-                        {% if field.errors %}
-                            {% for error in field.errors %}
-                                <td class="w3-red"> {{ error }} </td>
-                            {% endfor %}
-                        {% endif %}
-                    </tr>
+                {% for error in form.non_field_errors %}
+                    <div class="w3-row w3-red">
+                        {{ error }}
+                    </div>
                 {% endfor %}
-            </table>
-              <a href="{{success_url}}">
-                <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
-            </a>
-            - or -
-            <button class="w3-button-small w3-round-large subtle diy-button diy-yellow" type="submit">Close</button>
-          </form>
+                {% for hidden_field in form.hidden_fields %}
+                    <div class="w3-row w3-blue">
+                        {{ hidden_field.errors }}
+                        {{ hidden_field }}
+                    </div>
+                {% endfor %}
+                <table>
+                    {% for field in form.visible_fields %}
+                        <tr>
+                            <td class="w3-container w3-margin w3-right-align">{{ field.label_tag }}</td>
+                            <td class="w3-container w3-margin"> {{ field }}</td>
+                            {% if field.errors %}
+                                {% for error in field.errors %}
+                                    <td class="w3-red"> {{ error }} </td>
+                                {% endfor %}
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </table>
+                <a href="{{ success_url }}">
+                    <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
+                </a>
+                - or -
+                <button class="w3-button-small w3-round-large subtle diy-button diy-yellow" type="submit">Close</button>
+            </form>
         </div>
         <div style="height:350px;" class="w3-half w3-container">
-            <p>This form is used to close an account.   If you select an  account,  you previous Funing values will be
-            transferred to that account as of the close date,  which is today unless you picked a different value.</p>
+            <p>This form is used to close an account. If you select an account, you previous Funing values will be
+                transferred to that account as of the close date, which is today unless you picked a different
+                value.</p>
             <ul>
                 <li>Select an Account - This will transfer the funding from this account over the new account.</li>
-                <li>Select the Delete choice box,   The account will just be deleted</li>
+                <li>Select the Delete choice box, The account will just be deleted</li>
                 <li>Just leave the delete box unchecked and don't pick a new Account - the account will just close.</li>
             </ul>
-            <p>If you select a date,  we will make the close / transfer effective that date.</p>
+            <p>If you select a date, we will make the close / transfer effective that date.</p>
         </div>
     </div>
 

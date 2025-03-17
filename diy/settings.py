@@ -194,6 +194,7 @@ STATIC_ROOT = "static/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "diy_static",
+    BASE_DIR / "node_modules"
 ]
 
 # Default primary key field type

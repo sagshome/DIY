@@ -2,148 +2,98 @@
 {% load static %}
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
-<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-<script>
-    function setValues(button, cat, sub) {
-        // ShortCuts must be in the table just before Category and Subcategory
-        let my_cell = $(button).closest('td');
-        let cat_cell = my_cell.next('td');
-        let cat_id = cat_cell.children()[0].getAttribute('id');
-        let sub_id = cat_cell.next('td').children()[0].getAttribute('id');
+    <h2>Update Expenses - Unassigned Count:&nbsp;{{ count }}</h2>
 
-        for (var option of document.getElementById(cat_id).options) {
-            if (option.text === cat) {
-                option.selected = true;
-                break;
-            }
-        }
+    <form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
+        {% csrf_token %}
+        {% include 'expenses/includes/expenses_search_bar.html' %}
 
-        for (var option of document.getElementById(sub_id).options) {
-            if (option.text === sub) {
-                option.selected = true;
-                break;
-            }
-        }
-    }
-
-    $(document).ready(function() {
-        $('.diy-category').each(function(index, element) {  // Invalidate subcategory when category changed
-            document.getElementById(this.id).addEventListener("change", function() {
-                var row_id = this.id.slice(8, this.id.length - 9);  // Just the number part
-                var category_id = document.getElementById("id_form-" + row_id + "-category")
-                var subcategory_id = document.getElementById("id_form-" + row_id + "-subcategory")
-                var category = $(category_id).val()
-                $.ajax({
-                    url: '{% url 'ajax-load-subcategories' %}',
-                    data: {category: category},
-                    success: function(data) {
-                        $(subcategory_id).html(data);
-                        console.log(data);
-                        },
-                    error: function(ts) {
-                        console.log(ts.responseText)
-                    }
-                })  // ajax
-            })  // add Event
-        });  // for each
-    });  // document ready
-
-</script>
-
-<h2>Update Expenses - Unassigned Count:&nbsp;{{count}}</h2>
-
-<form method="post" id="itemForm" data-subcategories-url="{% url 'ajax-load-subcategories' %}" novalidate>
-    {% csrf_token %}
-    {% include 'expenses/expenses_search_bar.html' %}
-
-    {{ formset.management_form }}
-    {% for dict in formset.error_messages %}
-        {% for error in dict.values %}
-            {{ error }}
+        {{ formset.management_form }}
+        {% for dict in formset.error_messages %}
+            {% for error in dict.values %}
+                {{ error }}
+            {% endfor %}
         {% endfor %}
-    {% endfor %}
-    <table id="formset" class="table w3-striped">
-        {% for form in formset.forms %}
-            {% if forloop.first %}
-            <thead>
-                <tr></tr>
-                <tr>
+        <table id="formset" class="table w3-striped">
+            {% for form in formset.forms %}
+                {% if forloop.first %}
+                    <thead>
+                    <tr></tr>
+                    <tr>
+                        {% for field in form.visible_fields %}
+                            <th>{{ field.label|capfirst }}</th>
+                            {% if field.name == 'amount' %}
+                                <th>Shortcuts</th>
+                            {% endif %}
+                        {% endfor %}
+                        <th></th>
+                    </tr>
+                    </thead>
+                {% endif %}
+                <tr class="{% cycle 'row1' 'row2' %}">
                     {% for field in form.visible_fields %}
-                        <th>{{ field.label|capfirst }}</th>
+                        <td>
+                            {# Include the hidden fields in the form #}
+                            {% if forloop.first %}
+                                <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
+                                {% for hidden in form.hidden_fields %}
+                                    {{ hidden }}
+                                {% endfor %}
+                            {% endif %}
+                            {{ field.errors.as_ul }}
+                            {% if field.name == 'description' %}
+                                <a href="{% url 'expense_edit' form.instance.id %}">{{ field }}</a>
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
+
+                        </td>
                         {% if field.name == 'amount' %}
-                           <th>Shortcuts</th>
+                            <td>
+                                <span onclick="setValues(this, 'Housing', 'Other')"><i title="Housing - Other"
+                                                                                       class="fa fa-home"></i></span>
+                                <span onclick="setValues(this, 'Housing', 'Maintenance')"><i
+                                        title="Housing - Maintenance" class="fa fa-wrench"></i></span>
+                                <span onclick="setValues(this, 'Food', 'TakeOut')"><i title="Food - Takeout"
+                                                                                      class="fa fa-cutlery"></i></span>
+                                <span onclick="setValues(this, 'Food', 'Dinning')"><i title="Food - Dinning"
+                                                                                      class="fa fa-glass"></i></span>
+                                <span onclick="setValues(this, 'Food', 'Grocery')"><i title="Food - Grocery"
+                                                                                      class="fa fa-shopping-cart"></i></span>
+                                <span onclick="setValues(this, 'Transportation', 'Fuel')"><i
+                                        title="Transportation - Fuel" class="fa fa-car"></i></span>
+                                <span onclick="setValues(this, 'Personal Care', 'Clothing')"><i
+                                        title="Personal Care - Clothing" class="fa fa-male"></i></span>
+                                <span onclick="setValues(this, 'Recreation', 'Other')"><i title="Recreation - Other"
+                                                                                          class="fa fa-smile-o"></i></span>
+                                <span onclick="setValues(this, 'Recreation', 'Camping')"><i title="Recreation - Camping"
+                                                                                            class="fa fa-free-code-camp"></i></span>
+                                <span onclick="setValues(this, 'Other', 'Unknown')"><i title="Other - Unknown"
+                                                                                       class="fa fa-question-circle"></i></span>
+                            </td>
+                        {% endif %}
+                        {% if field.name == 'ignore' %}
+                            <td>
+                                <button class="w3-margin-left w3-button w3-round-xlarge  w3-orange" name="submit-type"
+                                        value="Template-{{ form.instance.id }}" type="submit">Template
+                                </button>
+                            </td>
                         {% endif %}
                     {% endfor %}
-                    <th></th>
                 </tr>
-            </thead>
-            {% endif %}
-            <tr class="{% cycle 'row1' 'row2' %}">
-                {% for field in form.visible_fields %}
-                    <td>
-                        {# Include the hidden fields in the form #}
-                        {% if forloop.first %}
-                            <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
-                            {% for hidden in form.hidden_fields %}
-                                {{ hidden }}
-                            {% endfor %}
-                        {% endif %}
-                        {{ field.errors.as_ul }}
-                        {% if field.name == 'description' %}
-                            <a href="{% url 'expense_edit' form.instance.id %}">{{field}}</a>
-                        {% else %}
-                            {{ field }}
-                        {% endif %}
+            {% endfor %}
+        </table>
+        <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" name="submit-type"
+                value="Save" type="submit">Submit
+        </button>
 
-                    </td>
-                    {% if field.name == 'amount' %}
-                    <td>
-                        <span onclick="setValues(this, 'Housing', 'Other')"><i title="Housing - Other" class="fa fa-home"></i></span>
-                        <span onclick="setValues(this, 'Housing', 'Maintenance')"><i title="Housing - Maintenance" class="fa fa-wrench"></i></span>
-                        <span onclick="setValues(this, 'Food', 'TakeOut')"><i title="Food - Takeout" class="fa fa-cutlery"></i></span>
-                        <span onclick="setValues(this, 'Food', 'Dinning')"><i title="Food - Dinning" class="fa fa-glass"></i></span>
-                        <span onclick="setValues(this, 'Food', 'Grocery')"><i title="Food - Grocery" class="fa fa-shopping-cart"></i></span>
-                        <span onclick="setValues(this, 'Transportation', 'Fuel')"><i title="Transportation - Fuel" class="fa fa-car"></i></span>
-                        <span onclick="setValues(this, 'Personal Care', 'Clothing')"><i title="Personal Care - Clothing" class="fa fa-male"></i></span>
-                        <span onclick="setValues(this, 'Recreation', 'Other')"><i title="Recreation - Other" class="fa fa-smile-o"></i></span>
-                        <span onclick="setValues(this, 'Recreation', 'Camping')"><i title="Recreation - Camping" class="fa fa-free-code-camp"></i></span>
-                        <span onclick="setValues(this, 'Other', 'Unknown')"><i title="Other - Unknown" class="fa fa-question-circle"></i></span>
-                    </td>
-                    {% endif %}
-                    {% if field.name == 'ignore' %}
-                        <td>
-                            <button class="w3-margin-left w3-button w3-round-xlarge  w3-orange" name="submit-type" value="Template-{{form.instance.id}}" type="submit">Template</button>
-                        </td>
-                    {% endif %}
-                {% endfor %}
-            </tr>
-        {% endfor %}
-    </table>
-    <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" name="submit-type" value="Save" type="submit">Submit</button>
+    </form><br><br>
 
-</form><br><br>
-{% endblock %}
-{% block localscript %}
+    <script src="{% static 'expenses.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            set_change_callback()
+        });
+    </script>
 {% endblock %}
 
-{% block help_content %}
-  <h2>Help using Assign Expense Page</h2>
-          <h3>General</h3>
-<p>This page allows you to quickly categorize expenses.  Any expense that is not assigned categories or explicitly told
-    to "hide" will be listed.   Categories are pre-defined and are used for graphing and comparing to national standards.
-</p>
-          <h3>Filters</h3>
-<p>Filters allow you to get a subset of unassigned expenses,  The first three Hidden,  Category and Subcategory don't
-really make any sense <em>on THIS page</em> so don't use them.   The others are date ranges,  amounts and Description.   The Description will
-search for the string in the description.  If I put ottawa in the description if would show me both Ottawa Hydro and Ottawa Public Library.   It also ignores case.</p>
-          <h3>Shortcuts</h3>
-<p>Single click assignment.   Maybe someday you will be able to define your own but for now it is my favorites. The
-<i class="fa fa-trash"></i> will bring up the delete record,  maybe you really just want to hide it though.</p>
-<h3>Templates</h3>
-<p>Templates may be the most important part of this page,  it allows the system on future imports to remember you decision.
-I can best illustrate this with an example.   I have one that anything starting with Ottawa Hydro,  will automatically
-assign the category Utilities, Electricity.   Wait,  isn't Hydro == Water - Ha ha,  not in Ottawa.</p>
-<p>One warning !  Templates are greedy,   be as explict as possible.   If my example above,  if I had just said Ottawa,
-it would also assign Utilities, Electricity when I came across Ottawa Public Library.  You can see all your existsing
-templates in the <a href="{% url 'expenses_templates' %}">Templates</a> page.</p>
-{% endblock %}

@@ -13,23 +13,31 @@
         </div>
     {% endfor %}
 
-      <h2>{{action}} Expense Item</h2>
+    <h2>{{ action }} Expense Item</h2>
 
-        <form method="post">
-            {% csrf_token %}
-            <table>
-                <tr class="w3-margin"><td>Date:</td><td><b>{{object.date | date:'Y-m-d'}}</b></td></tr>
-                <tr class="w3-margin"><td>Description:</td><td><b>{{object.description}}</b></td></tr>
-                <tr class="w3-margin"><td>Amount:</td><td><b>{{object.amount | floatformat:2}}</b></td></tr>
-            </table>
+    <form method="post">
+        {% csrf_token %}
+        <table>
+            <tr class="w3-margin">
+                <td>Date:</td>
+                <td><b>{{ object.date | date:'Y-m-d' }}</b></td>
+            </tr>
+            <tr class="w3-margin">
+                <td>Description:</td>
+                <td><b>{{ object.description }}</b></td>
+            </tr>
+            <tr class="w3-margin">
+                <td>Amount:</td>
+                <td><b>{{ object.amount | floatformat:2 }}</b></td>
+            </tr>
+        </table>
 
-            <p>A deleted item will be gone forever (unless you import it again).<br>Maybe you just want to Ignore it?<br><br>
+        <p>A deleted item will be gone forever (unless you import it again).<br>Maybe you just want to Ignore
+            it?<br><br>
             <a href="{% url 'expense_main' %}">
                 <button class="w3-button-small w3-round-xlarge w3-light-blue" type="button">Cancel</button>
             </a>
             - or -
             <input class="w3-button-small w3-round-xlarge w3-red" type="submit" value="Delete">
-        </form>
-
-
+    </form>
 {% endblock %}

@@ -1,7 +1,8 @@
 ﻿{% extends "base.html" %}
 {% block title %}IOOM Transaction{% endblock %}
+{% load static %}
 {% block content %}
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
 
@@ -39,7 +40,7 @@
             let action_value = $("#id_xa_action").val();
             let repeat_value = $("#id_repeat").val();
             let equity_value = $("#id_equity").val();
-            if (action_value == 1 || action_value == 5 || action_value == 6 || action_value == 7 || action_value == 10 || action_value == 11) {  // This is a Funding type
+            if (action_value === 1 || action_value === 5 || action_value === 6 || action_value === 7 || action_value === 10 || action_value === 11) {  // This is a Funding type
                 hideDiv('equityRow');
                 hideDiv('priceRow');
                 hideDiv('quantityRow');
@@ -217,7 +218,6 @@
             }
         });
 
-
         async function fetchOptions(query) {
             if (query.length < 2) return; // Avoid unnecessary API calls
 
@@ -249,7 +249,7 @@
     <div class="w3-cell-row">
         <div class="w3-cell">
             <h3>{{view_verb}} Transaction</h3>
-                <form method="post" equity-url="{% url 'equity_list' %}" novalidate>
+                <form method="post" novalidate>
             {% csrf_token %}
             <input type="hidden" name="success_url" value="{{ success_url }}">
             {% for error in form.non_field_errors %}

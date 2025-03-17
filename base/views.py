@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def diy_main(request):
-
     span = 3
     period = 'QTR'
     trends = 'Hide'
@@ -45,7 +44,8 @@ def diy_main(request):
         form = MainForm(initial={'years': span, 'period': period, 'show_trends': 'Hide'})
         if request.user:
             add_to_cache.delay(request.user.id)  # Update the redis cache for the accounts owned by this user.
-    return render(request, "base/diy_main.html", {'form': form, 'span': span, 'period': period, 'trends': trends})
+    return render(request, "base/diy_main.html", {
+        'form': form, 'span': span, 'period': period, 'trends': trends, "help_file": "base/help/diy_main.html"})
 
 
 class NewAccountConfirmView(PasswordResetConfirmView):
