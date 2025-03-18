@@ -14,6 +14,7 @@ urlpatterns = [
     path(r'assign/', views.assign_expenses, name='expenses_assign'),
 
     path(r'expense/add/', views.ItemAdd.as_view(), name='expense_add'),
+    path(r'expense/help', views.cash_help, name='cash_help'),
     path(r'expense/<int:pk>/edit/', views.ItemEdit.as_view(), name='expense_edit'),
     path(r'expense/<int:pk>/delete/', views.ItemDelete.as_view(), name='expense_delete'),
 

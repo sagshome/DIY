@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}IOOM Cash{% endblock %}
+{% block navbar %}
+    <div class="w3-top">
+        <div class="w3-bar w3-black w3-card">
+            <div class="w3-hide-small">
+                <a href="{{ success_url }}" class="w3-bar-item w3-button w3-padding-large">Back</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block content %}
+    <div class="w3-row w3-medium">
+        <div class="w3-container w3-third">
+            <h4>Overview</h4>
+            <p>For years, I managed/tracked my expenses via Excel spreadsheet. It was good but since I developed a
+                <a href="{% url 'stocks_main' %}"><b>Wealth</b></a> application I figured why not add <b>Cash</b> to it.
+                <br>
+                The <b>Cash</b> application tracks monthly expenditures as well as income. Using standard categorization
+                allow us to track to averages (based on Stats Canada surveys).<br>
+                Why use the <b>Cash</b> app?
+            <ul>
+                <li>Easy to search for previous expenses</li>
+                <li>Visualize a specific expense (like auto insurance) over time.</li>
+                <li>How do I compare to national averages (pending)</li>
+                <li>Will I have enough money to retire? I am retired, so it is a moot point but maybe not for you
+                    (pending)
+                </li>
+            </ul>
+            <br>
+            <b>It is time I included this:</b>
+            <div class="w3-container w3-pale-yellow w3-small">{% include 'base/blahblah.html' %}</div>
+            <h5>Searching</h5>
+            I can argue the ability so search is the most useful feature. I often use it and it is one of the few
+            features that is useful on my phone. Searching consists of the following categories
+            <table class="w3-table-all w3-small">
+                <tr>
+                    <td>Hidden</td>
+                    <td>Search for items that have been explicitly hidden</td>
+                <tr>
+                <tr>
+                    <td>Category</td>
+                    <td>Search on a Category, the result charts are based on that Category</td>
+                <tr>
+                <tr>
+                    <td>Subcategory</td>
+                    <td>Search on a Subcategory, if multiple categories have this
+                        subcatgory the results will reflect that.
+                    </td>
+                <tr>
+                <tr>
+                    <td>Search From</td>
+                    <td>Start on this date</td>
+                <tr>
+                <tr>
+                    <td>Search Until</td>
+                    <td>End by this date</td>
+                <tr>
+                <tr>
+                    <td>Amount</td>
+                    <td>Look for less than, greater than or equal to a specific amount</td>
+                <tr>
+                <tr>
+                    <td>Description</td>
+                    <td>Look in notes or description for an item</td>
+                <tr>
+            </table>
+        </div>
+        <div class="w3-container w3-third">
+
+            <h4>How to get started</h4>
+            <p>Well that depends... If you already have data in a spreadsheet you can upload it. If you have a bank
+                and/or credit card account
+                with a decent interface you can download transactions as CSV files (Comma Seperated Values).<br>
+                The <b>Cash</b> application stores each <em>Item</em> and allows you to categorize and subcategorize as
+                you see fit. It also supports templates so that later imports will automatically categorize based on
+                your
+                prior instructions.
+            <h5>Upload CSV Files Formats - Default Columns</h5>
+            <table class="w3-table-all w3-tiny">
+                <tr>
+                    <td>Date</td>
+                    <td>Description</td>
+                    <td>Amount</td>
+                    <td>Category</td>
+                    <td>Subcategory</td>
+                    <td>Hidden</td>
+                    <td>Details</td>
+                    <td>Notes</td>
+                </tr>
+                <tr>
+                    <td>2014-12-01</td>
+                    <td>Cosco's GreenBank inc.</td>
+                    <td>213.97</td>
+                    <td>Housing</td>
+                    <td>Other</td>
+                    <td>false</td>
+                    <td>0003</td>
+                    <td>I bought too many tee shirts again!</td>
+                </tr>
+                <tr>
+                    <td>Format must be YYYY-MM-DD</td>
+                    <td>Text, usually the exact text on the bank account or credit card statement</td>
+                    <td>Decimal number</td>
+                    <td>Must be a valid Category</td>
+                    <td>Must be a valid Subcategory</td>
+                    <td>true or false</td>
+                    <td>Other data from the statement</td>
+                    <td>arbitrary note you add</td>
+                </tr>
+            </table>
+            <p> Other than the default columns we support native uploads of CSV file export by: <b>CIBC Bank</b>
+                statements and <b>CIBC VISA</b> statements, If you have another
+                format you would like supported send along a sample CSV, and I'll do my best to add it.
+                <br><br>
+            </p>
+            <p>Ca Supported (Default Import)</p>
+            <table class="w3-table-all w3-small">
+                <tr>
+                    <td>Category</td>
+                    <td>Subcategories</td>
+                <tr>
+                <tr>
+                    <td>Food
+                    <td>
+                    <td>Grocery
+                    <td>
+                    <td>TakeOut
+                    <td>
+                    <td>Dinning
+                    <td>
+                    <td>Alcohol
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Utilities
+                    <td>
+                    <td>Water
+                    <td>
+                    <td>Electricity
+                    <td>
+                    <td>Heat
+                    <td>
+                    <td>Telecom
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Housing
+                    <td>
+                    <td>Maintenance
+                    <td>
+                    <td>Mortgage/Rent
+                    <td>
+                    <td>Appliances/Furniture
+                    <td>
+                    <td>Insurance
+                    <td>
+                    <td>Taxes
+                    <td>
+                    <td>Other
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Healthcare
+                    <td>
+                    <td>Medical
+                    <td>
+                    <td>Dental
+                    <td>
+                    <td>Insurance
+                    <td>
+                    <td>Other
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Recreation
+                    <td>
+                    <td>Events
+                    <td>
+                    <td>Camping
+                    <td>
+                    <td>Golf
+                    <td>
+                    <td>Computers/Tech
+                    <td>
+                    <td>Streaming
+                    <td>
+                    <td>Other
+                    <td>
+                    <td>Insurance
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Transportation
+                    <td>
+                    <td>Fuel
+                    <td>
+                    <td>Maintenance
+                    <td>
+                    <td>Lease/Purchase
+                    <td>
+                    <td>Insurance
+                    <td>
+                    <td>Parking/Tolls
+                    <td>
+                    <td>Fees
+                    <td>
+                    <td>Public/Rental
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Personal Care
+                    <td>
+                    <td>Beauty
+                    <td>
+                    <td>Fitness
+                    <td>
+                    <td>Clothing
+                    <td>
+                    <td>Other
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Other
+                    <td>
+                    <td>Education
+                    <td>
+                    <td>Unknown
+                    <td>
+                    <td>Taxes
+                    <td>
+                    <td>Savings
+                    <td>
+                    <td>Interest
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Income
+                    <td>
+                    <td>Salary
+                    <td>
+                    <td>Commissions
+                    <td>
+                    <td>Pensions
+                    <td>
+                    <td>Government Programs
+                    <td>
+                    <td>Investments
+                    <td>
+                    <td>Refunds
+                    <td></td>
+                </tr>
+
+            </table>
+
+
+        </div>
+        <div class="w3-container w3-third">
+
+            <h4>How do I maintain this once it is going</h4>
+            Once a month or whenever you feel like update fresh data.
+            <h4>Create templates</h4>
+            If you are shopping a certain stores often and they often have the same thing a template will make
+            life easy. You can search from the beginning or the end of the description or even somewhere in the
+            description and then assign categories / subcategories or even ignore/hide the records. <br>
+            <b><em>Templates are 'greedy', the first match wins, so If you have to templates that both satisfy
+                the same search, the first will win.</em></b><br>Don't go crazy with templates. In fact, you may want
+            to visit the template page and remove things you don't really use. They will slow down future imports.
+        </div>
+
+    </div>
+
+{% endblock content %}

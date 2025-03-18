@@ -111,8 +111,8 @@ class StocksMain(LoginRequiredMixin, ListView):
 
         account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
         context['account_list_data'] = account_list_data
+        context['help_file'] = 'stocks/help/stocks_main.html'
         return context
-
 
 class ContainerTableView(LoginRequiredMixin, DetailView):
     template_name = 'stocks/account_table.html'
@@ -505,6 +505,10 @@ def add_account(request):
 
     form = AccountAddForm(initial={'user': request.user, 'currency': request.user.profile.currency, 'managed': False})
     return render(request, 'stocks/add_account.html', {'form': form})
+
+
+def wealth_help(request):
+    return render(request, 'stocks/includes/help.html', {'success_url': request.META.get('HTTP_REFERER', '/')})
 
 
 @login_required

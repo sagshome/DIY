@@ -153,6 +153,8 @@ class ItemFormSet(modelformset_factory(Item, form=ItemListForm, extra=0)):
             # Perform your custom action here
             pass
 
+def cash_help(request):
+    return render(request, 'expenses/includes/help.html', {'success_url': request.META.get('HTTP_REFERER', '/')})
 
 @login_required
 def expense_main(request):

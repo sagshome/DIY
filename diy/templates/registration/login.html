@@ -1,21 +1,23 @@
 {% extends "base.html" %}
 {% block title %}IOOM{% endblock %}
-{% block navbar%}
-<div class="w3-top">
-    <div class="w3-bar w3-black w3-card">
-        <p class="w3-conainer w3-margin-left">Login Page</p>
+{% block navbar %}
+    <div class="w3-top">
+        <div class="w3-bar w3-black w3-card">
+            <p class="w3-conainer w3-margin-left">Login Page</p>
+        </div>
     </div>
-</div>
 
 {% endblock %}
 
 {% block content %}
     {% include 'base/blahblah.html' %}
+    <p class="w3-margin-left w3-pale-yellow">If you would like to understand a little more about this website. You can visit the
+        overview page on <a href="{% url 'cash_help' %}"><b>Cash</b></a> management or on the
+        <a href="{% url 'wealth_help' %}"><b>Wealth</b></a> tracking system<br>
+        If you just want to look around you may use the email address <b>demo</b>
+        with the password <b>demo</b>. This account's fake data is restored nightly</p>
     <div class="w3-cell-row w3-margin">
         <div class="w3-cell w3-margin w3-mobile">
-            <p>If you just want to look around you may use the email address <b>demo</b>
-                with the password <b>demo</b>.   This accounts fake data is restored nightly</p>
-
             {% if form.errors %}
                 <div class="w3-panel w3-red w3-margin-top">
                     <p>Your username and password didn't match. Please try again.</p>
@@ -46,6 +48,6 @@
             </form>
             <p><a href="{% url 'password_reset' %}">Lost password?</a></p>
             <p><a href="{% url 'new_account' %}">Request a IOOM account?</a></p>
+        </div>
     </div>
-    </div>
-    {% endblock %}
+{% endblock %}

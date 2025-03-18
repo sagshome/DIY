@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}IOOM Wealth{% endblock %}
+{% block navbar %}
+    <div class="w3-top">
+        <div class="w3-bar w3-black w3-card">
+            <div class="w3-hide-small">
+                <a href="{{ success_url }}" class="w3-bar-item w3-button w3-padding-large">Back</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block content %}
+    <div class="w3-row w3-medium">
+        <div class="w3-container w3-third">
+            <h4>Overview</h4>
+            <p>I started the <b>Wealth</b> application because I was frustrated using spreadsheets to track my
+                investments
+                over
+                time. I changed investment firms at least a half-dozen times as my career moved along. It was nearly
+                impossible for me to get a picture how my portfolio was changing. I also wanted an independent view
+                from
+                my current investment company. The application as originally named DIY <em>Do it yourself</em>. Here are
+                some
+                key things my site does that yours probably doesn't
+            <ul>
+                <li>Compare your actually invested funds vs inflation - I use the Canadian CPI numbers from the Bank of
+                    Canada
+                </li>
+                <li>Visually see how removing money from my account (withdraws) affects my ROI (return on investments)
+                </li>
+                <li>Am I beating the standard indices (pending)</li>
+                <li>Will I have enough money to retire? I am retired, so it is a moot point but maybe not for you
+                    (pending)
+                </li>
+            </ul>
+            <br>
+            <b>It is time I included this:</b>
+            <div class="w3-container w3-pale-yellow w3-small">{% include 'base/blahblah.html' %}</div>
+            {% include 'stocks/includes/about_accounts.html' %}
+        </div>
+        <div class="w3-container w3-third">
+
+            <h4>How to get started</h4>
+            <p>Well that depends... If you already have data in a spreadsheet you can upload it. If you have an trading
+                account
+                with a decent interface you can download transactions as CSV files (Comma Seperated Values).
+                It drives me crazy that my RRSP account does not offer
+                this ability. I use QuestTrade that does, so does my Manulife TFSA accounts.<br>
+                The crux of the <b>Wealth</b> application is that is only stores <em>Transactions</em> (XAs) against an
+                <em>Account</em>.
+                Transactions, are typically Fund/Withdraw - Buy/Sell. When you visit the application it will dynamically
+                calculate your wealth based on equity prices. I only store one entry per month, which is typically the
+                end
+                of the
+                month.
+            <h5>Upload CSV Files Formats - Default Columns</h5>
+            <table class="w3-table-all w3-tiny">
+                <tr>
+                    <td>Date</td>
+                    <td>AccountName</td>
+                    <td>AccountKey</td>
+                    <td>Symbol</td>
+                    <td>Region</td>
+                    <td>Description</td>
+                    <td>XAType</td>
+                    <td>Currency</td>
+                    <td>Quantity</td>
+                    <td>Price</td>
+                    <td>Amount</td>
+                </tr>
+                <tr>
+                    <td>2014-12-01</td>
+                    <td>Dan's Account</td>
+                    <td>Foo_007</td>
+                    <td>BCE.TO</td>
+                    <td>Canada</td>
+                    <td>Bell Canada Inc.</td>
+                    <td>Buy</td>
+                    <td>CAN</td>
+                    <td>10</td>
+                    <td>50</td>
+                    <td>500</td>
+                </tr>
+                <tr>
+                    <td>Format must be YYYY-MM-DD</td>
+                    <td>Display Name</td>
+                    <td>Unique Acct Name</td>
+                    <td>Equity with exchange suffix</td>
+                    <td>Canada or US</td>
+                    <td>Full Name</td>
+                    <td>Transaction Type</td>
+                    <td>Currency CAD or USD</td>
+                    <td>Quantity if applicable</td>
+                    <td>Price if applicable</td>
+                    <td>Amount if appropriate</td>
+                </tr>
+
+            </table>
+            <p> Other than the default columns we support native uploads of CSV file export by: <b>QuesTrade</b>,
+                <b>Manulife legacy</b>, and <b>Manulife Wealth</b>. If you have another
+                format you would like supported send along a sample CSV, and I'll do my best to add it.
+                <br><br>
+                You can also consider just creating an account, and adding the transactions manually.
+            </p>
+            <p>Transactions Supported (Default Import)</p>
+            <table class="w3-table-all w3-small">
+                <tr>
+                    <td>Transaction</td>
+                    <td>Description</td>
+                <tr>
+                <tr>
+                    <td>Deposit</td>
+                    <td>Funds added to the Account</td>
+                </tr>
+                <tr>
+                    <td>Buy</td>
+                    <td>Equities/ETF/Mutual Funds Purchased</td>
+                </tr>
+                <tr>
+                    <td>Reinvested Dividend</td>
+                    <td>Equities/ETF/Mutual Funds - Automatically Reinvested</td>
+                </tr>
+                <tr>
+                    <td>Sell</td>
+                    <td>Equities/ETF/Mutual Funds Sold</td>
+                </tr>
+                <tr>
+                    <td>Dividends/Interest</td>
+                    <td>Funds added to your account - increases the 'CASH' portion of your account</td>
+                </tr>
+                <tr>
+                    <td>Withdraw</td>
+                    <td>Funds removed to your account</td>
+                </tr>
+                <tr>
+                    <td>Fees Paid</td>
+                    <td>Funds removed to your account - to pay for services</td>
+                </tr>
+                <tr>
+                    <td>Transferred In</td>
+                    <td>Funds and/or equities transferred into your account</td>
+                </tr>
+                <tr>
+                    <td>Transferred Out</td>
+                    <td>Funds and/or equities transferred out of your account</td>
+                </tr>
+                <tr>
+                    <td>Value</td>
+                    <td>Special Transaction only applicable to Value accounts.  It is value reported on this date</td>
+                </tr>
+                <tr>
+                    <td>Balance</td>
+                    <td>Special Transaction only applicable to Bank accounts.  It is balance reported on this date</td>
+                </tr>
+            </table>
+
+
+        </div>
+        <div class="w3-container w3-third">
+
+            <h4>How do I maintain this once it is going</h4>
+            Well that depends... If you only have investment accounts that contain Equities/ETFs then the data should
+            update
+            all by itself. However, if you are tracking a bank account or Value accounts.
+            you
+            will need to spend some time updating them. <br><br><b>Best Practice</b><br> At the end of the month take 30
+            minutes and
+            update the values. If you have access to transactions. Download them and reimport them. If you don't just
+            update the values
+            at the end of the month.
+        </div>
+
+    </div>
+
+{% endblock content %}

@@ -26,6 +26,7 @@ urlpatterns = [
     path(r'equity/<id>/update/', views.equity_update, name='equity_update'),
 
     path(r'account/', views.StocksMain.as_view(), name='stocks_main'),
+    path(r'account/help', views.wealth_help, name='wealth_help'),
     path(r'account/add/', views.add_account, name='account_add'),
     path(r'account/<pk>/', views.AccountDetailView.as_view(), name='account_details'),
     path(r'account/<pk>/close/', views.AccountCloseView.as_view(), name='account_close'),
