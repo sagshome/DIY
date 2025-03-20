@@ -109,150 +109,46 @@
                     <td>arbitrary note you add</td>
                 </tr>
             </table>
+            <p>You do <b>not</b> need to have all the columns,  Date, Description and Amount are mandatory</p>
             <p> Other than the default columns we support native uploads of CSV file export by: <b>CIBC Bank</b>
                 statements and <b>CIBC VISA</b> statements, If you have another
                 format you would like supported send along a sample CSV, and I'll do my best to add it.
                 <br><br>
             </p>
-            <p>Ca Supported (Default Import)</p>
+            <p>Default Categories</p>
             <table class="w3-table-all w3-small">
                 <tr>
                     <td>Category</td>
                     <td>Subcategories</td>
                 <tr>
+                <tr><td><b>Food</b></td><td>Grocery</td><td>TakeOut</td><td>Dinning</td><td>Alcohol</td></tr>
+                <tr><td><b>Utilities</b></td><td>Water</td><td>Electricity</td><td>Heat</td><td>Telecom</td></tr>
                 <tr>
-                    <td>Food
-                    <td>
-                    <td>Grocery
-                    <td>
-                    <td>TakeOut
-                    <td>
-                    <td>Dinning
-                    <td>
-                    <td>Alcohol
-                    <td></td>
+                    <td><b>Housing</b></td><td>Maintenance</td><td>Mortgage/Rent</td><td>Appliances/Furniture</td>
+                    <td>Insurance</td><td>Taxes</td><td>Other</td>
+                </tr>
+                <tr><td><b>Healthcare</b></td><td>Medical</td><td>Dental</td><td>Insurance</td><td>Other</td></tr>
+                <tr>
+                    <td><b>Recreation</b></td><td>Events</td><td>Computers/Tech</td><td>Streaming</td><td>Other</td>
+                    <td>Insurance</td>
                 </tr>
                 <tr>
-                    <td>Utilities
-                    <td>
-                    <td>Water
-                    <td>
-                    <td>Electricity
-                    <td>
-                    <td>Heat
-                    <td>
-                    <td>Telecom
-                    <td></td>
+                    <td><b>Transportation</b></td><td>Fuel</td><td>Maintenance</td><td>Lease/Purchase</td>
+                    <td>Insurance</td><td>Parking/Tolls</td><td>Fees</td><td>Public/Rental</td>
+                </tr>
+                <tr><td><b>Personal Care</b></td><td>Beauty</td><td>Fitness</td><td>Clothing</td><td>Other</td>
                 </tr>
                 <tr>
-                    <td>Housing
-                    <td>
-                    <td>Maintenance
-                    <td>
-                    <td>Mortgage/Rent
-                    <td>
-                    <td>Appliances/Furniture
-                    <td>
-                    <td>Insurance
-                    <td>
-                    <td>Taxes
-                    <td>
-                    <td>Other
-                    <td></td>
+                    <td><b>Other</b></td><td>Education</td><td>Unknown</td><td>Taxes</td><td>Savings</td><td>Interest</td>
                 </tr>
                 <tr>
-                    <td>Healthcare
-                    <td>
-                    <td>Medical
-                    <td>
-                    <td>Dental
-                    <td>
-                    <td>Insurance
-                    <td>
-                    <td>Other
-                    <td></td>
+                    <td><b>Income</b></td><td>Salary</td><td>Commissions</td><td>Pensions</td>
+                    <td>Government Programs</td><td>Investments</td></td><td>Refunds</td>
                 </tr>
-                <tr>
-                    <td>Recreation
-                    <td>
-                    <td>Events
-                    <td>
-                    <td>Camping
-                    <td>
-                    <td>Golf
-                    <td>
-                    <td>Computers/Tech
-                    <td>
-                    <td>Streaming
-                    <td>
-                    <td>Other
-                    <td>
-                    <td>Insurance
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>Transportation
-                    <td>
-                    <td>Fuel
-                    <td>
-                    <td>Maintenance
-                    <td>
-                    <td>Lease/Purchase
-                    <td>
-                    <td>Insurance
-                    <td>
-                    <td>Parking/Tolls
-                    <td>
-                    <td>Fees
-                    <td>
-                    <td>Public/Rental
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>Personal Care
-                    <td>
-                    <td>Beauty
-                    <td>
-                    <td>Fitness
-                    <td>
-                    <td>Clothing
-                    <td>
-                    <td>Other
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>Other
-                    <td>
-                    <td>Education
-                    <td>
-                    <td>Unknown
-                    <td>
-                    <td>Taxes
-                    <td>
-                    <td>Savings
-                    <td>
-                    <td>Interest
-                    <td></td>
-                </tr>
-                <tr>
-                    <td>Income
-                    <td>
-                    <td>Salary
-                    <td>
-                    <td>Commissions
-                    <td>
-                    <td>Pensions
-                    <td>
-                    <td>Government Programs
-                    <td>
-                    <td>Investments
-                    <td>
-                    <td>Refunds
-                    <td></td>
-                </tr>
-
             </table>
 
+        <p>You can always add your own categories via <a href="{% url 'subcategory_list' %}">Personal Categories</a> selection in the main <b>Cash</b> Menu
+        dropdown  (full screen only)</p>
 
         </div>
         <div class="w3-container w3-third">
@@ -260,8 +156,9 @@
             <h4>How do I maintain this once it is going</h4>
             Once a month or whenever you feel like update fresh data.
             <h4>Create templates</h4>
-            If you are shopping a certain stores often and they often have the same thing a template will make
-            life easy. You can search from the beginning or the end of the description or even somewhere in the
+            If you are shopping a certain stores often and they often have the same categorization then a
+            <a href="{% url 'expenses_templates' %}">template</a> will make
+            life easy. Templates can search from the beginning or the end of the description or even somewhere in the
             description and then assign categories / subcategories or even ignore/hide the records. <br>
             <b><em>Templates are 'greedy', the first match wins, so If you have to templates that both satisfy
                 the same search, the first will win.</em></b><br>Don't go crazy with templates. In fact, you may want

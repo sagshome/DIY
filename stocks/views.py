@@ -24,6 +24,7 @@ from django.views.generic.dates import DateMixin
 
 from base.utils import DIYImportException, normalize_today, normalize_date
 from base.models import Profile
+from base.views import BaseDeleteView
 
 from .models import Account, Portfolio, Equity, EquityEvent, EquityValue, Transaction, BaseContainer, FundValue, DataSource
 from .tasks import equity_new_estimates
@@ -34,25 +35,9 @@ from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEAD
 logger = logging.getLogger(__name__)
 
 
-class BaseDeleteView(LoginRequiredMixin, DeleteView):
-    template_name = 'stocks/basic_confirm_delete.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
-        return context
-
-    def get_success_url(self):
-        try:
-            url = self.request.POST["success_url"]
-        except AttributeError:
-            url = super().get_success_url()
-        return url
-
 
 class AccountDeleteView(BaseDeleteView):
     model = Account
-    template_name = 'stocks/basic_confirm_delete.html'
 
     def get_object(self, queryset=None):
         return super().get_object(queryset=Account.objects.filter(user=self.request.user))

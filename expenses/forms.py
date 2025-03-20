@@ -1,6 +1,7 @@
 import copy
 import re
 from django import forms
+from django.db.models import Q
 from django.db.utils import ProgrammingError, OperationalError
 
 from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
@@ -39,7 +40,24 @@ class CategoryForm(forms.ModelForm):
 class SubCategoryForm(forms.ModelForm):
     class Meta:
         model = SubCategory
-        fields = ("category", "name", )
+        fields = ("category", "name", "user")
+        widgets = {
+            'user': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Adjusted to make W3C.CSS look nicer
+        self.fields["category"].widget.attrs['style'] = 'height:28.5px;'
+        self.fields["name"].widget.attrs['style'] = 'height:28.5px;'
+
+    def clean_name(self):
+        category = self.cleaned_data['category']
+        name = self.cleaned_data['name'].capitalize()
+        if SubCategory.objects.filter(category=category, name=name).filter(Q(user__isnull=True) | Q(user_id=self.initial['user'])).exists():
+            raise forms.ValidationError('This subcategory already exists')
+        return name
 
 
 class SearchForm(forms.Form):

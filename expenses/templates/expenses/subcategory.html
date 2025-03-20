@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
+    <h2>SubCategory</h2>
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="success_url" value="{{ success_url }}">
+
+        <div class="w3-grid" style="grid-template-columns:125px 300px auto;">
+            <div class="w3-padding w3-right-align">{{ form.category.label_tag }}</div>
+            <div class="w3-padding">{{ form.category }}</div>
+            <div class="w3-padding">{{ form.category.errors }}</div>
+
+            <div class="w3-padding w3-right-align">{{ form.name.label_tag }}</div>
+            <div class="w3-padding">{{ form.name }}</div>
+            <div class="w3-padding">{{ form.name.errors }}</div>
+            <div class="w3-padding" style="grid-column:1/span 2">
+                <button class="w3-border w3-margin w3-button-medium w3-round-large w3-margin-top w3-green"
+                        type="submit">Submit
+                </button>
+            </div>
+        </div>
+    </form>
+{% endblock %}

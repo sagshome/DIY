@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Expense Templates{% endblock %}
+{% block content %}
+<!-- todo: Maybe I should not rely on this. -->
+<script src="https://www.kryogenix.org/code/browser/sorttable/sorttable.js"></script>
+
+<div class="w3-row">
+         <h2>SubCategory List</h2>
+</div>
+
+<!--   <table class="sortable table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">-->
+<table class="w3-table-all">
+    <tr class="w3-margin-bottom">
+        <th></th>
+        <th>Used</th>
+        <th>Category</th>
+        <th>Name</th>
+    </tr>
+    {% for subcategory in subcategory_list %}
+        <tr>
+            <td><a href="{% url 'subcategory_delete' subcategory.id %}"><button class="w3-button-small w3-round-large w3-red">Delete</button></a></td>
+            <td>{{ subcategory.count }}</td>
+            <td>{{subcategory.category}}</td>
+            <td>{{subcategory.name}}</td>
+        </tr>
+   {% endfor %}
+</table>
+    <div class="w3-row">
+        <a href="{% url 'subcategory_add' %}">
+                <button class="diy-button-auto diy-blue" type="button">New SubCategory</button>
+            </a>
+
+    </div>
+{% endblock %}

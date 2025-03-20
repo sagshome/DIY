@@ -15,6 +15,10 @@ urlpatterns = [
 
     path(r'expense/add/', views.ItemAdd.as_view(), name='expense_add'),
     path(r'expense/help', views.cash_help, name='cash_help'),
+    path('subcategory/add/', views.SubCategoryAdd.as_view(), name='subcategory_add'),
+    path(r'subcategory/<pk>/delete/', views.SubCategoryDelete.as_view(), name='subcategory_delete'),
+    path('subcategory/list/', views.SubCategoryList.as_view(), name='subcategory_list'),
+
     path(r'expense/<int:pk>/edit/', views.ItemEdit.as_view(), name='expense_edit'),
     path(r'expense/<int:pk>/delete/', views.ItemDelete.as_view(), name='expense_delete'),
 

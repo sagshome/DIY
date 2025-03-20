@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ object_type }}{% endblock %}
+{% block content %}
+    <div class="w3-container w3-margin">
+        <h2>Delete {{ object_type }}:{{ object }}</h2>
+        <p>{{ extra_text }}</p>
+    </div>
+    <div class="w3-container w3-margin">
+        <form method="post">{% csrf_token %}
+            <input type="hidden" name="success_url" value="{{ success_url }}">
+            <p>Are you sure you want to delete "<b>{{ object }}</b>"?</p>
+            <a href="{{ success_url }}">
+                <button class="w3-button-small w3-round-large diy-button diy-blue" type="button">Cancel</button>
+            </a>
+            - or -
+            <button class="w3-button-small w3-round-large diy-button diy-red" type="submit">Delete</button>
+        </form>
+    </div>
+{% endblock %}

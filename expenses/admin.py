@@ -9,8 +9,9 @@ class CategoryAdmin(admin.ModelAdmin):
 
 
 class SubCategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "category")
-    fields = ["name", "category"]
+    list_display = ("name", "category", "user")
+    list_filter = ("category", "name", "user")
+    fields = ["name", "category", "user"]
 
 class TemplateAdmin(admin.ModelAdmin):
     list_display = ("type", "expression", "count", "category", "subcategory", "ignore")

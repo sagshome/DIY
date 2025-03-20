@@ -18,12 +18,62 @@ from django.views.generic import CreateView, DeleteView, UpdateView, FormView, L
 
 from base.models import COLORS, PALETTE
 from base.utils import DIYImportException, DateUtil, label_to_values, date_to_label
+from base.views import BaseDeleteView
 from expenses.importers import Generic, CIBC_VISA, CIBC_Bank, PersonalCSV
 from expenses.forms import *
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
 
 
 logger = logging.getLogger(__name__)
+
+
+class SubCategoryAdd(LoginRequiredMixin, CreateView):
+    model = SubCategory
+    form_class = SubCategoryForm
+    template_name = 'expenses/subcategory.html'
+
+    def get_success_url(self):
+        try:
+            url = self.request.POST["success_url"]
+        except KeyError:
+            url = reverse('expense_main')
+        return url
+
+    def get_initial(self):
+        super().get_initial()
+        self.initial['user'] = self.request.user.id
+        return self.initial
+
+    def form_valid(self, form):
+        self.object = form.save(commit=False)
+        self.object.user = self.request.user
+        self.object.save()
+        return HttpResponseRedirect(self.get_success_url())
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        return context
+
+
+class SubCategoryDelete(BaseDeleteView):
+    model = SubCategory
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=SubCategory.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'SubCategory'
+        context['extra_text'] = 'Deleting a SubCategory is permanent - All assignments will be removed.'
+        return context
+
+
+class SubCategoryList(LoginRequiredMixin, ListView):
+    model = SubCategory
+
+    def get_queryset(self):
+        return SubCategory.objects.filter(user=self.request.user).order_by('category__name', 'name')
 
 
 class ItemAdd(LoginRequiredMixin, CreateView):
@@ -337,15 +387,18 @@ def export_expenses(request):
     return response
 
 
+@login_required
 def load_subcategories(request):
+    user = request.user
     category = request.GET.get("category")
     if category:
-        choices = SubCategory.objects.filter(category=category).order_by('name')
+        choices =  SubCategory.objects.filter(category=category).filter(Q(user__isnull=True) | Q(user=user)).order_by('name')
     else:
         choices = SubCategory.objects.none()
     return render(request, "expenses/includes/subcategory_list_options.html", {"subcat": choices})
 
 
+@login_required
 def load_subcategories_search(request):
     """
     This is complicated because sometimes the subcategory will come in as
@@ -355,10 +408,11 @@ def load_subcategories_search(request):
     """
     default = copy.copy(DEFAULT_CATEGORIES)
     search = SubCategory.objects.all()
+    user = request.user
 
     category = request.GET.get("category")
     if category and category not in ['- ALL -', '- NONE -']:
-        search = search.filter(category__name=category)
+        search = SubCategory.objects.filter(category__name=category).filter(Q(user__isnull=True) | Q(user=user))
     if category == '- NONE -':
         search = SubCategory.objects.none()
 

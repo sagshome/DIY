@@ -1,24 +1,27 @@
 import logging
-from django.core.mail import EmailMultiAlternatives
-from django.template import loader
-from django.http import HttpResponseRedirect
 
-from django.shortcuts import render
-from django.urls import reverse
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import PasswordContextMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.views import PasswordContextMixin, PasswordResetConfirmView, PasswordResetCompleteView
 
-from django.http import JsonResponse
+from django.contrib.sites.shortcuts import get_current_site
+
+from django.core.mail import EmailMultiAlternatives
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from django.template import loader
+from django.urls import reverse
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+
+from django.views.generic import DeleteView
+from django.views.generic.base import TemplateView
+
 
 from localflavor.ca.ca_provinces import PROVINCE_CHOICES
 from localflavor.us.us_states import STATE_CHOICES
-from django.contrib.auth.views import PasswordResetConfirmView, PasswordResetCompleteView
-from django.views.generic.base import TemplateView
-from django.contrib.sites.shortcuts import get_current_site
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.contrib.auth.tokens import default_token_generator
 
 
 from base.forms import MainForm, ProfileForm, BaseProfileForm
@@ -27,6 +30,25 @@ from stocks.tasks import add_to_cache
 
 logger = logging.getLogger(__name__)
 
+
+class BaseDeleteView(LoginRequiredMixin, DeleteView):
+    """
+    Used throughout the project,  added to base
+    Generic language and can return to point of delete request
+    """
+    template_name = 'base/basic_confirm_delete.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        return context
+
+    def get_success_url(self):
+        try:
+            url = self.request.POST["success_url"]
+        except KeyError:
+            url = super().get_success_url()
+        return url
 
 @login_required
 def diy_main(request):

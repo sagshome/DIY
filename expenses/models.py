@@ -93,10 +93,14 @@ class SubCategory(models.Model):
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
     class Meta:
-        unique_together = ("name", "category")
+        unique_together = ("name", "category", "user")
 
     def __str__(self):
         return self.name
+
+    @property
+    def count(self):
+        return Item.objects.filter(subcategory=self).count()
 
     def filter_amount(self, qfilter) -> float:
 
