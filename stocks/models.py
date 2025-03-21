@@ -466,71 +466,45 @@ class Equity(models.Model):
             self.searchable = True
         self.validated = True
 
-    def fill_equity_value_holes(self):
-        """
-        Look for months without an equity value,  and calculated a value based on direct rate of change.
-        It is possible that values will need to be re-filled as data is populated via new transactions / sources
-        """
-        estimated = DataSource.ESTIMATE.value
+    def fill_holes(self):
+        model = EquityValue
+        data = 'price'
+        if self.equity_type in ('Value', 'Cash'):
+            model = FundValue
+            data = 'value'
 
-        if self.equity_type == 'Equity':
-            all_dates: Dict[date, float] = dict(EquityValue.objects.filter(equity=self).values_list('date', 'price'))
-            valid_dates: Dict[date, float] = dict(EquityValue.objects.filter(equity=self).exclude(source=estimated).values_list('date', 'price'))
-        else:
-            all_dates: Dict[date, float] = dict(FundValue.objects.filter(fund=self).values_list('date', 'value'))
-            valid_dates: Dict[date, float] = dict(FundValue.objects.filter(fund=self).exclude(source=estimated).values_list('date', 'value'))
+        first_record = model.objects.filter(equity=self).earliest('date')
+        start_date = first_record.date
+        end_date = self.deactived_date if self.deactived_date else normalize_today()
+        break_date = model.objects.filter(equity=self).latest('date').date
 
-        last_date: date = None
-        last_price: float = 0  # just to stop the warnings,  it can't actually be used before its referenced
-        for this_date in sorted(valid_dates.keys()):
-            if last_date and not this_date == next_date(last_date):  # We have a hole
-                months = (this_date.year - last_date.year) * 12 + this_date.month - last_date.month  # How many
-                change_increment = (valid_dates[this_date] - last_price) / months
-                for _ in range(months - 1):  # Fill holes up to this_date
-                    next_month = next_date(last_date)
-                    last_price = last_price + change_increment
-                    if next_month not in all_dates:
-                        if self.equity_type == 'Equity':
-                            EquityValue.objects.create(equity=self, real_date=next_month, date=next_month, price=last_price, source=estimated)
-                        else:
-                            FundValue.objects.create(fund=self, real_date=next_month, date=next_month, value=last_price, source=estimated)
-                    else:  # We may have estimated this before
-                        if all_dates[next_month] != last_price:
-                            if self.equity_type == 'Equity':
-                                e = EquityValue.objects.get(equity=self, date=next_month)
-                                e.price = last_price
-                                e.save()
-                            else:
-                                e = FundValue.objects.get(fund=self, date=next_month)
-                                e.value = last_price
-                                e.save()
-                    last_date = next_month
+        all_records: Dict[date, float] = dict(model.objects.filter(equity=self).values_list('date', data))
+        valid_records: Dict[date, float] = dict(model.objects.filter(equity=self).exclude(source=DataSource.ESTIMATE.value).values_list('date', data))
 
-            last_date = this_date
-            last_price = valid_dates[this_date]
+        # value = first_record.price if model == EquityValue else first_record.value
+        next_date = start_date
+        last_date = None
+        value = 0  # To stop the warnings
+        while next_date <= end_date and next_date <= break_date:
+            if next_date in valid_records:
+                if last_date:  # Valid record month step
+                    months = ((next_date.year - last_date.year) * 12 + next_date.month - last_date.month)  # How many months
+                    change_increment = (valid_records[next_date] - value) / months
+                    est_month = last_date + relativedelta(months=1)
+                    est_value = value + change_increment
+                    while est_month < next_date:
+                        if est_month not in all_records or all_records[est_month] != est_value:
+                            model.get_or_create(equity=self, date=est_month, amount=est_value)
+                        est_month = est_month + relativedelta(months=1)
+                        est_value += change_increment
+                value = valid_records[next_date]
+                last_date = next_date
+            next_date = next_date + relativedelta(months=1)
 
-        try:
-            if self.equity_type == 'Equity':
-                last_entry = EquityValue.objects.filter(equity=self).latest('date')
-            else:
-                last_entry = FundValue.objects.filter(fund=self).latest('date')
-            current_date = normalize_today()
-            date_value = next_date(last_entry.date)
-            if date_value <= current_date:
-                price_value = last_entry.price if self.equity_type == 'Equity' else last_entry.value
-                while date_value <= current_date:
-                    logger.debug('Adding %s on date %s' % (self, date_value))
-                    if self.equity_type == 'Equity':
-                        EquityValue.objects.create(equity=self, real_date=date_value, date=date_value, price=price_value, source=DataSource.ESTIMATE.value)
-                    else:
-                        FundValue.objects.create(fund=self, real_date=date_value, date=date_value, value=price_value, source=DataSource.ESTIMATE.value)
-                    date_value = next_date(date_value)
-        except IndexError:
-            logger.error('No EquityValue data for:%s' % self)
-        except FundValue.DoesNotExist:
-            logger.error('No Fund data for %s' % self)
-        except EquityValue.DoesNotExist:
-            logger.error('No Equity value data for %s' % self)
+        while last_date <= end_date:
+            if last_date not in all_records or all_records[last_date] != value:
+                model.get_or_create(equity=self, date=last_date, amount=value)
+            last_date = last_date + relativedelta(months=1)
 
     def get_dividend_dates(self) -> dict[date: date]:
         if API.status('ypfinance'):
@@ -686,7 +660,7 @@ class Equity(models.Model):
                 self.save()
             elif self.searchable:
                 self.update_external_equity_data(force=force, key=key, daily=daily)
-        self.fill_equity_value_holes()
+        self.fill_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
         queryset = EquityEvent.objects.filter(equity=self)
@@ -776,6 +750,9 @@ class EquityValue(models.Model):
         output = f'{self.equity} - {self.date}: {self.price} {DataSource(self.source).name}'
         return output
 
+    class Meta:
+        unique_together = ('equity', 'date')
+
     @classmethod
     def get_or_create(cls, **kwargs):
         """
@@ -784,22 +761,37 @@ class EquityValue(models.Model):
         :return:
         """
         created = False
-        real_date = kwargs['real_date']
-        norm_date = normalize_date(real_date)
+
+        if 'real_date' in kwargs:
+            norm_date = normalize_date(kwargs['real_date'])
+            real_date = kwargs['real_date']
+        else:
+            if 'date' in kwargs:
+                norm_date = normalize_date(kwargs['date'])
+            else:
+                norm_date = normalize_today()
+            real_date = norm_date
+
+        source = kwargs['source'] if 'source' in kwargs else DataSource.ESTIMATE.value
+        if 'price' not in kwargs and 'amount' in kwargs:
+            kwargs['price'] = kwargs['amount']
+        elif 'price' not in kwargs and 'amount' not in kwargs:
+            logger.error('Price is mandatory for create or update')
+            return None, False
+
+        kwargs.pop('amount')
         try:
             obj = cls.objects.get(equity=kwargs['equity'], date=norm_date)
-            if obj.source > kwargs['source']:
-                obj.source = kwargs['source']
+            if obj.source > source:
+                obj.source = source
                 obj.price = kwargs['price']
-                obj.real_date = real_date
                 logger.debug('Better source - Updated %s' % obj)
                 obj.save()
-            elif obj.source == kwargs['source'] and (not obj.real_date or obj.real_date < real_date):
+            elif obj.source == source and (not obj.real_date or obj.real_date < real_date):
                 obj.price = kwargs['price']
-                obj.real_date = real_date
                 logger.debug('More recent date - Updated %s' % obj)
                 obj.save()
-            elif obj.source == kwargs['source'] and obj.real_date == real_date:
+            elif obj.source == source and obj.real_date == real_date:
                 if obj.price != kwargs['price']:
                     logger.debug('Same Date price change- Updated %s' % obj)
                     obj.price = kwargs['price']
@@ -840,7 +832,7 @@ class FundValue(models.Model):
     Track an AccountFunds value
     """
 
-    fund = models.ForeignKey(Equity, on_delete=models.CASCADE, limit_choices_to={'equity_type': 'Value'})
+    equity = models.ForeignKey(Equity, on_delete=models.CASCADE, limit_choices_to={'equity_type': 'Value'})
     real_date: date = models.DateField(verbose_name='Recorded Date', null=True, validators=[MinValueValidator(datetime(1961, 1, 1).date()),
                                                                                             MaxValueValidator(datetime(2100, 1, 1).date())])
     date: date = models.DateField(verbose_name='Normalized Date')
@@ -849,137 +841,78 @@ class FundValue(models.Model):
     source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.USER.value)
 
     class Meta:
-        unique_together = (('fund', 'date'),)
+        unique_together = (('equity', 'date'),)
 
     def __str__(self):
-        output = f'{self.fund} - {self.date}: {self.value} {DataSource(self.source).name}'
+        output = f'{self.equity} - {self.date}: {self.value} {DataSource(self.source).name}'
         return output
+
+    @classmethod
+    def get_or_create(cls, **kwargs):
+        """
+        update if source is more specific
+        :param kwargs:
+        :return:
+        """
+        created = False
+
+        if 'real_date' in kwargs:
+            norm_date = normalize_date(kwargs['real_date'])
+            real_date = kwargs['real_date']
+        else:
+            if 'date' in kwargs:
+                norm_date = normalize_date(kwargs['date'])
+            else:
+                norm_date = normalize_today()
+            real_date = norm_date
+
+        source = kwargs['source'] if 'source' in kwargs else DataSource.ESTIMATE.value
+        if 'value' not in kwargs and 'amount' in kwargs:
+            kwargs['value'] = kwargs['amount']
+        elif 'value' not in kwargs and 'amount' not in kwargs:
+            logger.error('value or amount is mandatory for create or update')
+            return None, False
+
+        kwargs.pop('amount')
+
+        try:
+            obj = cls.objects.get(equity=kwargs['equity'], date=norm_date)
+            if obj.source > source:
+                obj.source = source
+                obj.value = kwargs['value']
+                logger.debug('Better source - Updated %s' % obj)
+                obj.save()
+            elif obj.source == source and (not obj.real_date or obj.real_date < real_date):
+                obj.value = kwargs['value']
+                logger.debug('More recent date - Updated %s' % obj)
+                obj.save()
+            elif obj.source == source and obj.real_date == real_date:
+                if obj.value != kwargs['value']:
+                    logger.debug('Same Date price change- Updated %s' % obj)
+                    obj.value = kwargs['value']
+                    obj.save()
+            else:
+                logger.debug('Update is not worthy of a change')
+
+        except FundValue.DoesNotExist:
+            kwargs['date'] = norm_date
+            obj = cls.objects.create(**kwargs)
+            created = True
+            logger.debug('Created %s' % obj)
+        return obj, created
 
     @property
     def lookup(self):
         try:
-            _, account_id = self.fund.symbol.split('-')
+            _, account_id = self.equity.symbol.split('-')
             return Account.objects.get(id=account_id)
         except Account.DoesNotExist:
-            logger.error('%s - value set to 0 get account based on fund %s' % (self, self.fund.symbol))
+            logger.error('%s - value set to 0 get account based on fund %s' % (self, self.equity.symbol))
         except ValueError:
-            logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.fund.symbol))
+            logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.equity.symbol))
         return None
 
-    @classmethod
-    def plug_holes(cls, start_record, end_record, all_records=None):
-        logger.debug('Start: %s End: %s' % (start_record, end_record))
-        if not all_records:
-            all_records = {d.date: d for d in FundValue.objects.filter(fund=start_record.fund, date__gt=start_record.date, date__lt=end_record.date)}
-
-        diff = (end_record.date.year - start_record.date.year) * 12 + (end_record.date.month - start_record.date.month)
-        if diff > 1:
-            rate = (end_record.value - start_record.value) / diff
-            value = start_record.value
-            plug_date = normalize_date(start_record.date) + relativedelta(months=1)
-            while plug_date < end_record.date:
-                value += rate
-                if plug_date in all_records:
-                    if all_records[plug_date].value != value:
-                        all_records[plug_date].value = value
-                        all_records[plug_date].save(fix_holes=False)
-                else:  # Create the record
-                    FundValue(value=value, date=plug_date, real_date=plug_date, fund=start_record.fund, source=DataSource.ESTIMATE.value).save(fix_holes=False)
-                plug_date = plug_date + relativedelta(months=1)
-
-    def fix_holes(self):
-        """
-        Fix any missing dates (called with save)
-        """
-        try:
-            earlier_date = FundValue.objects.filter(fund=self.fund, date__lt=self.date).exclude(source=DataSource.ESTIMATE.value).latest('date')
-        except FundValue.DoesNotExist:
-            earlier_date = None
-
-        try:
-            later_date = FundValue.objects.filter(fund=self.fund, date__gt=self.date).exclude(source=DataSource.ESTIMATE.value).earliest('date')
-        except FundValue.DoesNotExist:
-            try:
-                later_date = later_date = FundValue.objects.filter(fund=self.fund, date__gt=self.date).earliest('date')
-            except FundValue.DoesNotExist:
-                later_date = None
-
-        if earlier_date:
-            FundValue.plug_holes(earlier_date, self)
-        if later_date:
-            FundValue.plug_holes(self, later_date)
-
-        last_record = FundValue.objects.filter(fund=self.fund).exclude(source=DataSource.ESTIMATE.value).latest('date')
-        self.plug_forward(last_record.value, increment=False)
-        logger.debug('Plugging complete')
-
-    def plug_forward(self, value, increment=True, account=None, all_records=None):
-        '''
-        Update all future
-        '''
-
-        if not account:
-            account = self.lookup
-        logger.debug('Pluging forward on account:%s' % account)
-        end_date = account.end if account and account.end else normalize_today()
-        FundValue.objects.filter(fund=self.fund, date__gt=end_date).delete()
-
-        last_record = FundValue.objects.filter(fund=self.fund).exclude(source=DataSource.ESTIMATE.value).latest('date')
-
-        if not all_records:
-            all_records = {d.date: d for d in FundValue.objects.filter(fund=self.fund, date__gt=last_record.date)}
-
-        plug_date = last_record.date + relativedelta(months=1)
-        while plug_date <= end_date:
-            if plug_date in all_records:
-                if all_records[plug_date].value != value:
-                    all_records[plug_date].value = value
-                    all_records[plug_date].save(fix_holes=False)
-            else:  # Create the record
-                FundValue(value=value, date=plug_date, real_date=plug_date, fund=self.fund, source=DataSource.ESTIMATE.value).save(fix_holes=False)
-            plug_date = plug_date + relativedelta(months=1)
-        logger.debug('Plugging complete')
-
-    @classmethod
-    def fix_all_holes(cls, account):
-        try:
-            fund = Equity.objects.get(symbol=account.f_key)
-        except Equity.DoesNotExist:
-            logger.error('Failed to lookup equity %s for %s' % (account.f_key, account))
-            return
-
-        valid_records = list(FundValue.objects.filter(fund=fund).exclude(source=DataSource.ESTIMATE.value).order_by('date'))
-        all_records = {d.date: d for d in FundValue.objects.filter(fund=fund)}
-        if len(valid_records) > 1:
-            this_record = valid_records[0]
-            for next_record in valid_records[1:]:
-                if this_record.date + relativedelta(months=1) != next_record.date:
-                    FundValue.plug_holes(this_record, next_record, all_records=all_records)
-                this_record = next_record
-
-        last_record: FundValue = valid_records[len(valid_records) -1]
-        last_record.plug_forward(last_record.value, increment=False,account=account, all_records=all_records)
-
     def save(self, *args, **kwargs):
-        """
-        Fix_holes if true, which is the default.   This change will be reflected between the last and next actual non-estimated value.
-        Increment, if true the value was the incremental change to this record and that value will applied to future records
-        """
-        if 'fix_holes' in kwargs:
-            fix_holes = kwargs.pop('fix_holes')
-        else:
-            fix_holes = True
-
-        if 'increment' in kwargs:
-            increment = kwargs.pop('increment')
-            if increment and isinstance(increment, float) or isinstance(increment, int) or isinstance(increment, Decimal):
-                increment = float(increment)
-                fix_holes = False
-            else:
-                increment = 0
-        else:
-            increment = 0
-
         if self.real_date and not self.date:
             self.date = normalize_date(self.real_date)
         elif self.date and not self.real_date:
@@ -989,21 +922,16 @@ class FundValue(models.Model):
             self.date = normalize_date(self.date)
         super(FundValue, self).save(*args, **kwargs)
 
-        if self.value == 0:  # remove cruff going forward
-            FundValue.objects.filter(date__gt=self.date, fund=self.fund).delete()
+        if self.value == 0:  # remove cruft going forward
+            FundValue.objects.filter(date__gt=self.date, equity=self.equity).delete()
             try:
-                _, account_id = self.fund.symbol.split('-')
+                _, account_id = self.equity.symbol.split('-')
                 account = Account.objects.get(id=account_id)
                 account.close(self.real_date)
             except Account.DoesNotExist:
-                logger.error('%s - value set to 0 get account %s based on fund %s' % (self, account_id, self.fund.equity.symbol))
+                logger.error('%s - value set to 0  based on fund %s' % (self, self.equity.symbol))
             except ValueError:
-                logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.fund.equity.symbol))
-
-        if fix_holes:
-            self.fix_holes()
-        if increment:
-            self.plug_forward(increment, True)
+                logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.equity.symbol))
 
 
 class EquityEvent(models.Model):
@@ -1462,7 +1390,7 @@ class Account(BaseContainer):
             first = xas.earliest('date').date
         except Transaction.DoesNotExist:
             try:
-                first = FundValue.objects.filter(fund=equity).earliest('date').date
+                first = FundValue.objects.filter(equity=equity).earliest('date').date
             except FundValue.DoesNotExist:
                 logger.error('Transaction/Funds %s:  No data' % self)
                 return df
@@ -1475,7 +1403,7 @@ class Account(BaseContainer):
         if equity.equity_type == 'Equity':
             values = EquityValue.objects.filter(date__gte=first, equity=equity).order_by('date')
         else:
-            values = FundValue.objects.filter(fund=equity).order_by('date')
+            values = FundValue.objects.filter(equity=equity).order_by('date')
 
         funded = dict(xas.filter(xa_action__in=[Transaction.FUND,]).annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
         redeemed = dict(xas.filter(xa_action__in=[Transaction.REDEEM,]).annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
@@ -1694,28 +1622,23 @@ class Account(BaseContainer):
             self.account_name = self.name
         super(Account, self).save(*args, **kwargs)
 
-    def set_value(self, this_value, this_date, increment : bool = False) -> BoolReason:
-        '''
-        account.set_value(value, real_date, increment=False)
-        '''
-        increment = this_value if increment else 0
-        datasource = DataSource.ESTIMATE.value if increment else DataSource.USER.value  # Estimate means we had a funding record vs explicit value
+    def set_value(self, this_value, this_date) -> BoolReason:
+
+        datasource = DataSource.USER.value
         logger.debug('Setting a value:%s on %s for %s' % (self, this_date, this_value))
         try:
             equity = Equity.objects.get(symbol=self.f_key)
-            if FundValue.objects.filter(fund=equity, date=normalize_date(this_date)).exists():
-                existing = FundValue.objects.get(fund=equity, date=normalize_date(this_date))
+            if FundValue.objects.filter(equity=equity, date=normalize_date(this_date)).exists():
+                existing: FundValue = FundValue.objects.get(equity=equity, date=normalize_date(this_date))
                 if existing.real_date <= this_date or existing.source == DataSource.ESTIMATE.value:
                     existing.real_date = this_date
-                    existing.value = this_value + existing.value if increment else this_value
+                    existing.value = this_value
                     existing.source = datasource
-
-                    existing.save(increment=increment)
+                    existing.save()
                 else:
                     return BoolReason(False, "You have a later date already recorded for this action,  try Edit Transaction")
             else:
-                existing = FundValue(fund=equity, value=this_value, real_date=this_date, source=datasource)
-                existing.save(increment=increment)
+                FundValue.objects.create(equity=equity, value=this_value, real_date=this_date, source=datasource)
         except Equity.DoesNotExist:
             return BoolReason(False, "This account has not been setup correctly")
         return BoolReason(True)

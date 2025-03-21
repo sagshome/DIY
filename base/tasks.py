@@ -166,7 +166,7 @@ def _process_value(account, fund, user, pay_date, starting, new, change):
         fund_value.real_date = pay_date
     except FundValue.DoesNotExist:
         fund_value = FundValue(date=normalize_date(pay_date), real_date=pay_date, value=ending, fund=fund)
-    fund_value.save(fix_holes=False, increment=0)
+    fund_value.save()
     return ending
 
 

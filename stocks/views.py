@@ -567,7 +567,7 @@ def set_transaction(request, account_id, action):
             real_date = form.cleaned_data['real_date']
             if (account.account_type in ['Cash'] and xa_action == Transaction.BALANCE) or \
                     (account.account_type == 'Value' and xa_action == Transaction.VALUE):
-                result = account.set_value(value, real_date, increment=False)
+                result = account.set_value(value, real_date)
                 if not result:
                     form.add_error(None, str(result))
                     valid = False
@@ -584,7 +584,7 @@ def set_transaction(request, account_id, action):
                 if account.account_type == 'Value':
                     value = value * -1 if xa_action == Transaction.REDEEM else value
                     logger.debug('Update Values base on :%s' % value)
-                    result = account.set_value(value, real_date, increment=True)
+                    result = account.set_value(value, real_date)
                     if not result:
                         form.add_error(None, str(result))
                         valid = False
@@ -684,7 +684,6 @@ def equity_update(request,  id):
     return HttpResponse(status=200)
 
 
-
 @login_required
 def reconcile_value(request, pk):
     """
@@ -694,11 +693,11 @@ def reconcile_value(request, pk):
         """
         Build the list of dictionaries for the forms based on existing data
         """
-        first_value = FundValue.objects.filter(fund__symbol=account.f_key).earliest('date')
+        first_value = FundValue.objects.filter(equity__symbol=account.f_key).earliest('date')
         if account.end:
-            last_value = FundValue.objects.filter(fund__symbol=account.f_key, date__lte=account.end).latest('date')
+            last_value = FundValue.objects.filter(equity__symbol=account.f_key, date__lte=account.end).latest('date')
         else:
-            last_value = FundValue.objects.filter(fund__symbol=account.f_key).latest('date')
+            last_value = FundValue.objects.filter(equity__symbol=account.f_key).latest('date')
 
         funded = dict(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')).
                       values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
@@ -711,7 +710,7 @@ def reconcile_value(request, pk):
                 result.append({'date': redeemed_key, 'reported_date': redeemed_key, 'value': 0, 'source': None,
                                'deposited': 0, 'withdrawn': redeemed[redeemed_key]})
 
-        for record in FundValue.objects.filter(fund__symbol=account.f_key, date__lte=last_value.date).order_by('-date'):
+        for record in FundValue.objects.filter(equity__symbol=account.f_key, date__lte=last_value.date).order_by('-date'):
             this_funded = funded[record.date] if record.date in funded else 0
             this_redeemed = redeemed[record.date] if record.date in redeemed else 0
             result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name,
@@ -734,10 +733,10 @@ def reconcile_value(request, pk):
                         as_dict[form.cleaned_data['date']]['value'] != form.cleaned_data['value']:
                     logger.debug('Change date or value detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
                     try:
-                        fund_value = FundValue.objects.get(fund__symbol=account.f_key, date=form.cleaned_data['date'])
+                        fund_value = FundValue.objects.get(equity__symbol=account.f_key, date=form.cleaned_data['date'])
                     except FundValue.DoesNotExist:
                         fund = Equity.objects.get(symbol=account.f_key)
-                        fund_value = FundValue(fund=fund, date=form.cleaned_data['date'])
+                        fund_value = FundValue(equity=fund, date=form.cleaned_data['date'])
                     fund_value.value = form.cleaned_data['value']
                     fund_value.real_date = form.cleaned_data['reported_date']
                     fund_value.source = DataSource.USER.value
@@ -805,7 +804,7 @@ def reconcile_cash(request, pk):
         Build the list of dictionaries for the forms based on existing data
         """
         result = []
-        for record in FundValue.objects.filter(fund__symbol=account.f_key).order_by('-date'):
+        for record in FundValue.objects.filter(equity__symbol=account.f_key).order_by('-date'):
             result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name})
         return result
 
@@ -820,10 +819,10 @@ def reconcile_cash(request, pk):
                         as_dict[form.cleaned_data['date']]['value'] != form.cleaned_data['value']:
                     logger.debug('Change date or value detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
                     try:
-                        fund_value = FundValue.objects.get(fund__symbol=account.f_key, date=form.cleaned_data['date'])
+                        fund_value = FundValue.objects.get(equity__symbol=account.f_key, date=form.cleaned_data['date'])
                     except FundValue.DoesNotExist:
                         fund = Equity.objects.get(symbol=account.f_key)
-                        fund_value = FundValue(fund=fund, date=form.cleaned_data['date'])
+                        fund_value = FundValue(equity=fund, date=form.cleaned_data['date'])
                     fund_value.value = form.cleaned_data['value']
                     fund_value.real_date = form.cleaned_data['reported_date']
                     fund_value.source = DataSource.USER.value
