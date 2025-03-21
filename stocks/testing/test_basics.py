@@ -28,7 +28,7 @@ class BasicSetup(TestCase):
             Equity.objects.create(symbol='CETF.TO', name='Eq CAN_ETF', equity_type='Equity',region='Canada', currency='CAD', searchable=False, validated=True),
             Equity.objects.create(symbol='USEQ', name='Eq US_EQUITY', equity_type='Equity', region='US', currency='USD', searchable=False, validated=True),
         ]
-        self.account = Account.objects.create(name="test001", account_type='Value', currency='CAD', account_name='Bar_007', managed=True)
+        self.account = Account.objects.create(name="test001", user=self.user, account_type='Investment', currency='CAD', account_name='Bar_007', managed=True)
         self.months = [datetime(2022, 1, 1).date(), datetime(2022, 2, 1).date(),
                        datetime(2022, 3, 1).date(), datetime(2022, 4, 1).date(),
                        datetime(2022, 5, 1).date(), datetime(2022, 6, 1).date(),

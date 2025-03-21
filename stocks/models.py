@@ -390,9 +390,9 @@ class Equity(models.Model):
     def key(self):
         key = self.symbol
         if self.equity_type == 'Cash':
-            key = f'Cash-Account:{self.id}'
+            key = str(self)
         elif self.equity_type == 'Value':
-            key = f'Value-Account:{self.id}'
+            key = str(self)
         return key  # US does not get a region decorator via APIs
 
     def __str__(self):
@@ -1059,8 +1059,7 @@ class BaseContainer(models.Model):
         return f'{self.__class__.__name__}:{self.id}:Components'
 
     def reset(self):
-        clear_cached_dataframe(self.e_key)
-        clear_cached_dataframe(self.p_key)
+        raise NotImplementedError
 
     @property
     def p_pd(self) -> DataFrame:
@@ -1110,11 +1109,15 @@ class BaseContainer(models.Model):
 
     def equity_dataframe(self, equity: Equity) -> DataFrame:
         df = self.e_pd.loc[self.e_pd['Object_ID'] == equity.id].groupby(['Date']).agg(
-            {'Shares': 'sum', 'Cost': 'sum', 'Price': 'max', 'TotalDividends': 'sum', 'TBuy': 'sum', 'TSell': 'sum'}).reset_index()
-        df['Value'] = df['Shares'] * df['Price']
-        df['AvgCost'] = df['Cost'] / df['Shares']
-        df['UnRelGain'] = df['Value'] - df['Cost']
+            {'Shares': 'sum', 'Cost': 'sum', 'Value': 'sum', 'Price': 'max', 'TotalDividends': 'sum',
+             'AvgCost': 'sum', 'UnRelGain': 'sum', 'TBuy': 'sum', 'TSell': 'sum'}).reset_index()
+        if equity.equity_type == 'Equity':
+            df['Value'] = df['Shares'] * df['Price']
+            df['AvgCost'] = df['Cost'] / df['Shares']
+            df['UnRelGain'] = df['Value'] - df['Cost']
+        # else Only one instance of this account existed so we can just use the data
         df['AdjValue'] = df['Value'] + df['TotalDividends']
+
         return df
 
 
@@ -1187,6 +1190,12 @@ class Portfolio(BaseContainer):
         for equity in Equity.objects.filter(id__in=Transaction.objects.filter(xa_action__in=Transaction.SHARE_TRANSACTIONS, account__in=Account.objects.filter(portfolio=self)).values_list('equity__id', flat=True).distinct()):
             values.append(equity.key)
         return values
+
+    def reset(self, all=False):
+        clear_cached_dataframe(self.p_key)
+        if all:
+            for account in self.account_set.all():
+                account.reset()
 
     @property
     def transactions(self) -> QuerySet['Transaction']:
@@ -1334,6 +1343,9 @@ class Account(BaseContainer):
 
             if not shares.empty:
                 cash = self.get_pattr('Cash', normalized)
+                funding = self.get_pattr('Funds', normalized) + self.get_pattr('Redeemed', normalized)  # Using addition because Redeemed is always negative
+                actual = self.get_pattr('Actual', normalized)
+                transfer_amount = funding - actual
 
                 for shares_dict in shares.to_dict(orient='records'):
                     cash += shares_dict['Value']
@@ -1343,9 +1355,6 @@ class Account(BaseContainer):
                     Transaction.objects.create(account=account, real_date=close_date, user=self.user, xa_action=Transaction.BUY,
                                                equity_id=shares_dict['Object_ID'], price=shares_dict['AvgCost'], quantity=shares_dict['Shares'])
 
-                funding = self.get_pattr('Funds', normalized) + self.get_pattr('Redeemed', normalized)  # Using addition because Redeemed is always negative
-                actual = self.get_pattr('Actual', normalized)
-                transfer_amount = funding - actual
                 Transaction.objects.create(account=self, real_date=close_date, user=self.user, xa_action=Transaction.REDEEM, value=funding)
                 Transaction.objects.create(account=account, real_date=close_date, user=self.user, xa_action=Transaction.FUND, value=funding)
                 if transfer_amount:
@@ -1487,8 +1496,8 @@ class Account(BaseContainer):
                 unrelgp = unrealized_gain * 100 / cost if unrealized_gain  and cost else 0
 
             avg_cost = total_spend / shares if shares or shares > 0 else 0  # Update average cost
-
-            df.loc[len(df.index)] = [entry.date, equity.key, equity.id, 'Equity', shares, cost, this_price, dividend, total_dividends, value, total_spend, total_redeem, realized_gain, unrealized_gain, relgp, unrelgp, avg_cost]
+            df.loc[len(df.index)] = [entry.date, equity.key, equity.id, 'Equity', shares, cost, this_price, dividend, total_dividends, value, total_spend,
+                                     total_redeem, realized_gain, unrealized_gain, relgp, unrelgp, avg_cost]
         return df
 
     @property

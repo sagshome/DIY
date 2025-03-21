@@ -4,7 +4,10 @@
 {% block content %}
 
     <div class="w3-container">
-        <h2 class="w3-margin">{{ equity.key }} - {{ equity.name }}</h2>
+        <h2 class="w3-margin">{{ equity.key }}
+            {% if equity.equity_type == 'Equity' %}-{{ equity.name }}{% endif %}
+        </h2>
+
         <p class="w3-margin-left">Last updated : {{ equity.last_updated }}
             {% if account_type == 'Account' %}
                 <h3 class="w3-margin">Details for {{ account_type }} <a

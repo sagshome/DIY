@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
+from base.models import API
 from stocks.models import ExchangeRate, Equity, EquityValue
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,7 @@ class ExchangeRateTest(TestCase):
 
     def setUp(self):
         super().setUp()
+        API.objects.create(name='BOC', base='foo', _active=True)
         # print(self.__class__.__name__, self._testMethodName)
         ExchangeRate.objects.create(date=datetime(2023,5, 1).date(), us_to_can=1.1, can_to_us=0.909)
         ExchangeRate.objects.create(date=datetime(2023,6, 1).date(), us_to_can=1.2, can_to_us=0.833)

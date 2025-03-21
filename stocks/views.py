@@ -99,6 +99,7 @@ class StocksMain(LoginRequiredMixin, ListView):
         context['help_file'] = 'stocks/help/stocks_main.html'
         return context
 
+
 class ContainerTableView(LoginRequiredMixin, DetailView):
     template_name = 'stocks/account_table.html'
 
@@ -122,6 +123,7 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['help_file'] = 'stocks/help/account_table.html'
         return context
+
 
 class AccountTableView(ContainerTableView):
     model = Account
@@ -197,7 +199,7 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
              'RelGain': 'sum', 'UnRelGain': 'sum', 'RelGainPct': 'mean', 'UnRelGainPct': 'mean'}).reset_index()
 
         equity_data.replace(np.nan, 0, inplace=True)
-        equity_data.sort_values(by=['Value'], inplace=True, ascending=False)
+        equity_data.sort_values(by=['Value', 'Shares', 'Equity'], inplace=True, ascending=[False, False, True])
         return equity_data
 
     def get_context_data(self, **kwargs):
