@@ -793,6 +793,7 @@ def reconcile_value(request, pk):
     formset = SimpleReconcileFormSet(initial=initial)
     return render(request, 'stocks/value_reconciliation.html',
                   {'formset': formset, 'account': account, 'xas': account.transactions.order_by('real_date'),
+                   'view_type': 'Data',
                    'help_file': 'stocks/help/value_reconciliation.html'})
 
 
@@ -835,7 +836,7 @@ def reconcile_cash(request, pk):
 
     initial = set_initial()  # This is called twice on POST since I may have changed the data.
     formset = SimpleCashReconcileFormSet(initial=initial)
-    return render(request, 'stocks/cash_reconciliation.html', {'formset': formset, 'account': account})
+    return render(request, 'stocks/cash_reconciliation.html', {'formset': formset, 'account': account, 'view_type': 'Data'})
 
 
 @login_required
