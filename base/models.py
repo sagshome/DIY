@@ -52,12 +52,12 @@ DIY_EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy wo
 
 class Profile(models.Model):
     user: User = models.OneToOneField(User, on_delete=models.CASCADE)
-    phone_number = PhoneNumberField(blank=False, null=False)
+    phone_number = PhoneNumberField(blank=True, null=True)
     currency = models.CharField(max_length=3, choices=CURRENCIES, default='CAD')
     address1 = models.CharField(max_length=100, blank=True, null=True)
     address2 = models.CharField(max_length=100, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
-    country = models.CharField(max_length=2, blank=False, null=False)
+    country = models.CharField(max_length=2, blank=True, null=True)
     state = models.CharField(max_length=2, blank=True, null=True)
     postal_code = models.CharField(max_length=20, blank=True, null=True)
     av_api_key = models.CharField(max_length=24, null=True, blank=True)
