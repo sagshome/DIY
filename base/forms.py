@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.models import User
 from phonenumber_field.formfields import PhoneNumberField
 from base.models import CURRENCIES, COUNTRIES
 from localflavor.ca.ca_provinces import PROVINCE_CHOICES
@@ -30,8 +31,8 @@ class BaseProfileForm(forms.Form):
     """
 
     email = forms.CharField(required=True, label='Email', help_text='Required')
-    phone = PhoneNumberField(required=True, label='Phone Num.', help_text='Required')
-    birth_date = forms.DateField(required=True, widget=forms.TextInput(attrs={'type': 'date'}), help_text='Required')
+    phone = PhoneNumberField(required=False, label='Phone Num.')
+    birth_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
     country = forms.ChoiceField(required=False, choices=COUNTRIES)
     full_name = forms.CharField(required=False)
     address_1 = forms.CharField(required=False)
@@ -60,6 +61,11 @@ class BaseProfileForm(forms.Form):
         self.fields["country"].widget.attrs['class'] = 'diy-country'  # Used in the search javascript
         self.fields["state"].widget.attrs['class'] = 'diy-state'
 
+    def clean_email(self):
+        if User.objects.filter(username=self.cleaned_data['email']).exists():
+            raise forms.ValidationError(f"This email is already in use {self.cleaned_data['email']}, maybe you could "
+                                        f"reset your password.")
+        return self.cleaned_data['email']
 
 class ProfileForm(BaseProfileForm):
     def __init__(self, *args, **kwargs):
