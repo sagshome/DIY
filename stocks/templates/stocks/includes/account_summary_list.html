@@ -108,7 +108,11 @@
                             <a class="w3-hide-small" href="{% url 'portfolio_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
                             <a class="w3-hide-small" href="{% url 'portfolio_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% else %}
-                            <button onclick="fetchDataWithTimeout('{% url 'account_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
+                            {% if item.AccountType == 'Cash' %}
+                                <a class="w3-hide-small" href="{% url 'set_balance' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                            {% else %}
+                                <button onclick="fetchDataWithTimeout('{% url 'account_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
+                            {% endif %}
                             <a class="w3-hide-small" href="{% url 'account_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
                             <a class="w3-hide-small" href="{% url 'account_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% endif %}

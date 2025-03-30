@@ -148,6 +148,7 @@ class AccountTableView(ContainerTableView):
             summary_data = {}
         # Build the table data as [date, (shares, value), (shares, value)... total_value
         context['summary_data'] = summary_data
+        context['value'] = self.object.get_pattr('Value')
         context['view_type'] = 'Data'
         context['equity_count'] = context['equities'].count()
         context['can_reconcile'] = True
@@ -213,16 +214,17 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
             context['object_type']  = 'Account'
             context['can_update'] = True
 
-        funded = context['account'].transactions.filter(xa_action=Transaction.FUND)
-        redeemed = context['account'].transactions.filter(xa_action=Transaction.REDEEM)
-        if funded.count() == 0:
-            context['funded'] = 0
-        else:
-            context['funded'] = funded.aggregate(Sum('value'))['value__sum']
-        if redeemed.count() == 0:
-            context['redeemed'] = 0
-        else:
-            context['redeemed'] = redeemed.aggregate(Sum('value'))['value__sum'] * -1
+        # funded = context['account'].transactions.filter(xa_action=Transaction.FUND)
+        # redeemed = context['account'].transactions.filter(xa_action=Transaction.REDEEM)
+        data = self.object.p_pd.loc[self.object.p_pd['Date'] == pd.to_datetime(normalize_today())]
+
+        net_dep = data['Funds'] - abs(data['Redeemed'])
+        context['funded'] = round(data['Funds'].item(), 2)
+        context['net_funded'] = round(net_dep.item(), 2)
+        context['value'] = round(data['Value'].item(), 2)
+        context['p_and_l'] = round(context['value'] - net_dep, 2)
+        context['dividends'] = round(data['TotalDividends'].item(), 2)
+        context['redeemed'] = round(abs(data['Redeemed'].item()), 2)
 
         equity_data = self.equity_data(context['account'])
         context['equity_list_data'] = json.loads(equity_data.to_json(orient='records'))
@@ -559,7 +561,7 @@ def set_transaction(request, account_id, action):
     else:
         raise Http404('Action %s is not supported' % action)
 
-    initial = {'user': request.user, 'xa_action': xa_action, 'account': account}
+    initial = {'user': request.user, 'xa_action': xa_action, 'account': account, 'real_date': datetime.now().date()}
 
     if request.method == 'POST':
         form = TransactionSetValueForm(request.POST, initial=initial)
@@ -920,7 +922,7 @@ def reconciliation(request, a_pk, date_str):
             formset_errors = formset.errors
     else:
         formset = ReconciliationFormSet(initial=initial)
-    return render(request, 'stocks/reconciliation.hml', {'formset': formset, 'errors': formset_errors,
+    return render(request, 'stocks/reconciliation.html', {'formset': formset, 'errors': formset_errors,
                                                      'account': account, 'date_str': date_str,
                                                      'xas': account.transactions.filter(date=view_date),
                                                          'help_file': 'stocks/help/reconciliation.html',

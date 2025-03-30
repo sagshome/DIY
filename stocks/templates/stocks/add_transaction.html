@@ -2,13 +2,12 @@
 {% block title %}IOOM Transaction{% endblock %}
 {% load static %}
 {% block content %}
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
 
     <script>
-        const doing_edit =  "{{ view_verb }}" == "Edit";
-        const investment = "{{ account.account_type }}" == "Investment";
+        const doing_edit =  "{{ view_verb }}" === "Edit";
+        const investment = "{{ account.account_type }}" === "Investment";
         function hideDiv(divId) {
            var div = document.getElementById(divId);
            if (div === null) {
@@ -37,7 +36,7 @@
                 TRANS_OUT = 9
                 VALUE = 10
                 BALANCE = 11 */
-            let action_value = $("#id_xa_action").val();
+            let action_value = parseInt($("#id_xa_action").val());
             let repeat_value = $("#id_repeat").val();
             let equity_value = $("#id_equity").val();
             if (action_value === 1 || action_value === 5 || action_value === 6 || action_value === 7 || action_value === 10 || action_value === 11) {  // This is a Funding type
@@ -46,13 +45,13 @@
                 hideDiv('quantityRow');
                 hideDiv('toAccountRow');
                 showDiv('valueRow');
-                if (action_value == 1 || action_value == 5) {
+                if (action_value === 1 || action_value === 5) {
                     showDiv('repeatRow');
                 } else {
                     hideDiv('repeatRow');
                }
-            } else if (action_value == 8 || action_value == 9) {  // Transfer In/Out
-               if (action_value == 8) {
+            } else if (action_value === 8 || action_value === 9) {  // Transfer In/Out
+               if (action_value === 8) {
                    update_cash(false);
                } else {
                    update_cash(true);
@@ -60,7 +59,7 @@
                showDiv('equityRow');
                hideDiv('priceRow');
                hideDiv('repeatRow');
-               if (equity_value == "") {
+               if (equity_value === "") {
                     showDiv('valueRow');
                     hideDiv('quantityRow')
                } else {
@@ -68,7 +67,7 @@
                     hideDiv('valueRow')
                }
                showDiv('toAccountRow');
-            } else if ((action_value == 2 || action_value == 3 || action_value == 4 )) {
+            } else if ((action_value === 2 || action_value === 3 || action_value === 4 )) {
                 if (!investment) {
                     hideDiv('equityRow');
                     hideDiv('priceRow');
@@ -90,7 +89,7 @@
                 hideDiv('repeatRow')
                 hideDiv('toAccountRow')
             }
-            if (repeat_value == 'yes') {
+            if (repeat_value === 'yes') {
                 showDiv('numberRow');
             } else {
                 hideDiv('numberRow');
@@ -178,7 +177,7 @@
                     document.getElementById('id_quantity').value = data['shares'];
                 }
             });
-            if (equity_value == "") {
+            if (equity_value === "") {
                 hideDiv('quantityRow')
                 showDiv('valueRow')
             } else {
@@ -335,10 +334,12 @@
             </div>
         </form>
         </div>
-        <div class="w3-cell">
-            <h3>Add Equity/ETF/Fund</h3>
-            <input type="text" id="search" oninput="fetchOptions(this.value)" placeholder="Type to search...">
-            <div id="checkbox-container"></div>
-        </div>
+        {% if view_verb != 'Quick' %}
+            <div class="w3-cell">
+                <h3>Add Equity/ETF/Fund</h3>
+                <input type="text" id="search" oninput="fetchOptions(this.value)" placeholder="Type to search...">
+                <div id="checkbox-container"></div>
+            </div>
+        {% endif %}
     </div>
 {% endblock content %}

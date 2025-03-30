@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from base.models import Profile
 from base.utils import get_simple_cache
 
-from stocks.models import Equity, Inflation, ExchangeRate, Account, Portfolio
+from stocks.models import Equity, Inflation, ExchangeRate, Account, Portfolio, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +44,15 @@ def daily_update():
     # Your cleanup logic here
     key = settings.ALPHAVANTAGEAPI_KEY if settings.ALPHAVANTAGEAPI_KEY else None
     for equity in Equity.objects.all().order_by('last_updated'):
+        # Find useless transactions
+
         equity.update(force=True, key=key, daily=True)
 
     Inflation.update()
     ExchangeRate.update()
 
     for account in Account.objects.all():
+        logger.debug('Resetting account(%s) %s' % (account.id, account))
         account.reset()
         account.update_static_values()
 

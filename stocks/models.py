@@ -472,8 +472,11 @@ class Equity(models.Model):
         if self.equity_type in ('Value', 'Cash'):
             model = FundValue
             data = 'value'
-
-        first_record = model.objects.filter(equity=self).earliest('date')
+        try:
+            first_record = model.objects.filter(equity=self).earliest('date')
+        except model.DoesNotExist:
+            logger.error('Can not fill holes on %s - No records found' % self)
+            return
         start_date = first_record.date
         end_date = self.deactived_date if self.deactived_date else normalize_today()
         break_date = model.objects.filter(equity=self).latest('date').date
@@ -494,7 +497,7 @@ class Equity(models.Model):
                     est_value = value + change_increment
                     while est_month < next_date:
                         if est_month not in all_records or all_records[est_month] != est_value:
-                            model.get_or_create(equity=self, date=est_month, amount=est_value)
+                            model.get_or_create(equity=self, date=est_month, amount=est_value, source=DataSource.ESTIMATE.value)
                         est_month = est_month + relativedelta(months=1)
                         est_value += change_increment
                 value = valid_records[next_date]
@@ -658,8 +661,13 @@ class Equity(models.Model):
             if not self.validated:
                 self.set_equity_data()
                 self.save()
-            elif self.searchable:
+            if self.searchable:
                 self.update_external_equity_data(force=force, key=key, daily=daily)
+        else:  # Cash and Value
+            if not FundValue.objects.filter(equity=self).exclude(source=DataSource.ESTIMATE.value).exists():
+                logger.warning('Deleting Cash/Value Equity with only ESTIMATED values')
+                self.delete()
+                return
         self.fill_holes()
 
     def event_dict(self, start_date: datetime.date = None, event: str = None) -> Dict[datetime.date, float]:
@@ -924,14 +932,6 @@ class FundValue(models.Model):
 
         if self.value == 0:  # remove cruft going forward
             FundValue.objects.filter(date__gt=self.date, equity=self.equity).delete()
-            try:
-                _, account_id = self.equity.symbol.split('-')
-                account = Account.objects.get(id=account_id)
-                account.close(self.real_date)
-            except Account.DoesNotExist:
-                logger.error('%s - value set to 0  based on fund %s' % (self, self.equity.symbol))
-            except ValueError:
-                logger.error('%s - value set to 0 get account cant parse fund %s' % (self, self.equity.symbol))
 
 
 class EquityEvent(models.Model):
@@ -1051,11 +1051,11 @@ class BaseContainer(models.Model):
             return 0
 
     @property
-    def p_key(self):
+    def container_cache_key(self):
         return f'{self.__class__.__name__}:{self.id}:Container'
 
     @property
-    def e_key(self):
+    def component_cache_key(self):
         return f'{self.__class__.__name__}:{self.id}:Components'
 
     def reset(self):
@@ -1192,7 +1192,8 @@ class Portfolio(BaseContainer):
         return values
 
     def reset(self, all=False):
-        clear_cached_dataframe(self.p_key)
+        clear_cached_dataframe(self.container_cache_key)
+        clear_cached_dataframe(self.component_cache_key)
         if all:
             for account in self.account_set.all():
                 account.reset()
@@ -1209,7 +1210,7 @@ class Portfolio(BaseContainer):
 
     @property
     def p_pd(self) -> DataFrame:
-        new = get_cached_dataframe(self.p_key)
+        new = get_cached_dataframe(self.container_cache_key)
         try:
             if not new.empty:
                 return new
@@ -1222,12 +1223,12 @@ class Portfolio(BaseContainer):
             alist.append(account.p_pd)
         if len(alist):
             new = pd.concat(alist).groupby('Date').sum().reset_index()
-        cache_dataframe(self.p_key, new)
+        cache_dataframe(self.container_cache_key, new)
         return new
 
     @property
     def e_pd(self) -> DataFrame:
-        new = get_cached_dataframe(self.e_key)
+        new = get_cached_dataframe(self.component_cache_key)
         try:
             if not new.empty:
                 return new
@@ -1246,7 +1247,7 @@ class Portfolio(BaseContainer):
                 else:
                     logger.debug('Something fishing with account id %s' % account.id)
             pass
-        cache_dataframe(self.e_key, new)
+        cache_dataframe(self.component_cache_key, new)
         return new
 
     @property
@@ -1502,7 +1503,7 @@ class Account(BaseContainer):
 
     @property
     def e_pd(self) -> DataFrame:
-        df = get_cached_dataframe(self.e_key)
+        df = get_cached_dataframe(self.component_cache_key)
         try:
             if not df.empty:
                 return df
@@ -1522,7 +1523,7 @@ class Account(BaseContainer):
             df['Date'] = pd.to_datetime(df['Date'])
         except:
             logger.debug('DataFrame exception on date:%s' % df)
-        cache_dataframe(self.e_key, df)
+        cache_dataframe(self.component_cache_key, df)
 
     # self.pd.loc[self.pd['Date'] == normalize_today()].sort_values(['Equity'])
         return df
@@ -1539,7 +1540,7 @@ class Account(BaseContainer):
         :return:
         '''
 
-        df = get_cached_dataframe(self.p_key)
+        df = get_cached_dataframe(self.container_cache_key)
         try:
             if not df.empty:
                 return df
@@ -1618,11 +1619,12 @@ class Account(BaseContainer):
 
         df.replace(np.nan, 0, inplace=True)
         df['Actual'] = df['Cash'] + df['Value']
-        cache_dataframe(self.p_key, df)
+        cache_dataframe(self.container_cache_key, df)
         return df
 
     def reset(self):
-        super(Account, self).reset()
+        clear_cached_dataframe(self.container_cache_key)
+        clear_cached_dataframe(self.component_cache_key)
         if self.portfolio:
             self.portfolio.reset()
 
@@ -1700,6 +1702,7 @@ class Account(BaseContainer):
         summary['Id'] = self.id
         summary['Closed'] = 'Closed' if self.closed else 'Open'
         summary['End'] = self.end
+        summary['AccountType'] = self.account_type
 
         return summary
 
