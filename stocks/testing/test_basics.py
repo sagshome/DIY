@@ -141,7 +141,8 @@ class AccountMgmtTest(BasicSetup):
         self.new_account = Account.objects.create(name='New', account_type='Investment', account_name='002', managed=False, currency='CAD', user=self.user, portfolio=self.portfolio)
 
     def test_cache(self):
-        print (self.account.e_pd.to_dict())
+        pass
+        # print (self.account.e_pd.to_dict())
 
 
     @freeze_time("2022-06-01")

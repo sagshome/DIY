@@ -1,4 +1,5 @@
 import logging
+import os
 import platform
 import pandas as pd
 import tempfile
@@ -7,6 +8,7 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from io import StringIO
 from pathlib import Path
+from typing import Dict
 
 from django.conf import settings
 from django.core.cache import cache
@@ -265,3 +267,57 @@ def aggregate_or_0(expression):
     value = expression
     value = value if value else 0
     return value
+
+
+'''
+df = pd.read_excel('/home/scott/shared/Finance/rawdata/scott_qt_jan12024_feb242025.xlsx')
+df2 = pd.read_csv('/home/scott/shared/Finance/rawdata/csv/CIBC-ALL.csv', header=None)
+df3 = pd.read_excel('/home/scott/shared/Finance/rawdata/Activities_for_01Feb2018_to_06Jan2022.ods', engine='odf')
+
+headings = df.dtypes.to_dict()
+for item in headings:
+    print (item, headings.get(item).name)
+->     'object' vs 'float64'    ?
+
+float(df['Quantity'].sum())
+df3.replace(np.nan, 0, inplace=True)
+df.columns = ['a', 'b', 'c', 'd']...
+    
+'''
+
+def load_dataframe(filepath: str, header: bool = True) -> pd.DataFrame:
+    file_ext = os.path.splitext(filepath)[1]
+    try:
+        if file_ext == '.csv':
+            if header:
+                df = pd.read_csv(filepath)
+            else:
+                df = pd.read_csv(filepath, header=None)
+        elif file_ext == '.ods':
+            if header:
+                df = pd.read_excel(filepath, engine='odf')
+            else:
+                df = pd.read_excel(filepath, engine='odf', header=None)
+        else:
+            if header:
+                df = pd.read_excel(filepath)
+            else:
+                df = pd.read_excel(filepath, header=None)
+        return df
+    except FileNotFoundError:
+        logger.error('File Not Found: %s' % filepath)
+    except KeyError:
+        logger.error('File Format Error: %s' % filepath)
+    except UnicodeDecodeError:
+        logger.error('File UnicodeDecodeError Error: %s' % filepath)
+    except ValueError:
+        logger.error('File Format Value Error: %s' % filepath)
+    except:
+        logger.error('Unknown Error: %s' % filepath)
+
+    return pd.DataFrame()
+
+
+
+
+

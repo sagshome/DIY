@@ -1,14 +1,42 @@
 import logging
+import os
+import time
 
 from celery import shared_task
 from datetime import datetime
 from django.conf import settings
+from django.core.cache import cache
+
 from django.contrib.auth.models import User
 from base.models import Profile
+from base.utils import get_simple_cache
 
 from stocks.models import Equity, Inflation, ExchangeRate, Account, Portfolio
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task
+def cleanup_uploads():
+    """
+    Delete non-cached files that are older than 10 minutes
+    """
+
+    cutoff_time = time.time() - 600 # 10 minutes
+    directory = settings.MEDIA_ROOT.joinpath('uploads')
+
+    # Process files
+    for filename in os.listdir(directory):
+        if get_simple_cache(f'file:{filename}'):
+            continue
+
+        file_path = os.path.join(directory, filename)
+        if not os.path.isfile(file_path):
+            continue
+
+        file_mtime = os.path.getmtime(file_path)
+        if file_mtime < cutoff_time:
+            os.remove(file_path)
 
 
 @shared_task
@@ -34,13 +62,14 @@ def hourly_update():
 
 @shared_task
 def add_to_cache(user_id):
-    logger.debug("Processing accounts for %s" % user_id)
-    for account in Account.objects.filter(user_id=user_id):
-        _ = account.p_pd  # Just to the math which will cache the results
-        _ = account.e_pd
-    for portfolio in Portfolio.objects.all():
-        _ = portfolio.p_pd  # Just to the math which will cache the results
-        _ = portfolio.e_pd
+    if not settings.NO_CACHE:
+        logger.debug("Processing accounts for %s" % user_id)
+        for account in Account.objects.filter(user_id=user_id):
+            _ = account.p_pd  # Just to the math which will cache the results
+            _ = account.e_pd
+        for portfolio in Portfolio.objects.all():
+            _ = portfolio.p_pd  # Just to the math which will cache the results
+            _ = portfolio.e_pd
 
 
 @shared_task

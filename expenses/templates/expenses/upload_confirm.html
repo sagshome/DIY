@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Expense Upload{% endblock %}
+{% block content %}
+    <h2>Upload - Confirm Columns</h2>
+
+    {%  if errors %}
+        <div class="w3-container w3-pink w3-margin">{{ errors }}</div>
+    {%  endif %}
+
+    <form method="post" id="itemForm" novalidate>
+        {% csrf_token %}
+        {{ formset.management_form }}
+        {% for dict in formset.error_messages %}
+            {% for error in dict.values %}
+                {{ error }}
+            {% endfor %}
+        {% endfor %}
+        <div class="w3-cell-row">
+                {% for form in formset.forms %}
+                <div class="w3-cell">
+                    {{ form.heading }}<br>
+                    {{ form.heading.errors }}
+                    {{ form.example0 }}<br>
+                    {{ form.example1 }}<br>
+                    {{ form.example2}}<br>
+                {{ form.example3 }}<br>
+                {{ form.example4 }}
+                </div>
+                {% endfor %}
+            </tr>
+        </div>
+        <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" name="submit-type"
+                value="Save" type="submit">Submit
+        </button>
+
+    </form>
+{% endblock %}
+

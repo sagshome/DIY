@@ -1,16 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Expenses Import{% endblock %}
 {% block content %}
-    <div class="flex-container flex-items-auto">
-        <div class="row">
-            <div id="heading">
-                <h2>Import Expenses</h2>
-            </div>
-        </div>
-    </div>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
 
-    <div class="flex-container flex-items-auto">
-        <div id="import-form" class="flex-size-8 pad-md">
+    <div class="w3-cell-row">
+        <div id="import-form" class="w3-cell">
+            <h2>Import Expenses</h2>
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 {{ form.non_field_errors }}
@@ -19,58 +13,61 @@
                     {{ hidden_field.errors }}
                     {{ hidden_field }}
                 {% endfor %}
+                <div class="w3-grid" style="grid-template-columns:200px 400px auto;">
+                    <div class="w3-padding w3-right-align">{{ form.upload_file.label_tag }}</div>
+                    <div class="w3-padding">{{ form.upload_file }}</div>
+                    <div class="w3-padding">{{ form.upload_file.errors }}</div>
 
-                <table class="table table-bordered table-accent-1 table-striped table-hover width-full col-padding-md text-sm">
-                    {% for field in form.visible_fields %}
-                        <tr>
-                            <th class="col-3">{{ field.label_tag }}</th>
-                            <td class="col-5 rounded">
-                                {{ field.errors }}
-                                {{ field }}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </table>
+                    <div class="w3-padding w3-right-align">{{ form.has_headings.label_tag }}</div>
+                    <div class="w3-padding">{{ form.has_headings }}</div>
+                    <div class="w3-padding">{{ form.has_headings.errors }}</div>
+                    <div class="w3-padding" style="grid-column:1/span 2">
+                    <button class="w3-border w3-margin w3-button-medium w3-round-large w3-margin-top w3-green"
+                        type="submit">Submit
+                    </button>
+                </div>
+        </div>
                 <!-- todo: Add a progress bar -->
-                <button class="w3-margin w3-button w3-round-xlarge w3-margin-top w3-green" type="submit">Import CSV
-                </button>
                 This typically takes about 5 seconds per 1000 records. Please be patient.
             </form>
         </div>
-    </div>
-
-    {% if custom_error %}
-        <a href="{% url 'expense_ignored' %}">
-            <button class="rounded spaced menu-button-primary">Review Ignored</button>
-        </a><br>
-        <div class="alert alert-danger">
-            <h2>Errors</h2>
-            {{ custom_error }}
+        <div class="w3-cell">
+            Without the ability to <b>Upload</b> content this system would be too arduous to use. The
+            <b>Cash</b> Application supports Excel format(<em>.xls, xlsx</em>),  OpenOffice (<em>.ods</em>) and Comma
+            Seperated Value (<em>.csv</em>) files as upload input.
+            <br>
+            In all cases the data is stored in 'rows' of 'columns'.   If your input data has headings on the columns (
+            aka a <em>header row</em>),  then indicated it as such in this form.
+            <br><br>
+            The system will attempt to process your data by reading the column headers or the actual data.  If it
+            can not be determined what each column is,  you will be prompted for guidance and/or conformation.
+            <br><br>If you are crafting your own data.   The following columns are required:
+            <ul>
+                <li><b>Date</b>: Format is YYYY-MM-DD as in 2024-09-27</li>
+                <li><b>Description</b>: This is the description of the transaction</li>
+                <li><b>Amount</b>: A Decimal number,  negative items indicate a refund or return.</li>
+                <li><em>Instead of Amount,  you may provide a 'Debit' and a 'Credit' column</em></li>
+            </ul>
+            The following columns are optional:
+            <ul>
+                <li><b>Category</b>: Must match the predefined IOOM categories</li>
+                <li><b>SubCategory</b>: If not already defined it will be added during the import</li>
+                <li><b>Hidden</b>: Keep a record but do not process this data</li>
+                <li><b>Details</b>: Internal information such as Credit Card Key</li>
+                <li><b>Notes</b>: Arbitrary text (that will be searchable)</li>
+            </ul>
+            <p>This is the same format used by the <b>Cash</b> Export action.</p>
         </div>
-    {% endif %}
+    </div>
+    </div class=w3-row>
+        {% if custom_error %}
+            <a href="{% url 'expense_ignored' %}">
+                <button class="rounded spaced menu-button-primary">Review Ignored</button>
+            </a><br>
+            <div class="alert alert-danger">
+                <h2>Errors</h2>
+                {{ custom_error }}
+            </div>
+        {% endif %}
+    </div>
 {% endblock content %}
-
-{% block help_content %}
-    <p>
-        Without the ability to <b>Upload</b> content the expense system would be too arduous to use. This system using
-        CSV
-        (comma seperated values) a standard format most financial institutes use. The actual columns may vary but what I
-        support so far is selected as <b>Expense Source</b>:<br><br>
-        <b>Generic File</b>: The file has columns with a header labels: 'Date', 'Transaction' and 'Amount' and other
-        column is ignored<br>
-        <b>CIBC VISA Download</b>: The file has NO Headers. Columns starting at 0 are defined as 0 = Date, 1 =
-        Transaction, 2 = Amount, 3 = Credit (return), 4 = Card Detail<br>
-        <b>CIBC Bank Download</b>: The file has NO Headers, Columns starting at 0 are defined as 0 = Date, 1 =
-        Transaction, 2 = Amount, 3 = Credit (return)<br>
-        <em>Scott's Legacy CSV</em>: You don't want to know...<br><br>
-        Select the actual file with the <em>Choose File</em> Dialog<br><br>
-        Use the
-        <button class="w3-button-small w3-round-xlarge w3-green">Import CSV</button>
-        button to start the process. It may
-        appear to be "hung", it really does take a few minutes to make all the records when importing a large file.
-    </p>
-    <p>You can always modify your CSV file to fit one of these formats or work with <a href="D1Yapp.ca@gmail.com">me</a>
-        to
-        get your format added.
-    </p>
-{% endblock %}

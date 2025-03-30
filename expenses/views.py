@@ -1,28 +1,34 @@
+import copy
 import csv
 import logging
 import numpy as np
+import os
+import pandas as pd
+import uuid
 
 from datetime import datetime
 from dateutil import relativedelta
-from json import dumps
-from decimal import Decimal
+
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+
 from django.db.models import Q, Sum
 from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
-from django.forms import modelformset_factory
+from django.forms import modelformset_factory, formset_factory
 from django.http import JsonResponse, HttpResponse
-from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404
+from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, UpdateView, FormView, ListView
 
 from base.models import COLORS, PALETTE
-from base.utils import DIYImportException, DateUtil, label_to_values, date_to_label
+from base.utils import DateUtil, label_to_values, date_to_label, set_simple_cache, load_dataframe
 from base.views import BaseDeleteView
-from expenses.importers import Generic, CIBC_VISA, CIBC_Bank, PersonalCSV
-from expenses.forms import *
+from expenses.importers import import_dataframe, find_headers_errors
+from expenses.forms import SubCategoryForm, ItemForm, ItemAddForm, ItemEditForm, TemplateForm, ItemListEditForm, SearchForm, UploadFileForm, UploadColumnForm
 from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
-
 
 logger = logging.getLogger(__name__)
 
@@ -168,11 +174,21 @@ class DeleteTemplateView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("expenses_templates")
 
 
+class ItemFormSet(modelformset_factory(Item, form=ItemListEditForm, extra=0)):
+    def save(self, commit=True):
+        # Call the original save method to save the forms in the formset
+        super(ItemFormSet, self).save(commit=commit)
+
+        # Custom action (e.g., send an email notification)
+        if commit:
+            # Perform your custom action here
+            pass
+
 @login_required
 def edit_template(request, pk: int):
     obj = get_object_or_404(Template, pk=pk)
 
-    ItemFormSet = modelformset_factory(Item, form=ItemListForm, extra=0)
+    # ItemFormSet = modelformset_factory(Item, form=ItemListEditForm, extra=0)
     template_form = TemplateForm(instance=obj)
 
     if request.method == "POST":
@@ -193,18 +209,9 @@ def edit_template(request, pk: int):
     })
 
 
-class ItemFormSet(modelformset_factory(Item, form=ItemListForm, extra=0)):
-    def save(self, commit=True):
-        # Call the original save method to save the forms in the formset
-        super(ItemFormSet, self).save(commit=commit)
-
-        # Custom action (e.g., send an email notification)
-        if commit:
-            # Perform your custom action here
-            pass
-
 def cash_help(request):
     return render(request, 'expenses/includes/help.html', {'success_url': request.META.get('HTTP_REFERER', '/')})
+
 
 @login_required
 def expense_main(request):
@@ -214,12 +221,12 @@ def expense_main(request):
     """
     search_for = False
     default_end = datetime.now().date()
-    default_start = datetime.now().replace(year=datetime.now().year-7).date().replace(day=1)
+    default_start = datetime.now().replace(year=datetime.now().year - 7).date().replace(day=1)
 
     if request.GET:
         if 'span' in request.GET:
             new_start, new_end = label_to_values(request.GET['span'])
-            if new_start: # Just incase the data was ill formatted ?
+            if new_start:  # Just incase the data was ill formatted ?
                 default_start = new_start
                 default_end = new_end
 
@@ -236,7 +243,6 @@ def expense_main(request):
 
     if search_for:
         initial['search_category'] = search_for.name
-
 
     warnings = {}
     max_size = 50
@@ -332,30 +338,124 @@ def assign_expenses(request):
 
 @login_required
 def upload_expenses(request):
+    """
+    UploadFileForm - Insures that file type matches.
+    """
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
-            bin_file = form.cleaned_data["csv_file"].read()
-            text_file = bin_file.decode("utf-8")
-            reader = csv.reader(text_file.splitlines())
-            try:
-                if form.cleaned_data["csv_type"] == "Generic":
-                    importer = Generic(reader,  request.user, "Generic")
-                elif form.cleaned_data["csv_type"] == 'CIBC_VISA':
-                    importer = CIBC_VISA(reader, request.user, form.cleaned_data["csv_type"])
-                elif form.cleaned_data["csv_type"] == 'CIBC_Bank':
-                    importer = CIBC_Bank(reader, request.user, form.cleaned_data["csv_type"])
-                elif form.cleaned_data["csv_type"] == 'Personal':
-                    importer = PersonalCSV(reader, request.user, form.cleaned_data["csv_type"])
-            except DIYImportException as e:
-                return render(request, "expenses/uploadfile.html", {"form": form, "custom_error": str(e)})
-            if Item.unassigned(user=request.user).count() > 0:
-                return HttpResponseRedirect(reverse('expenses_assign'))
-            return HttpResponseRedirect(reverse('expense_main'))
+            upload_file = form.cleaned_data["upload_file"]
+            file_ext = os.path.splitext(upload_file.name)[1]
+            random_filename = f"{uuid.uuid4()}{file_ext}"
+            file_path = os.path.join("uploads", random_filename)
+            # Save file
+            saved_path = default_storage.save(file_path, ContentFile(upload_file.read()))
+            absolute_path = settings.MEDIA_ROOT.joinpath(saved_path)
+            # load as dataframe
+            df = load_dataframe(absolute_path, form.cleaned_data['has_headings'])
+            if not df.empty:
+                request.session["uploaded_request"] = random_filename
+                set_simple_cache(random_filename, saved_path, 600)  # Cache prevents file from being deleted (for 10 minutes)
+                if form.cleaned_data['has_headings']:
+                    if not find_headers_errors(df.columns.to_list()):
+                        return HttpResponseRedirect(reverse('upload_process', kwargs={'uuid': random_filename}))
+
+                return HttpResponseRedirect(reverse('upload_confirm', kwargs={'uuid': random_filename, 'headings': form.cleaned_data['has_headings']}))
 
     form = UploadFileForm()
     return render(request, "expenses/uploadfile.html", {"form": form})
 
+
+class ColumnConfirmFormset(formset_factory(UploadColumnForm, extra=0)):
+
+    def is_valid(self):
+        """
+        This is required since validation is on the collection of forms not a single form
+        when we can not blame an actual form,  blame the first one
+        """
+        valid = super().is_valid()
+        if valid:
+            headings = []
+            for form in self.forms:
+                headings.append(form.cleaned_data['heading'])
+
+            errors = find_headers_errors(headings)
+            if errors:
+                for index in range(len(errors)):
+                    if errors[index]:
+                        for error in errors[index]:
+                            self.forms[index].add_error('heading', error)
+                valid = False
+        return valid
+
+
+@login_required
+def upload_confirm(request, uuid: uuid, headings):
+    """
+    uuid:  is the filename
+    headings: True or False, if the file is suppose to have headings.
+    """
+
+    headings = headings == 'True'
+    errors = None
+    file_path = os.path.join(default_storage.location, "uploads", uuid)
+    df = load_dataframe(file_path, headings)
+    if not df.empty:
+        if request.method == "POST":
+            formset = ColumnConfirmFormset(request.POST)
+            if formset.is_valid():
+                headings = []
+                for form in formset.forms:
+                    heading = form.cleaned_data['heading']
+                    if heading != 'ignore':
+                        headings.append(heading)
+                new_dataframe = df[headings]
+                if 'Amount' not in headings:
+                    new_dataframe['Amount'] = new_dataframe['Debit'] - new_dataframe['Credit']
+
+                # Save a file in csv format.
+                file_name = os.path.splitext(uuid)[0] + '.csv'
+                file_path = default_storage.base_location.joinpath('uploads', file_name)
+                set_simple_cache(file_name, file_path, 600)  # Cache prevents file from being deleted (for 10 minutes)
+                df.to_csv(file_path)
+                return HttpResponseRedirect(reverse('upload_process', kwargs={'uuid': uuid}))
+            errors = f'{uuid} no data available'
+
+    max_examples = 5 if len(df) > 5 else len(df)
+    columns = df.columns.tolist()
+    initial = []
+    for index in range(len(df.dtypes)):
+        if headings:
+            heading = df.columns[index]
+        else:
+            heading = 'ignore'
+        initial.append({'example' + str(x): df.iloc[0:max_examples][columns[index]].to_list()[x] for x in range(max_examples)})
+        initial[index]['heading'] = heading
+    formset = ColumnConfirmFormset(initial=initial)
+    return render(request, "expenses/upload_confirm.html", {"formset": formset, "errors": errors})
+
+
+@login_required
+def upload_process(request, uuid: uuid):
+    df = load_dataframe(uuid, True)
+    if not df.empty:
+        existing = pd.DataFrame.from_records(Item.objects.filter(user=request.user).values_list('date', 'description', 'amount'))
+        existing.columns = ['Date', 'Description', 'Amount']
+        existing['Date'] = pd.to_datetime(existing['Date'])
+        existing['Amount'] = pd.to_numeric(existing['Amount'])  # Decimal to Float
+        df = df.round(2)  # Fix up any crazy rounding issues.
+
+        # todo: I won't pretend to understand this, but it works and it's darn fast.
+        to_process = df.drop_duplicates().merge(existing.drop_duplicates(), on=['Date', 'Description', 'Amount'], how='left', indicator=True)
+        to_process = to_process.loc[to_process._merge == 'left_only', to_process.columns != '_merge']
+        if len(to_process) > 0:
+            errors = import_dataframe(to_process, request.user)
+
+
+
+
+
+    return render(request, "expenses/main")
 
 @login_required
 def export_expense_page(request):
@@ -364,9 +464,10 @@ def export_expense_page(request):
     The format is suitable for reloading into the application using the 'default' format.
     """
     return render(request, "expenses/export.html", {
-            'expenses': Item.objects.filter(user=request.user, ignore=False, income=False).count(),
-            'income': Item.objects.filter(user=request.user, ignore=False, income=True).count(),
-            'hidden': Item.objects.filter(user=request.user, ignore=True).count()})
+        'expenses': Item.objects.filter(user=request.user, ignore=False, income=False).count(),
+        'income': Item.objects.filter(user=request.user, ignore=False, income=True).count(),
+        'hidden': Item.objects.filter(user=request.user, ignore=True).count()})
+
 
 @login_required
 def export_expenses(request):
@@ -375,7 +476,7 @@ def export_expenses(request):
         headers={"Content-Disposition": 'attachment; filename="expense_export.csv"'},
     )
     writer = csv.writer(response)
-    writer.writerow(['Date', 'Transaction', 'Amount', 'Category', 'Subcategory', 'Hidden', 'Details', 'Notes'])
+    writer.writerow(['Date', 'Description', 'Amount', 'Category', 'Subcategory', 'Hidden', 'Details', 'Notes'])
 
     logger.debug('starting dump')
     for item in Item.objects.filter(user=request.user).exclude(split__isnull=False).exclude(amortized__isnull=False):
@@ -392,7 +493,7 @@ def load_subcategories(request):
     user = request.user
     category = request.GET.get("category")
     if category:
-        choices =  SubCategory.objects.filter(category=category).filter(Q(user__isnull=True) | Q(user=user)).order_by('name')
+        choices = SubCategory.objects.filter(category=category).filter(Q(user__isnull=True) | Q(user=user)).order_by('name')
     else:
         choices = SubCategory.objects.none()
     return render(request, "expenses/includes/subcategory_list_options.html", {"subcat": choices})
@@ -476,7 +577,6 @@ def expense_bar(request):
     first_date = super_set.earliest('date').date.replace(day=1)
     last_date = super_set.latest('date').date.replace(day=1)
 
-
     months = []
     labels = []
     month_dict = {}
@@ -491,8 +591,8 @@ def expense_bar(request):
         raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month', 'sum', 'subcategory__name')
     else:
         raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
-                                                                                                             'sum',
-                                                                                                             'category__name')
+                                                                                                                   'sum',
+                                                                                                                   'category__name')
 
     colors = COLORS.copy()
     colors.reverse()
@@ -513,7 +613,7 @@ def expense_bar(request):
         try:
             datasets[data_dict[name]]['data'][month_dict[element['month']]] += element['sum']
         except KeyError:
-            print(f'Failed on:{element}')
+            logger.error('Failed on %s' % element)
 
     return JsonResponse({'datasets': datasets, 'labels': labels, 'colors': COLORS})
 
@@ -525,7 +625,6 @@ def cash_flow_chart(request):
     1.  Income
     2.  Expenses
     """
-
 
     date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
     show_trends = True if request.GET.get('trends') == 'Show' else False
@@ -564,7 +663,7 @@ def cash_flow_chart(request):
         income.append(dates[key]['income'])
 
     data_sets = [
-        {'label': 'Expenses',  'fill': False, 'data': expenses, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1},
+        {'label': 'Expenses', 'fill': False, 'data': expenses, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1},
         {'label': 'Income', 'fill': False, 'data': income, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'tension': 0.1}]
 
     if show_trends:
@@ -574,7 +673,9 @@ def cash_flow_chart(request):
         expense_trend = [slope * x + intercept for x in x_indices]
         slope, intercept = np.polyfit(x_indices, income, 1)
         income_trend = [slope * x + intercept for x in x_indices]
-        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': expense_trend, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'borderDash': [5, 5]})
-        data_sets.append({'label': 'Income-Trend', 'fill': False, 'data': income_trend, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'borderDash': [5, 5]})
+        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': expense_trend, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'],
+                          'borderDash': [5, 5]})
+        data_sets.append({'label': 'Income-Trend', 'fill': False, 'data': income_trend, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'],
+                          'borderDash': [5, 5]})
 
     return JsonResponse({'labels': labels, 'datasets': data_sets})

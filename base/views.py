@@ -50,6 +50,7 @@ class BaseDeleteView(LoginRequiredMixin, DeleteView):
             url = super().get_success_url()
         return url
 
+
 @login_required
 def diy_main(request):
     span = 3

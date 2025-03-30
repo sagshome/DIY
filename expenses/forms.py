@@ -1,10 +1,13 @@
 import copy
+import os
 import re
 from django import forms
+from django.forms import formset_factory
 from django.db.models import Q
 from django.db.utils import ProgrammingError, OperationalError
 
 from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
+from expenses.importers import DEFAULT, EXTRA
 
 
 def get_categories():
@@ -31,12 +34,6 @@ def get_subcategories():
     return default
 
 
-class CategoryForm(forms.ModelForm):
-    class Meta:
-        model = Category
-        fields = ("name", )
-
-
 class SubCategoryForm(forms.ModelForm):
     class Meta:
         model = SubCategory
@@ -45,7 +42,7 @@ class SubCategoryForm(forms.ModelForm):
             'user': forms.HiddenInput(),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
         # Adjusted to make W3C.CSS look nicer
@@ -81,9 +78,7 @@ class SearchForm(forms.Form):
     # view = forms.ChoiceField(choices=[('chart', 'Chart'), ('list', 'List'), ('both', 'Both')])
     # template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
 
-
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
         # Adjusted to make W3C.CSS look nicer
@@ -104,7 +99,7 @@ class TemplateForm(forms.ModelForm):
 
     # template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
 
-    class Meta:
+    class Meta:  # pragma: no cover
         model = Template
         fields = ("user", "type", "expression",  "category", "subcategory", "ignore")
 
@@ -112,7 +107,7 @@ class TemplateForm(forms.ModelForm):
             'user': forms.HiddenInput(),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
         self.fields["type"].widget.attrs['style'] = 'width:110px;'
         self.fields["expression"].widget.attrs['style'] = 'width:400px;'
@@ -157,21 +152,42 @@ class TemplateForm(forms.ModelForm):
         return self.cleaned_data
 
 
+class UploadColumnForm(forms.Form):
+
+    heading = forms.ChoiceField(choices=tuple(list({'ignore': '-----'}.items()) + list(DEFAULT.items()) + list(EXTRA.items())))
+
+    example0 = forms.CharField(required=False, max_length=64)
+    example1 = forms.CharField(required=False, max_length=64)
+    example2 = forms.CharField(required=False, max_length=64)
+    example3 = forms.CharField(required=False, max_length=64)
+    example4 = forms.CharField(required=False, max_length=64)
+
+    def __init__(self, *args, **kwargs):  # pragma: no cover
+        super().__init__(*args, **kwargs)
+        self.fields["heading"].widget.attrs['style'] = 'width:200px;height:27px'
+
+        self.fields["example0"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
+        self.fields["example0"].widget.attrs['readonly'] = True
+        self.fields["example1"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
+        self.fields["example1"].widget.attrs['readonly'] = True
+        self.fields["example2"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
+        self.fields["example2"].widget.attrs['readonly'] = True
+        self.fields["example3"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
+        self.fields["example3"].widget.attrs['readonly'] = True
+        self.fields["example4"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
+        self.fields["example4"].widget.attrs['readonly'] = True
+
+
 class UploadFileForm(forms.Form):
-    csv_type = forms.ChoiceField(label="Expense Source",
-                                 choices=[('', "----",),
-                                          ("Generic", "Generic File"),
-                                          ("CIBC_VISA", "CIBC VISA Download"),
-                                          ("CIBC_Bank", "CIBC Bank Download"),
-                                          ])
-    csv_file = forms.FileField(label="CSV File:")
+    has_headings = forms.TypedChoiceField(coerce=lambda x: x == 'True', choices=((False, 'No'), (True, 'Yes')))
+    upload_file = forms.FileField(label="Expenses File:")
 
-    def clean(self):
-        cleaned_data = super().clean()
-        csv_type = cleaned_data.get("csv_type")
-
-        if csv_type not in ("CIBC_Bank", "CIBC_VISA", "Generic"):
-            self.add_error("csv_type", f"Source Value {csv_type} is not currently supported")
+    def clean_upload_file(self):
+        cleaned_file = self.cleaned_data["upload_file"]
+        file_ext = os.path.splitext(cleaned_file.name)[1]
+        if file_ext not in ('.csv', '.ods', '.xls', '.xlsx'):
+            raise forms.ValidationError(f'Warning: file type {file_ext} is not supported.')
+        return cleaned_file
 
 
 class BaseItemForm(forms.ModelForm):
@@ -179,7 +195,7 @@ class BaseItemForm(forms.ModelForm):
     All Item Forms have these fields so let treat them consistantly
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
         self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
@@ -193,18 +209,18 @@ class BaseItemForm(forms.ModelForm):
         self.fields["amount"].widget.attrs['class'] = 'w3-right-align'
 
         self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
-        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'
+        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'  # Used in the search javascript
 
         if "ignore" in self.fields:
             self.fields["ignore"].label = 'Hidden'
 
 
-class ItemListForm(BaseItemForm):
+class ItemListEditForm(BaseItemForm):
     is_split = forms.BooleanField(required=False, label='Split')
     is_amortized = forms.BooleanField(required=False, label='Leveled')
     # amortized_expense = forms.BooleanField()
 
-    class Meta:
+    class Meta:  # pragma: no cover
         model = Item
         fields = ("date", "description", "amount", "category", "subcategory", "ignore", "is_split", "is_amortized",
                   "notes")
@@ -212,7 +228,7 @@ class ItemListForm(BaseItemForm):
           'notes': forms.Textarea(attrs={'rows':1, 'cols':15}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
         if self.instance.is_split:
@@ -230,9 +246,9 @@ class ItemListForm(BaseItemForm):
     def clean(self):
         super().clean()
         if self.cleaned_data["category"] and not self.cleaned_data["subcategory"]:
-            raise forms.ValidationError(f'Warning: Category {self.cleaned_data["category"]} missing subcategory.')
+            raise forms.ValidationError(f'Error: Category {self.cleaned_data["category"]} missing Subcategory.')
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
-            raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
+            raise forms.ValidationError(f'Error: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
 
 
 class ItemAddForm(BaseItemForm):
@@ -244,7 +260,7 @@ class ItemAddForm(BaseItemForm):
             'date': forms.TextInput(attrs={'type': 'date'}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
         self.fields["date"].widget.attrs['style'] = 'width:95px;'
@@ -267,12 +283,12 @@ class ItemEditForm(BaseItemForm):
     s_description = forms.CharField(required=False)
 
 
-    class Meta:
+    class Meta:  # pragma: no cover
         model = Item
         fields = ("date", "description", "amount", "category", "subcategory", "ignore",
                   "amortize_months", "amortize_type", "s_amount", "s_description", "notes")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
         self.fields["amortize_months"].widget.attrs['style'] = 'width:100px;'
@@ -313,11 +329,11 @@ class ItemForm(BaseItemForm):
     #template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
     #template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
 
-    class Meta:
+    class Meta:  # pragma: no cover
         model = Item
         fields = ("date", "description", "amount", "category", "subcategory", "ignore")  # "template_type", "template")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
         self.fields['ignore'].label = "Hide"
 

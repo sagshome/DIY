@@ -7,6 +7,8 @@ urlpatterns = [
     path(r'main/', views.expense_main, name='expense_main'),
 
     path(r'upload/', views.upload_expenses, name='expenses_upload'),
+    path(r'upload/<uuid>/<headings>/confirm/', views.upload_confirm, name='upload_confirm'),
+    path(r'upload/<uuid>/process/', views.upload_process, name='upload_process'),
 
     path(r'export/', views.export_expense_page, name='expenses_export'),
     path(r'export/download/', views.export_expenses, name='export_expense_page'),

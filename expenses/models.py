@@ -8,6 +8,8 @@ from dateutil.relativedelta import relativedelta
 from typing import Union
 
 from django.contrib.auth.models import User
+from django.core.validators import RegexValidator
+
 from django.db import models
 from django.db.models import Q, Sum, QuerySet
 
@@ -64,10 +66,8 @@ class Category(models.Model):
     name = models.CharField(unique=True, max_length=32, null=False, blank=False, verbose_name="Expense Category")
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
-
     def __str__(self):
         return self.name
-
 
     # def filter_amount(self, qfilter: Union[QuerySet | None]) -> float:
     def filter_amount(self, qfilter) -> float:
@@ -88,7 +88,9 @@ class SubCategory(models.Model):
     """
     Second level classification for expense categorization
     """
-    name = models.CharField(max_length=32, null=False, blank=False, verbose_name="SubCategory")
+    alphanumeric = RegexValidator(r'^[0-9a-zA-Z]*$', 'Only alphanumeric characters are allowed.')
+
+    name = models.CharField(max_length=32, blank=True, null=True, verbose_name="SubCategory", validators=[alphanumeric])
     category = models.ForeignKey(Category, null=False, blank=False, verbose_name="Category", on_delete=models.CASCADE)
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
@@ -202,7 +204,6 @@ class Item(models.Model):
     date = models.DateField(null=False, blank=False, verbose_name="Date")
     description: str = models.CharField(max_length=120, null=False, blank=False)
     amount: decimal = models.DecimalField(null=False, max_digits=9, decimal_places=2, blank=False)
-    source = models.CharField(max_length=40, null=False, blank=False)
     template = models.ForeignKey(Template, blank=True, null=True, on_delete=models.SET_NULL)
     category = models.ForeignKey(Category, blank=True, null=True, on_delete=models.SET_NULL)
     subcategory = models.ForeignKey(SubCategory, blank=True, null=True, on_delete=models.SET_NULL)
@@ -271,7 +272,6 @@ class Item(models.Model):
                             category=None,
                             subcategory=None,
                             ignore=False,
-                            source='Split',
                             details=self.details,
                             user=self.user,
                             split=self)
@@ -283,7 +283,6 @@ class Item(models.Model):
                                 category=None,
                                 subcategory=None,
                                 ignore=self.ignore,
-                                source='Split',
                                 details=self.details,
                                 user=self.user,
                                 split=self)
@@ -318,7 +317,6 @@ class Item(models.Model):
                                 category=self.category,
                                 subcategory=self.subcategory,
                                 ignore=False,
-                                source='Amortized',
                                 details=self.details,
                                 user=self.user,
                                 amortized=self)

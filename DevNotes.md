@@ -1,3 +1,6 @@
+coverage run --source=expenses manage.py test expenses
+coverage report -m
+
 # Tracking Wealth #
 * Contributions are used to calculate Growth
 * Contributions + TransIn (Funding) is used to calculate rates of returns

@@ -19,6 +19,8 @@ def create_reference_equities(apps, schema_editor):
         'Other': ['Education', 'Unknown']
     }
 
+    initial_data = {}  # Stop doing this.
+
     for key in initial_data:
         category = Category.objects.create(name=key)
         for subcategory in initial_data[key]:

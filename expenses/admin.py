@@ -18,8 +18,8 @@ class TemplateAdmin(admin.ModelAdmin):
     fields = ["type", "expression", "category", "subcategory", "ignore"]
 
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("date", "category", "subcategory", "description", "source", "details")
-    fields = ["date", "category", "subcategory", "description", "source", "details"]
+    list_display = ("date", "category", "subcategory", "description", "details")
+    fields = ["date", "category", "subcategory", "description", "details"]
 
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(SubCategory, SubCategoryAdmin)

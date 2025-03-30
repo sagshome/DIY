@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+MEDIA_ROOT = BASE_DIR / 'media'
 # In production,  a production.env file is used to set variable via docker compose
 load_dotenv(BASE_DIR / 'diy' / 'local.env')
 
@@ -34,12 +34,10 @@ except KeyError:
     DIY_LOCALDB = False
 
 ACRONYM = 'IOOM'
-FULL_NAME = 'Its Only Our Money'
+FULL_NAME = "Its Only Our Money"
 
 ALLOWED_HOSTS = ['*']   # I dont have a domain at home.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-
-
 
 # print('Using a remote DB')
 DATABASES = {

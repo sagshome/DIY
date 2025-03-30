@@ -42,10 +42,11 @@
 </div>
 
     <script src="{% static 'expenses.js' %}"></script>
+    <script src="{% static 'expense_charts.js' %}"></script>
     <script>
         $(document).ready(function() {
-            expense_chart('bar', 'barChart', 'Stacked - Expenses over time', false);
-            expense_chart('pie', 'pieChart', 'Breakdown - by Category', false)
+            expense_charts('bar', 'barChart', 'Stacked - Expenses over time', false);
+            expense_charts('pie', 'pieChart', 'Breakdown - by Category', false)
         });
     </script>
 {% endblock %}
