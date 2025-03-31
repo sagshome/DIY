@@ -84,11 +84,19 @@ class AccountCloseForm(forms.ModelForm):
         self.fields["accounts"].queryset = self.initial['accounts']
         self.fields["_end"].queryset = self.initial['_end']
 
-    def clean__end(self):
-        this = self.cleaned_data["_end"]
-        if self.instance.transactions.latest('real_date').real_date > this:
-            raise forms.ValidationError(f"Close date is before all transaction are completed {self.instance.transactions.latest('real_date').real_date}")
-        return this
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if 'accounts' in cleaned_data and cleaned_data['accounts']:
+            account = cleaned_data['accounts']
+        else:
+            account = None
+
+        result = self.instance.can_close(cleaned_data['_end'], transfer_to=account, re_close=False)
+        if not result:
+            raise forms.ValidationError(str(result))
+
+        return cleaned_data
 
 
 class PortfolioForm(forms.ModelForm):

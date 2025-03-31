@@ -302,8 +302,19 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
         try:
             self.initial['_end'] = self.object.transactions.latest('real_date').real_date
         except Transaction.DoesNotExist:
-            self.initial['_end'] = self.object.id
+            self.initial['_end'] = datetime.today().date()
         return self.initial
+
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        if request.method == 'POST':  # Post is completed
+            close_to = None
+            if 'accounts' in request.POST:
+                close_to = Account.objects.get(id=request.POST['accounts'])
+                self.object.close(self.object._end, transfer_to=close_to, re_close=True)
+        return response
+
+
 
 class PortfolioEdit(PortfolioView, UpdateView):
     def get_context_data(self, **kwargs):

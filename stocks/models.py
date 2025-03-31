@@ -1292,8 +1292,8 @@ class Account(BaseContainer):
     class Meta:
         unique_together = (('account_name', 'user'),)
 
-    def can_close(self, close_date: date, transfer_to=None) -> BoolReason:
-        if self.closed:
+    def can_close(self, close_date: date, transfer_to=None, re_close=True) -> BoolReason:
+        if self.closed and not re_close:
             return BoolReason(False, 'Account is already closed')
 
         try:
@@ -1319,7 +1319,7 @@ class Account(BaseContainer):
             return BoolReason(False, f'Can not close this account,  it still has active equities')
         return BoolReason(True, 'Ready to Close')
 
-    def close(self, close_date: date, transfer_to=None):
+    def close(self, close_date: date, transfer_to=None, re_close=True):
         """
         Close an Account and adjust values as required.
 
@@ -1330,7 +1330,7 @@ class Account(BaseContainer):
             when doing a transfer to,  we update Funds so no contributions are lost,  we update TransIn so we can get a true picture how this account is doing.
         """
 
-        test = self.can_close(close_date, transfer_to=transfer_to)
+        test = self.can_close(close_date, transfer_to=transfer_to, re_close=re_close)
         if not test:
             logger.debug('Close of %s on %s (to %s) failed:%s' % (self, date, transfer_to, str(test)))
             return
@@ -1361,10 +1361,13 @@ class Account(BaseContainer):
                 if transfer_amount:
                     Transaction.objects.create(account=self, real_date=close_date, user=self.user, xa_action=Transaction.TRANS_OUT, value=transfer_amount)
                     Transaction.objects.create(account=account, real_date=close_date, user=self.user, xa_action=Transaction.TRANS_IN, value=transfer_amount * -1)
+            account.update_static_values()
 
         self._end = close_date
         self.save()
         self.update_static_values()
+        if self.portfolio:
+            set.portfolio.reset()
 
     @property
     def closed(self) -> bool:
@@ -1751,6 +1754,7 @@ class Account(BaseContainer):
             end: date = models.DateField(null=True, blank=True)
 
         """
+        set.reset()
         if self.account_type == 'Cash':
             self._cost = 0
             self._value = self.get_eattr('Cost')
