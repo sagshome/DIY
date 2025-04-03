@@ -506,7 +506,7 @@ class Equity(models.Model):
 
         while last_date <= end_date:
             if last_date not in all_records or all_records[last_date] != value:
-                model.get_or_create(equity=self, date=last_date, amount=value)
+                model.get_or_create(equity=self, date=last_date, amount=value, source=DataSource.ESTIMATE.value)
             last_date = last_date + relativedelta(months=1)
 
     def get_dividend_dates(self) -> dict[date: date]:
@@ -1090,18 +1090,23 @@ class BaseContainer(models.Model):
             summary['UnRelGainPct'] = summary['UnRelGain'] * 100 / summary['Cost'] if summary['Cost'] else 0
         return summary
 
-    def get_eattr(self, key, query_date=normalize_today(), symbol=None):
+    def get_eattr(self, key, query_date=normalize_today(), symbol=None, df=pd.DataFrame()):
         query_date = pd.Timestamp(query_date)
+        if df.empty:
+            df = self.e_pd
+
         try:
             if not symbol:
-                return self.e_pd.loc[self.e_pd['Date'] == query_date][key].agg(['sum']).item()
+                return df.loc[df['Date'] == query_date][key].agg(['sum']).item()
             else:
-                return self.e_pd.loc[(self.e_pd['Date'] == query_date) & (self.e_pd['Equity'] == symbol)][key].agg(['sum']).item()
+                return df.loc[(df['Date'] == query_date) & (df['Equity'] == symbol)][key].agg(['sum']).item()
         except ValueError:
             return 0
 
-    def get_pattr(self, key, query_date=normalize_today()):
-        return self.p_pd.loc[self.p_pd['Date'] == pd.to_datetime(query_date)][key].agg(['sum']).item()
+    def get_pattr(self, key, query_date=normalize_today(), df=pd.DataFrame()):
+        if df.empty:
+            df = self.p_pd
+        return df[df['Date'] == pd.to_datetime(query_date)][key].agg(['sum']).item()
 
     @property
     def transactions(self):
@@ -1237,13 +1242,14 @@ class Portfolio(BaseContainer):
         first = True
         new = pd.DataFrame(columns=EQUITY_COL)
         for account in self.account_set.all():
+            df = account.e_pd
             if first:
-                if not account.e_pd.empty and not account.e_pd.isna().all().all():
-                    new = account.e_pd
+                if not df.empty and not df.isna().all().all():
+                    new = df
                     first = False
             else:
-                if not account.e_pd.empty and not account.e_pd.isna().all().all():
-                    new = pd.concat([new, account.e_pd], axis=0)
+                if not df.empty and not df.isna().all().all():
+                    new = pd.concat([new, df], axis=0)
                 else:
                     logger.debug('Something fishing with account id %s' % account.id)
             pass
@@ -1296,13 +1302,16 @@ class Account(BaseContainer):
         if self.closed and not re_close:
             return BoolReason(False, 'Account is already closed')
 
-        try:
-            last_date = self.transactions.latest('real_date')
-        except Transaction.DoesNotExist:
+        if not self.transactions:
             return BoolReason(False, 'Can not close an account with no transactions - Delete instead')
 
-        if last_date.real_date > close_date:
-            return BoolReason(False, f'Close date must be later then {last_date.real_date}')
+        last_date = self.last_date
+        if last_date > close_date:
+            return BoolReason(False, f'Close date must be later then {last_date}')
+
+        if not self.account_type == 'Investment':
+            if not last_date == close_date:
+                return BoolReason(False, f'Value accounts, must close on the last updated data {last_date}')
 
         if transfer_to:
             try:
@@ -1316,7 +1325,7 @@ class Account(BaseContainer):
             except Account.DoesNotExist:
                 return BoolReason,(False, 'Can not Transfer to non-existing account')
         elif self.get_eattr('Value', close_date) != 0:
-            return BoolReason(False, f'Can not close this account,  it still has active equities')
+            return BoolReason(False, f'Can not close this account,  it still has some value')
         return BoolReason(True, 'Ready to Close')
 
     def close(self, close_date: date, transfer_to=None, re_close=True):
@@ -1338,23 +1347,27 @@ class Account(BaseContainer):
         normalized = normalize_date(close_date)
         if transfer_to:
             account = Account.objects.get(id=transfer_to.id, user=self.user)
-            df = self.e_pd
             this_date = np.datetime64(normalized)
-            shares = df.loc[(df['Date'] == this_date) & (df['Shares'] != 0)]
 
+            pd = self.p_pd
+            funding = self.get_pattr('Funds', query_date=normalized, df=pd) - abs(self.get_pattr('Redeemed', query_date=normalized, df=pd))
+            actual = self.get_pattr('Actual', query_date=normalized, df=pd)
+            transfer_amount = funding - actual
+
+            if account.account_type == 'Investment':
+                result = self.transfer_investments(this_date, account)
+            elif account.account_type == 'Value':
+                result = self.transfer_value(this_date, account)
+
+            ed = self.e_pd
+            shares = ed.loc[(ed['Date'] == this_date) & (ed['Shares'] != 0)]
             if not shares.empty:
-                cash = self.get_pattr('Cash', normalized)
-                funding = self.get_pattr('Funds', normalized) + self.get_pattr('Redeemed', normalized)  # Using addition because Redeemed is always negative
-                actual = self.get_pattr('Actual', normalized)
+                pd = self.p_pd
+                # cash = self.get_pattr('Cash', date=normalized, df=pd)
+                funding = self.get_pattr('Funds', query_date=normalized, df=pd) + self.get_pattr('Redeemed', query_date=normalized, df=pd)  # Using addition because Redeemed is always negative
+                actual = self.get_pattr('Actual', query_date=normalized, df=pd)
                 transfer_amount = funding - actual
 
-                for shares_dict in shares.to_dict(orient='records'):
-                    cash += shares_dict['Value']
-
-                    Transaction.objects.create(account=self, real_date=close_date, user=self.user, xa_action=Transaction.SELL,
-                                               equity_id=shares_dict['Object_ID'], price=shares_dict['AvgCost'], quantity=shares_dict['Shares'])
-                    Transaction.objects.create(account=account, real_date=close_date, user=self.user, xa_action=Transaction.BUY,
-                                               equity_id=shares_dict['Object_ID'], price=shares_dict['AvgCost'], quantity=shares_dict['Shares'])
 
                 Transaction.objects.create(account=self, real_date=close_date, user=self.user, xa_action=Transaction.REDEEM, value=funding)
                 Transaction.objects.create(account=account, real_date=close_date, user=self.user, xa_action=Transaction.FUND, value=funding)
@@ -1367,7 +1380,36 @@ class Account(BaseContainer):
         self.save()
         self.update_static_values()
         if self.portfolio:
-            set.portfolio.reset()
+            self.portfolio.reset()
+
+    def transfer_investments(self, on_date, receiver) -> bool:
+        """
+        When transferring an Investment account we must create a Sell/Buy for equities
+        """
+        ed = self.e_pd
+        shares = ed.loc[(ed['Date'] == on_date) & (ed['Shares'] != 0)]
+        if not shares.empty:
+            for shares_dict in shares.to_dict(orient='records'):
+                Transaction.objects.create(account=self, real_date=on_date, user=self.user, xa_action=Transaction.SELL, equity_id=shares_dict['Object_ID'],
+                                           price=shares_dict['AvgCost'], quantity=shares_dict['Shares'])
+                Transaction.objects.create(account=receiver, real_date=on_date, user=self.user, xa_action=Transaction.BUY,
+                                           equity_id=shares_dict['Object_ID'], price=shares_dict['AvgCost'], quantity=shares_dict['Shares'])
+
+    def transfer_value(self, on_date, receiver) -> bool:
+        """
+        When transferring a Value account we must ensure the prior month has a non-estimated value
+        """
+        equity = Equity.objects.get(symbol=self.f_key)
+        close_value: FundValue = FundValue.objects.get(date=on_date, equity=equity)
+        try:
+            prior_value: FundValue = FundValue.objects.get(date=on_date - relativedelta(months=1), equity=equity)
+            if prior_value.source == DataSource.ESTIMATE.value:
+                prior_value.source = DataSource.RECONCILED.value
+                prior_value.save()
+        except FundValue.DoesNotExist:
+            logger.error('Transfer of account(%s) %s on %s fails,  no prior Value detected' % (self.id, self.name, on_date))
+            return False
+        return True
 
     @property
     def closed(self) -> bool:
@@ -1536,6 +1578,21 @@ class Account(BaseContainer):
         return f'{self.account_type}-{self.id}'
 
     @property
+    def last_date(self):
+        last = normalize_today()
+        if self.transactions:
+            last = self.transactions.latest('real_date').real_date
+            if not self.account_type == 'Investment':
+                try:
+                    equity = Equity.objects.get(symbol=self.f_key)
+                    if FundValue.objects.filter(equity=equity).exclude(source=DataSource.ESTIMATE.value).exists():
+                        last_value = FundValue.objects.filter(equity=equity).exclude(source=DataSource.ESTIMATE.value).latest('real_date').real_date
+                        last = last if last > last_value else last_value
+                except Equity.DoesNotExist:
+                    logger.error('Account %s:%s is not set up properly' % (self.id, self.name))
+        return last
+
+    @property
     def p_pd(self) -> DataFrame:
         '''
         Regardless of the equities,  how is the account doing based on money in,  money out
@@ -1620,7 +1677,7 @@ class Account(BaseContainer):
         #df['TotalDividends'] = df['TotalDividends'].fillna(0)
         #df['Dividends'] = df['Dividends'].fillna(0)
 
-        df.replace(np.nan, 0, inplace=True)
+        df.replace(np.nan, 0, inplace=True)  # todo: Fix Downcasting behavior in `replace` is deprecated and will be removed in a future version.
         df['Actual'] = df['Cash'] + df['Value']
         cache_dataframe(self.container_cache_key, df)
         return df
@@ -1754,7 +1811,7 @@ class Account(BaseContainer):
             end: date = models.DateField(null=True, blank=True)
 
         """
-        set.reset()
+        self.reset()
         if self.account_type == 'Cash':
             self._cost = 0
             self._value = self.get_eattr('Cost')

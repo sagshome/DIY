@@ -154,7 +154,7 @@ def get_cash_value(request):
     except Account.DoesNotExist:
         logger.error("No account provided with ID %s is not found." % request.GET.get("account_id"))
         return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
-    return JsonResponse({'cash': account.get_pattr('Cash', this_date)})
+    return JsonResponse({'cash': account.get_pattr('Cash', query_date=this_date)})
 
 @login_required
 def search_equity(request):

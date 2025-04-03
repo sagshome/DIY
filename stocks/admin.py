@@ -12,7 +12,8 @@ def display_source(obj):
 
 
 class FundValueAdmin(admin.ModelAdmin):
-    list_filter = ("equity", "date", "real_date", "value", "source")
+    list_display = ("equity", "real_date", "value", "source")
+    list_filter = ("equity", "date", "source")
     fields = ["equity", "date", "real_date", "value", "source"]
 
 

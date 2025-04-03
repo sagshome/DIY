@@ -74,6 +74,11 @@ class TransactionDeleteView(BaseDeleteView):
         context['extra_text'] = 'Deleting a Transaction is permanent'
         return context
 
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        if request.method == 'POST':  # Post is completed
+            pass
+        return response
 
 class StocksMain(LoginRequiredMixin, ListView):
     model = Account
@@ -98,7 +103,6 @@ class StocksMain(LoginRequiredMixin, ListView):
         context['account_list_data'] = account_list_data
         context['help_file'] = 'stocks/help/stocks_main.html'
         return context
-
 
 class ContainerTableView(LoginRequiredMixin, DetailView):
     template_name = 'stocks/account_table.html'
@@ -216,15 +220,16 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
 
         # funded = context['account'].transactions.filter(xa_action=Transaction.FUND)
         # redeemed = context['account'].transactions.filter(xa_action=Transaction.REDEEM)
-        data = self.object.p_pd.loc[self.object.p_pd['Date'] == pd.to_datetime(normalize_today())]
+        df = self.object.p_pd
+        data = df.loc[df['Date'] == pd.to_datetime(normalize_today())]
 
-        net_dep = data['Funds'] - abs(data['Redeemed'])
-        context['funded'] = round(data['Funds'].item(), 2)
-        context['net_funded'] = round(net_dep.item(), 2)
-        context['value'] = round(data['Value'].item(), 2)
-        context['p_and_l'] = round(context['value'] - net_dep, 2)
-        context['dividends'] = round(data['TotalDividends'].item(), 2)
-        context['redeemed'] = round(abs(data['Redeemed'].item()), 2)
+        net_dep = 0 if data.empty else data['Funds'] - abs(data['Redeemed'])
+        context['funded'] = 0 if data.empty else data['Funds'] - abs(data['Redeemed'])
+        context['net_funded'] = 0 if data.empty else round(net_dep.item(), 2)
+        context['value'] = 0 if data.empty else round(data['Value'].item(), 2)
+        context['p_and_l'] = 0 if data.empty else round(context['value'] - net_dep, 2)
+        context['dividends'] = 0 if data.empty else round(data['TotalDividends'].item(), 2)
+        context['redeemed'] = 0 if data.empty else round(abs(data['Redeemed'].item()), 2)
 
         equity_data = self.equity_data(context['account'])
         context['equity_list_data'] = json.loads(equity_data.to_json(orient='records'))
@@ -280,6 +285,9 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
     template_name = 'stocks/account_close.html'
     form_class = AccountCloseForm
 
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
+
     def get_success_url(self):
         try:
             url = self.request.POST["success_url"]
@@ -299,19 +307,16 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
             accounts = accounts.filter(portfolio=self.object.portfolio)
         self.initial['accounts'] = accounts
         self.initial['user'] = self.request.user.id
-        try:
-            self.initial['_end'] = self.object.transactions.latest('real_date').real_date
-        except Transaction.DoesNotExist:
-            self.initial['_end'] = datetime.today().date()
+        self.initial['_end'] = self.object.last_date
         return self.initial
 
     def dispatch(self, request, *args, **kwargs):
-        response = super().dispatch(request, *args, **kwargs)
+        response = super().dispatch(request, *args, **kwargs)  # This will close the account, so we need to specify re_close=True
         if request.method == 'POST':  # Post is completed
             close_to = None
-            if 'accounts' in request.POST:
+            if 'accounts' in request.POST and request.POST['accounts']:
                 close_to = Account.objects.get(id=request.POST['accounts'])
-                self.object.close(self.object._end, transfer_to=close_to, re_close=True)
+            self.object.close(self.object._end, transfer_to=close_to, re_close=True)
         return response
 
 
@@ -899,7 +904,7 @@ def reconciliation(request, a_pk, date_str):
                         if form.data_changed(entry, 'Shares'):
                             # Big assume,   this was a REDIV since they did not just make a transaction
                             orig = entry['Shares']
-                            transaction = Transaction(equity=equity, account=account, user=request.user, date=view_date, price=0, value=0, esimated=True)
+                            transaction = Transaction(equity=equity, account=account, user=request.user, date=view_date, price=0, value=0, estimated=True)
                             if entry['Shares'] > form.cleaned_data['Shares']:
                                 transaction.quantity = entry['Shares'] - form.cleaned_data['Shares']
                                 transaction.xa_action = Transaction.SELL

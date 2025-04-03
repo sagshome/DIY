@@ -269,6 +269,9 @@ def equity_summary(request):
     else:
         this = get_object_or_404(Portfolio, id=object_id, user=request.user)
 
+    this_pd = this.p_pd
+    this_ed = this.e_pd
+
     start = this.start
     end = this.end if this.end else normalize_today()
     if not (start and end):
@@ -285,7 +288,7 @@ def equity_summary(request):
     datasets.append({
         'label': 'Cash',
         'fill': False,
-        'data': this.p_pd['Cash'].to_list(),
+        'data': this_pd['Cash'].to_list(),
         'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
         'stack': 1,
         'order': 1,
@@ -298,7 +301,7 @@ def equity_summary(request):
         datasets.append({
             'label': label,
             'fill': False,
-            'data': pd.concat([month_df, this.e_pd.loc[this.e_pd['Object_ID'] == equity.id, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+            'data': pd.concat([month_df, this_ed.loc[this_ed['Object_ID'] == equity.id, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
             'boarderColor': color, 'backgroundColor': color,
             'stack': 1,
             'order': 1,
@@ -306,9 +309,9 @@ def equity_summary(request):
 
     # Redeemed and TransOut are negative numbers so add them to subtract them.
     if object_type == 'Account':
-        cost_df = this.p_pd['Funds'] + this.p_pd['TransIn'] + this.p_pd['Redeemed'] + this.p_pd['TransOut']
+        cost_df = this_pd['Funds'] + this_pd['TransIn'] + this_pd['Redeemed'] + this_pd['TransOut']
     else:
-        cost_df = this.p_pd['Funds'] + this.p_pd['Redeemed']
+        cost_df = this_pd['Funds'] + this_pd['Redeemed']
 
     datasets.append({
         'label': 'Cost',
