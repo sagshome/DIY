@@ -5,6 +5,7 @@ from .models import DataSource, Equity, EquityValue, Account, Transaction, Portf
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory
 from django.core.validators import MinValueValidator
 
+from base.utils import ReadonlyFieldsMixin, append_styles
 from decimal import Decimal
 from django.forms.widgets import HiddenInput
 
@@ -22,7 +23,7 @@ class EquityForm(forms.Form):
     equity = forms.ChoiceField(choices=choices)
 
 
-class AccountAddForm(forms.ModelForm):
+class AccountAddForm(ReadonlyFieldsMixin, forms.ModelForm):
     class Meta:
         model = Account
         fields = ('account_name', 'name', 'account_type', 'currency', 'managed', 'user')
@@ -30,14 +31,16 @@ class AccountAddForm(forms.ModelForm):
             'user': forms.HiddenInput(),
         }
 
+    readonly_fields = ['user', ]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["name"].label = "Display Name"
-        self.fields["account_name"].widget.attrs['style'] = 'width:200px;height:28.5px;'
-        self.fields["name"].widget.attrs['style'] = 'width:200px;height:28.5px;'
-        self.fields["account_type"].widget.attrs['style'] = 'width:200px;height:28.5px;'
-        self.fields["currency"].widget.attrs['style'] = 'width:200px;height:28.5px;'
-        self.fields["managed"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+        append_styles(self.fields["account_type"].widget, width='200px', height='28.5px')
+        append_styles(self.fields["name"].widget, width='200px', height='28.5px')
+        append_styles(self.fields["account_name"].widget, width='200px', height='28.5px')
+        append_styles(self.fields["currency"].widget, width='200px', height='28.5px')
+        append_styles(self.fields["managed"].widget, width='200px', height='28.5px')
 
 
 class AccountForm(AccountAddForm):
@@ -48,6 +51,7 @@ class AccountForm(AccountAddForm):
             'user': forms.HiddenInput(),
         }
 
+    readonly_fields = ['user',  'account_name', 'account_type']
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.initial['user']:
@@ -55,11 +59,12 @@ class AccountForm(AccountAddForm):
         else:
             self.fields['portfolio'] = forms.ModelChoiceField(queryset=Portfolio.objects.none())
 
-        self.fields['portfolio'].required = False
-        self.fields["account_name"].widget.attrs['readonly'] = True
-        self.fields["account_name"].widget.attrs['style'] = 'width:200px;height:28.5px;background-color:Wheat'
-        self.fields["portfolio"].widget.attrs['style'] = 'width:200px;height:28.5px;'
+        current_value = self.instance.account_type
+        label = dict(self.fields['account_type'].choices).get(current_value, current_value)
+        self.fields['account_type'].choices = [(current_value, label)]
 
+        self.fields['portfolio'].required = False
+        append_styles(self.fields["portfolio"].widget, width='200px', height='28.5px')
 
 class AccountCloseForm(forms.ModelForm):
 
@@ -84,7 +89,6 @@ class AccountCloseForm(forms.ModelForm):
         self.fields["accounts"].queryset = self.initial['accounts']
         self.fields["_end"].queryset = self.initial['_end']
 
-
     def clean(self):
         cleaned_data = super().clean()
         if 'accounts' in cleaned_data and cleaned_data['accounts']:
@@ -92,7 +96,7 @@ class AccountCloseForm(forms.ModelForm):
         else:
             account = None
 
-        result = self.instance.can_close(cleaned_data['_end'], transfer_to=account, re_close=False)
+        result = self.instance.can_close(cleaned_data['_end'], transfer_to=account)
         if not result:
             raise forms.ValidationError(str(result))
 
@@ -355,8 +359,6 @@ class ReconciliationForm(forms.Form):
         self.fields['Shares'].widget.attrs['style'] = 'width:95px;text-align: right;'
         self.fields["Equity"].widget.attrs['readonly'] = True
         self.fields["Equity"].widget.attrs['style'] = 'text-align: left;background-color:Wheat;'
-
-
 ReconciliationFormSet = formset_factory(ReconciliationForm, extra=0)
 
 
@@ -391,6 +393,7 @@ class SimpleCashReconcileForm(forms.Form):
         if self.cleaned_data['value'] < 0:
             raise ValidationError('Value must be a positive value')
         return self.cleaned_data['value']
+SimpleCashReconcileFormSet = formset_factory(SimpleCashReconcileForm, extra=0)
 
 
 class SimpleReconcileForm(forms.Form):
@@ -400,20 +403,36 @@ class SimpleReconcileForm(forms.Form):
     date = forms.DateField()
     reported_date = forms.DateField(required=True)
     value = forms.FloatField(required=True)
-    source = forms.CharField(required=False)
+    source = forms.ChoiceField(choices=[(tag.value, tag.name) for tag in DataSource], required=False)
     deposited = forms.FloatField(required=True)
     withdrawn = forms.FloatField(required=True)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, source=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if 'initial' in kwargs and 'super_user' in kwargs['initial'] and kwargs['initial']['super_user']:
+            #choices = [(tag.value, tag.name) for tag in DataSource]
+            #self.fields['source'] = forms.ChoiceField(
+            #    choices=choices,
+            #    required=False
+            #)
+            self.fields["source"].widget.attrs['style'] = 'width:100px;'
+            #self.fields["source"] = kwargs['initial']['source']
+        else:
+            self.fields['source'] = forms.CharField(
+                required=False,
+                widget=forms.TextInput(attrs={'readonly': 'readonly'})
+            )
+            self.fields["source"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
+
+
         self.fields["date"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
         self.fields["reported_date"].widget.attrs['style'] = 'width:80px;'
         self.fields["value"].widget.attrs['style'] = 'width:80px;'
         self.fields["deposited"].widget.attrs['style'] = 'width:80px;'
         self.fields["withdrawn"].widget.attrs['style'] = 'width:80px;'
-        self.fields["source"].widget.attrs['style'] = 'width:150px;background-color:Wheat'
-        self.fields["source"].widget.attrs['readonly'] = True
+        #self.fields["source"].widget.attrs['style'] = 'width:150px;background-color:Wheat'
+        #self.fields["source"].widget.attrs['readonly'] = True
 
     def clean_reported_date(self):
         reported_date = self.cleaned_data['reported_date']
@@ -441,4 +460,3 @@ class SimpleReconcileForm(forms.Form):
 
 
 SimpleReconcileFormSet = formset_factory(SimpleReconcileForm, extra=0)
-SimpleCashReconcileFormSet = formset_factory(SimpleCashReconcileForm, extra=0)

@@ -23,11 +23,7 @@
             {% for item in equity_list_data %}
                 <tr>
                     <td class="w3-left-align w3-small ">
-                        {% if object_type == 'Account' %}
-                            <a href="{% url 'account_equity_details' object_type account.id item.Object_ID %}">{{ item.Equity }}</a>
-                        {% else %}
-                        <a href="{% url 'account_equity_details' object_type account.id item.Object_ID %}">{{ item.Equity }}</a>
-                        {% endif %}
+                       <a href="{% url 'account_equity_details' object_type account.id item.Object_ID %}">{{ item.Equity }}</a>
                     </td>
                     <td class="w3-right-align w3-small">
                         {% if item.Shares == 0 %}<em>Closed</em>{% else %}{{ item.Shares | floatformat:'1g'}}{% endif %}

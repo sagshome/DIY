@@ -1,11 +1,15 @@
 <div>
-    {% if account %}
+    {% if account and not hide_new_xa %}
         <a href="{% url 'transaction_add' account.id %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
     {% endif %}
 </div>
 <div>
 <table class="w3-table w3-stripped">
-    <caption class="w3-wide w3-padding-16">Transactions</caption>
+    {% if table_title %}
+          <caption class="w3-wide w3-padding-16">{{ table_title }}</caption>
+    {%  else %}
+          <caption class="w3-wide w3-padding-16">Transactions</caption>
+    {%  endif %}
     <thead class="w3-margin-bottom" style="background:#eee;">
         <th></th>
         <th>Date</th>
@@ -59,7 +63,7 @@
                 {% endif %}
             </td>
             <td>{{x.action_str}}</td>
-            <td>{% if x.equity %}{{x.equity.symbol}} {% endif %}</td>
+            <td>{% if x.equity %}{{x.equity.symbol}}{% endif %}</td>
             <td class="w3-right-align">{% if x.value %} ${{x.value|floatformat:'2g'}}{% endif %}</td>
             <td>
                 {% if x.equity %}

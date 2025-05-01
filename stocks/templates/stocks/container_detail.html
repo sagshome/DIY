@@ -3,59 +3,17 @@
 {% load stocks_tags %}
 {% load static %}
 {% block content %}
-<script>
-    $(document).ready(function() {
-      var object_type = '{{account.container_type}}'
-      var url = "/stocks/api/wealth_summary"
-      if (object_type == 'Account') {
-          url = "/stocks/api/equity_summary"
-      }
-      $.ajax({
-            url: url,
-            data: {'object_id': '{{ account.id }}',
-                   'object_type': '{{ account.container_type }}'},
-            success: function (data) {
-                new Chart("lineChart", {
-                    type: "bar",
-                    data: {
-                        labels: data['labels'],
-                        datasets: data['datasets'],
-                    },
-                    options: {
-                        maintainAspectRatio: false,
-                        responsive: true,
-                        title: {
-                            display: true,
-                            text: 'Account Accumulation Chart'
-                        },
-                        legend: {
-                            display: true,
-                            position: 'right',
-                            align: 'center'
-                        },
-                    },
-                    scales: {
-                        xAxes: [{
-                            stacked: true // this should be set to make the bars stacked
-                        }],
-                    }
-                });
-            },
-        error: function(data) {
-            alert('Error occured');
-        }
-
-      });
-    });
-</script>
 <h2 class="w3-margin">Chart view for {{object_type}}:{{account.name}}</h2>
 <div class="w3-cell-row w3-margin-left">
     <div class="w3-cell">Value: <b>${{ value|floatformat:'2g' }}</b></div>
-
     <div class="w3-cell"><em>Net</em> Funding: ${{ net_funded|floatformat:'2g' }}</div>
-    <div class="w3-cell">Profit (or Loss): ${{ p_and_l|floatformat:'2g' }}</div>
+    {%  if p_and_l < 0 %}
+      <div class="w3-cell">Profit (or Loss): (${{ p_and_l|floatformat:'2g' }})</div>
+    {%  else %}
+      <div class="w3-cell">Profit (or Loss): ${{ p_and_l|floatformat:'2g' }}</div>
+    {%  endif %}
+
     <div class="w3-cell">Total Dividends: ${{ dividends|floatformat:'2g' }}</div>
-    <div class="w3-cell">Total Redeemed: ${{redeemed|floatformat:'2g'}}</div>
 </div>
     <hr>
 {% include 'stocks/includes/account_actions.html' %}
@@ -67,14 +25,14 @@
 <div class="w3-container">
     {% include 'stocks/includes/account_summary_list.html' %}
 </div>
-{% if object_type == 'Portfolio' or object_type == 'Account' and account.account_type == 'Investment' %}
+{% if object_type == 'Portfolio' or account.account_type == 'Investment' %}
     <div class="w3-row">
         <div class="w3-container">
             {% include 'stocks/includes/equity_summary_list.html' %}
         </div>
     </div>
 {% endif %}
-        <script src="{% static 'stocks.js' %}"></script>
+    <script src="{% static 'stocks.js' %}"></script>
     <script>
         $(document).ready(function () {
             summary_chart("{{ account.container_type }}", "{{ account.id }}")

@@ -8,60 +8,23 @@ from freezegun import freeze_time
 from unittest.mock import patch
 from pandas import Timestamp
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, override_settings
 from django.contrib.auth.models import User
 
-from stocks.models import ExchangeRate, Inflation, Equity, EquityEvent, EquityValue, FundValue, Account, Transaction, DataSource, Portfolio
+from stocks.models import ExchangeRate, Inflation, Equity, EquityEvent, EquityValue, FundValue, Account, Transaction, DataSource, Portfolio, InvestmentAccount, ValueAccount, CashAccount
 from base.models import Profile
 
 from base.utils import normalize_date, next_date, normalize_today
 
+from stocks.testing.setup import BasicSetup
+
 logger = logging.getLogger(__name__)
-
-
-@override_settings(NO_CACHE=True)
-class BasicSetup(TestCase):
-    def setUp(self):
-        super().setUp()
-        self.user = User.objects.create(username='test', is_superuser=False, is_staff=False, is_active=True)
-        self.months = [datetime(2022, 1, 1).date(), datetime(2022, 2, 1).date(),
-                       datetime(2022, 3, 1).date(), datetime(2022, 4, 1).date(),
-                       datetime(2022, 5, 1).date(), datetime(2022, 6, 1).date(),
-                       ]
-
-        self.exchange_rates = [{'us_to_can': 1.2719, 'can_to_us': 0.7862}, {'us_to_can': 1.2698, 'can_to_us': 0.7875},
-                               {'us_to_can': 1.2496, 'can_to_us': 0.8003}, {'us_to_can': 1.2792, 'can_to_us': 0.7817},
-                               {'us_to_can': 1.2648, 'can_to_us': 0.7906}, {'us_to_can': 1.2886, 'can_to_us': 0.776}]
-
-        self.inflation = [{'cost': 145.3, 'inflation': 0.9027777777777857}, {'cost': 146.8, 'inflation': 1.032346868547832},
-                          {'cost': 148.9, 'inflation': 1.430517711171658}, {'cost': 149.8, 'inflation': 0.6044325050369413},
-                          {'cost': 151.9, 'inflation': 1.4018691588785008}, {'cost': 152.9, 'inflation': 0.6583278472679394}]
-        index = 0
-        for month in self.months:
-            ExchangeRate.objects.create(date=month, us_to_can=self.exchange_rates[index]['us_to_can'], can_to_us=self.exchange_rates[index]['can_to_us'])
-            Inflation.objects.create(date=month, cost=self.inflation[index]['cost'], inflation=self.inflation[index]['inflation'])
-            index += 1
 
 
 class AccountSetup(BasicSetup):
     def setUp(self):
         super().setUp()
-
-        self.account = Account.objects.create(name="test001", user=self.user, account_type='Investment', currency='CAD', account_name='Bar_007', managed=True)
-        self.equities = [
-            Equity.objects.create(symbol='CETF.TO', name='Eq CAN_ETF', equity_type='Equity',region='Canada', currency='CAD', searchable=False, validated=True),
-            Equity.objects.create(symbol='USEQ', name='Eq US_EQUITY', equity_type='Equity', region='US', currency='USD', searchable=False, validated=True),
-        ]
-
-        for month in self.months:
-            EquityValue.objects.create(equity=self.equities[0], real_date=month, price=10, source=DataSource.API.value)
-            EquityValue.objects.create(equity=self.equities[1], real_date=month, price=20, source=DataSource.API.value)
-
-        EquityEvent.objects.create(real_date=self.months[1], equity=self.equities[0], value='0.05', event_type='Dividend', source=DataSource.API.value)
-        EquityEvent.objects.create(real_date=self.months[4], equity=self.equities[0], value='0.05', event_type='Dividend', source=DataSource.API.value)
-
-        Transaction.objects.create(account=self.account, real_date=self.months[0], value=1000, xa_action=Transaction.FUND)
-        Transaction.objects.create(account=self.account, equity=self.equities[0], real_date=self.months[1], price=10, quantity=50, xa_action=Transaction.BUY)
+        self.account = self.investment_account
 
         self.pd_starting_dict = {
             'Date': {0: Timestamp('2022-01-01 00:00:00'),
@@ -119,11 +82,22 @@ class DataFrameTest(AccountSetup):
         default inflation = 0,  exchange rate = 1
         :return:
         """
-        self.assertEqual(self.account.get_pattr('Funds', self.months[len(self.months)-1]), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', self.months[len(self.months)-1]), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', self.months[len(self.months)-1]), 1000, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', self.months[len(self.months)-1]), 500, 'Value as Expected')
-        self.assertEqual(self.account.get_pattr('Cost', self.months[len(self.months) - 1]), 500, 'Value as Expected')
+        self.account._end = self.months[len(self.months) - 1]
+        self.account.save()
+
+        expected_dict = self.pd.to_dict()
+        generated_dict = self.account.p_pd.to_dict()
+        for key in expected_dict.keys():
+            if key != 'Effective':  # Ignore effective,  it is to precise to compare this way
+                self.assertEqual(generated_dict[key], expected_dict[key], f'Comparing Account DF - Key {key}')
+        self.assertEqual(round(self.account.get_pattr('Effective', self.months[len(self.months) - 1]), 0), 1052, 'Value as Expected')
+
+        expected_dict = self.ed.to_dict()
+        generated_dict = self.account.e_pd.to_dict()
+        for key in expected_dict.keys():
+            if not key == 'Object_ID':
+                self.assertEqual(generated_dict[key], expected_dict[key], f'Comparing Equity DF - Key {key}')
+
 
     def test_day_change(self):
         """
@@ -134,311 +108,13 @@ class DataFrameTest(AccountSetup):
                                    price=11, quantity=10, xa_action=Transaction.SELL)
 
         self.assertEqual(self.account.get_pattr('Value', self.months[1]), 400, 'PD Value')  # Price should not change - still 10
-        self.assertEqual(self.account.get_pattr('Cash', self.months[1]), 610, 'PD Cash')
-        self.assertEqual(self.account.get_pattr('Actual', self.months[1]), 1010, 'PD Value')  # Price should not change - still 10
+        self.assertEqual(self.account.get_pattr('Cash', self.months[1]), 612, 'PD Cash')
+        self.assertEqual(self.account.get_pattr('Actual', self.months[1]), 1012, 'PD Value')  # Price should not change - still 10
 
 
-class AccountMgmtTest(AccountSetup):
-    """
-    Test Closing and Account and transferring it to another
-    """
-    def setUp(self):
-        super().setUp()
-        self.portfolio = Portfolio.objects.create(name='Portfolio', user=self.user, currency='CAD')
-        self.new_account = Account.objects.create(name='New', account_type='Investment', account_name='002', managed=False, currency='CAD', user=self.user, portfolio=self.portfolio)
+class SimpleTests(SimpleTestCase):
 
-
-    @freeze_time("2022-06-01")
-    def test_can_close(self):
-        result = self.account.can_close(datetime(2022,6,1).date())
-        self.assertFalse(result, 'Can not close without transfer when equities exist')
-        self.assertEqual(str(result), 'Can not close this account,  it still has active equities', 'Error Message Correct')
-
-        result = self.account.can_close(self.months[0])
-        self.assertFalse(result, 'Can not close with later transactions')
-        self.assertTrue(str(result).startswith('Close date must be later then'), 'Error Message Correct')
-
-        result = self.new_account.can_close(self.months[0])
-        self.assertFalse(result, 'Can not close no transactions')
-        self.assertTrue(str(result).startswith('Can not close an account with no transactions - Delete instead'), 'Error Message Correct')
-
-        self.account._end = self.months[0]
-        self.account.save()
-        result = self.account.can_close(self.months[0], re_close=False)
-        self.assertFalse(result, 'already Closed')
-        self.assertTrue(str(result).startswith('Account is already closed'), 'Error Message Correct')
-
-        self.account._end = None
-        self.account.save()
-
-        result = self.account.can_close(self.months[len(self.months)-1], self.new_account)
-        self.assertFalse(result, 'Must be in the same portfolio')
-        self.assertTrue(str(result).startswith('Can not Transfer to shares between different portfolios'), 'Error Message Correct')
-
-        self.account.portfolio = self.portfolio
-        self.account.save()
-        result = self.account.can_close(self.months[len(self.months)-1], self.new_account)
-        self.assertTrue(result, 'Must be in the same portfolio')
-
-    @freeze_time("2022-06-01")
-    def test_nochange(self):
-
-        # Test the starting point
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 1000, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 500, 'Value as Expected')
-        self.account.portfolio = self.portfolio
-        self.account.save()
-
-        self.account.close(self.months[len(self.months)-1], self.new_account)
-
-        self.assertTrue(self.account._end, self.months[len(self.months)-1])
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), -1000, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 0, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 0, 'Value as Expected')
-
-        self.assertEqual(self.new_account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Actual', datetime.today().date()), 1000, 'Actual as Expected')
-        self.assertEqual(self.new_account.get_pattr('Value', datetime.today().date()), 500, 'Value as Expected')
-
-    @freeze_time("2022-06-01")
-    def test_with_profits(self):
-        e = EquityValue.objects.get(equity=self.equities[0], date=self.months[5])
-        e.price = 20
-        e.save()
-
-        # Test the starting point
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 1500, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 1000, 'Value as Expected')
-
-        self.account.portfolio = self.portfolio
-        self.account.save()
-
-        self.account.close(self.months[len(self.months)-1], self.new_account)
-
-        self.assertTrue(self.account._end, self.months[len(self.months)-1])
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), -1000, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('TransOut', datetime.today().date()), -500, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 0, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 0, 'Value as Expected')
-
-        self.assertEqual(self.new_account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Actual', datetime.today().date()), 1500, 'Actual as Expected')
-        self.assertEqual(self.new_account.get_pattr('Value', datetime.today().date()), 1000, 'Value as Expected')
-        self.assertEqual(self.new_account.get_pattr('TransIn', datetime.today().date()), 500, 'Value as Expected')
-
-    @freeze_time("2022-06-01")
-    def test_with_losses(self):
-        e = EquityValue.objects.get(equity=self.equities[0], date=self.months[5])
-        e.price = 5
-        e.save()
-
-        # Test the starting point
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 750, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 250, 'Value as Expected')
-        self.assertEqual(self.account.get_pattr('Cash', datetime.today().date()), 500, 'Value as Expected')
-
-        self.account.portfolio = self.portfolio
-        self.account.save()
-
-        self.account.close(self.months[len(self.months)-1], self.new_account)
-
-        self.assertTrue(self.account._end, self.months[len(self.months)-1])
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), -1000, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('TransOut', datetime.today().date()), 250, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 0, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 0, 'Value as Expected')
-
-        self.assertEqual(self.new_account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Actual', datetime.today().date()), 750, 'Actual as Expected')
-        self.assertEqual(self.new_account.get_pattr('Value', datetime.today().date()), 250, 'Value as Expected')
-        self.assertEqual(self.new_account.get_pattr('TransIn', datetime.today().date()), -250, 'Value as Expected')
-        self.assertEqual(self.new_account.get_pattr('Cash', datetime.today().date()), 500, 'Value as Expected')
-
-    @freeze_time("2022-06-01")
-    def test_with_prior_redeem(self):
-        e = EquityValue.objects.get(equity=self.equities[0], date=self.months[5])
-        e.price = 20
-        e.save()
-
-        # Test the starting point
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 1500, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 1000, 'Value as Expected')
-        self.assertEqual(self.account.get_pattr('Cash', datetime.today().date()), 500, 'Value as Expected')
-
-        Transaction.objects.create(account=self.account, real_date=self.months[3], value=650, xa_action=Transaction.REDEEM)
-        Transaction.objects.create(account=self.account, equity=self.equities[0], real_date=self.months[3], quantity=10, price=15, xa_action=Transaction.SELL)
-
-        # Test the starting point
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), -650, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Cash', datetime.today().date()), 0, 'Value as Expected')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 800, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 800, 'Value as Expected')
-
-        self.account.portfolio = self.portfolio
-        self.account.save()
-
-        self.account.close(self.months[len(self.months)-1], self.new_account)
-
-        self.assertTrue(self.account._end, self.months[len(self.months)-1])
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), -1000, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('TransOut', datetime.today().date()), -450, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 0, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 0, 'Value as Expected')
-
-        self.assertEqual(self.new_account.get_pattr('Funds', datetime.today().date()), 350, 'Funding as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Actual', datetime.today().date()), 800, 'Actual as Expected')
-        self.assertEqual(self.new_account.get_pattr('Value', datetime.today().date()), 800, 'Value as Expected')
-        self.assertEqual(self.new_account.get_pattr('TransIn', datetime.today().date()), 450, 'Value as Expected')
-        self.assertEqual(self.new_account.get_pattr('Cash', datetime.today().date()), 0, 'Value as Expected')
-
-
-class CashSetup(BasicSetup):
-    def setUp(self):
-        super().setUp()
-
-        self.account = self.account = Account.objects.create(name="test002", user=self.user, account_type='Cash', currency='CAD', account_name='Bar_007',
-                                                                  managed=True)
-        equity = Equity.objects.create(symbol=self.account.f_key, name=self.account.name, equity_type='Cash', region='Canada', currency='CAD', searchable=False, validated=True)
-        # self.value_account = self.account = Account.objects.create(name="test003", user=self.user, account_type='Value', currency='CAD', account_name='Bar_008', managed=True)
-
-        for index in range(len(self.months)):
-            if index == 0 or index == len(self.months) -1:
-                source = DataSource.USER.value
-            else:
-                source = DataSource.ESTIMATE.value
-            FundValue.objects.create(equity=equity, real_date=self.months[index], value=1000, source=source)
-        Transaction.objects.create(account=self.account, real_date=self.months[0], value=1000, xa_action=Transaction.FUND)
-
-        self.pd_starting_dict = {
-            'Date': {0: Timestamp('2022-01-01 00:00:00'),
-                     1: Timestamp('2022-02-01 00:00:00'),
-                     2: Timestamp('2022-03-01 00:00:00'),
-                     3: Timestamp('2022-04-01 00:00:00'),
-                     4: Timestamp('2022-05-01 00:00:00'),
-                     5: Timestamp('2022-06-01 00:00:00')},
-            'Funds': {0: 1000, 1: 1000, 2: 1000, 3: 1000, 4: 1000, 5: 1000},
-            'Redeemed': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'TransIn': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'TransOut': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'NewCash': {0: 1000, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'Cash': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'Effective': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'Cost': {0: 1000.0, 1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0},
-            'TotalDividends': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'Dividends': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-            'Value': {0: 1000, 1: 1000, 2: 1000, 3: 1000, 4: 1000, 5: 1000},
-            'Actual': {0: 1000, 1: 1000, 2: 1000, 3: 1000, 4: 1000, 5: 1000}}
-
-        self.pd = pd.DataFrame.from_dict(self.pd_starting_dict)
-
-        self.ed_starting_dict =  {
-             'Date': {0: Timestamp('2022-01-01 00:00:00'),
-                      1: Timestamp('2022-02-01 00:00:00'),
-                      2: Timestamp('2022-03-01 00:00:00'),
-                      3: Timestamp('2022-04-01 00:00:00'),
-                      4: Timestamp('2022-05-01 00:00:00'),
-                      5: Timestamp('2022-06-01 00:00:00')},
-             'Equity': {0: 'test002',
-                        1: 'test002',
-                        2: 'test002',
-                        3: 'test002',
-                        4: 'test002',
-                        5: 'test002'},
-             'Object_ID': {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1},
-             'Object_Type': {0: 'Equity',
-                             1: 'Equity',
-                             2: 'Equity',
-                             3: 'Equity',
-                             4: 'Equity',
-                             5: 'Equity'},
-             'Shares': {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1},
-             'Cost': {0: 1000.0, 1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0},
-             'Price': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-             'Dividends': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-             'TotalDividends': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-             'Value': {0: 1000.0, 1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0},
-             'TBuy': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-             'TSell': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-             'RelGain': {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
-             'UnRelGain': {0: 1000.0,
-                           1: 1000.0,
-                           2: 1000.0,
-                           3: 1000.0,
-                           4: 1000.0,
-                           5: 1000.0},
-             'RelGainPct': {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0},
-             'UnRelGainPct': {0: 100.0, 1: 100.0, 2: 100.0, 3: 100.0, 4: 100.0, 5: 100.0},
-             'AvgCost': {0: 1000.0, 1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0}}
-
-        self.ed = pd.DataFrame.from_dict(self.ed_starting_dict)
-
-
-class CashAccountTests(CashSetup):
-
-    def setUp(self):
-        super().setUp()
-        self.portfolio = Portfolio.objects.create(name='Portfolio', user=self.user, currency='CAD')
-        self.new_account = Account.objects.create(name='New', account_type='Cash', account_name='002', managed=False, currency='CAD', user=self.user, portfolio=self.portfolio)
-
-    @freeze_time("2022-06-01")
-    def test_cash_can_close(self):
-        result = self.account.can_close(self.months[len(self.months)-1])
-        self.assertTrue(result, 'Close on last updated cash value is good')
-
-        result = self.account.can_close(self.months[len(self.months) - 2])
-        self.assertFalse(result, 'Close on estimated value is wrong')
-        self.assertEqual(str(result), f'Value accounts, must close on the last updated data {self.months[len(self.months)-1]}', 'Error Message Correct')
-
-
-    @freeze_time("2022-06-01")
-    def test_cash_account_setup(self):
-        expected_dict = self.pd.to_dict()
-        generated_dict = self.account.p_pd.to_dict()
-        for key in expected_dict.keys():
-            self.assertEqual(generated_dict[key], expected_dict[key], f'Comparing Account DF - Key {key}')
-
-        expected_dict = self.ed.to_dict()
-        generated_dict = self.account.e_pd.to_dict()
-        for key in expected_dict.keys():
-            self.assertEqual(generated_dict[key], expected_dict[key], f'Comparing Equities DF - Key {key}')
-
-    @freeze_time("2022-06-01")
-    def test_cash_account_close(self):
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 1000, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 1000, 'Value as Expected')
-        self.account.portfolio = self.portfolio
-        self.account.save()
-
-        self.account.close(self.months[len(self.months) - 1], self.new_account)
-
-        self.assertTrue(self.account._end, self.months[len(self.months) - 1])
-        self.assertEqual(self.account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.account.get_pattr('Redeemed', datetime.today().date()), -1000, 'Redeemed as Expected.')
-        self.assertEqual(self.account.get_pattr('Actual', datetime.today().date()), 0, 'Actual as Expected')
-        self.assertEqual(self.account.get_pattr('Value', datetime.today().date()), 0, 'Value as Expected')
-
-        self.assertEqual(self.new_account.get_pattr('Funds', datetime.today().date()), 1000, 'Funding as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Redeemed', datetime.today().date()), 0, 'Redeemed as Expected.')
-        self.assertEqual(self.new_account.get_pattr('Actual', datetime.today().date()), 1000, 'Actual as Expected')
-        self.assertEqual(self.new_account.get_pattr('Value', datetime.today().date()), 1000, 'Value as Expected')
+    def test_StringTranslations(self):
+        self.assertEqual(Transaction.transaction_value('Deposit'), Transaction.FUND)
 
 

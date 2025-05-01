@@ -13,6 +13,7 @@ urlpatterns = [
     path(r'api/action_list/', apis.get_action_list, name='action_list'),
     path(r'api/xa_values/', apis.get_equity_values, name='xa_values'),
     path(r'api/cash_value/', apis.get_cash_value, name='cash_value'),
+    path(r'api/xa_list/', apis.get_transaction_list, name='xa_list'),
 
     path(r'api/cost_value/', charts.cost_value_chart, name='cost_value_chart'),
     path(r'api/compare_chart/', charts.compare_equity_chart, name='compare_equity_chart'),
@@ -39,7 +40,7 @@ urlpatterns = [
     path(r'account/<pk>/update/', views.account_update, name='account_update'),
     path(r'account/<container_type>/<pk>/<id>/details/', views.account_equity_details, name='account_equity_details'),
 
-    path(r'account/<p_pk>/<e_pk>/<date_str>/update', views.account_equity_date_update, name='update_by_date'),
+    # path(r'account/<p_pk>/<e_pk>/<date_str>/update', views.account_equity_date_update, name='update_by_date'),
     path(r'account/<a_pk>/<date_str>/update', views.reconciliation, name='update_account_date'),
 
     path(r'portfolio/add/', views.PortfolioAdd.as_view(), name='portfolio_add'),

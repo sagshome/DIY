@@ -45,12 +45,11 @@
                             {% if field.name == 'date' %}<td class="w3-small w3-left-align">{{ field }}</td>{% endif %}
                             {% if field.name == 'reported_date' %}<td class="w3-small w3-left-align">{{ field }}</td>{% endif %}
                             {% if field.name == 'value' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
-                            {% if field.name == 'source' %}<td class="w3-small w3-right-align">{{ field.value }}</td>{% endif %}
-
+                            {% if field.name == 'source' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
                             {% if field.name == 'deposited' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
                             {% if field.name == 'withdrawn' %}<td class="w3-small w3-right-align">{{ field }}</td>{% endif %}
                         {% endfor %}
-                            {% if form.errors %}<td>{{form.errors}}</td>{% endif %}
+                            {% if form.errors %}<td class="w3-red">{{form.errors}}</td>{% endif %}
                         </tr>
                     {% endfor %}
                 </table>

@@ -2,7 +2,7 @@
 {% block title %}Close Account{% endblock %}
 {% block content %}
     <h1 class="w3-margin">Close Account</h1>
-    <div class="w3-row">
+    <div class="w3-row" style="height: 600px;">
         <div style="height:350px;" class="w3-half w3-container">
             <form action="" method="post">
                 {% csrf_token %}
@@ -40,16 +40,43 @@
             </form>
         </div>
         <div style="height:350px;" class="w3-half w3-container">
-            <p>This form is used to close an account. If you select an account, you previous Funing values will be
-                transferred to that account as of the close date, which is today unless you picked a different
-                value.</p>
-            <ul>
-                <li>Select an Account - This will transfer the funding from this account over the new account.</li>
-                <li>Select the Delete choice box, The account will just be deleted</li>
-                <li>Just leave the delete box unchecked and don't pick a new Account - the account will just close.</li>
-            </ul>
-            <p>If you select a date, we will make the close / transfer effective that date.</p>
+          {% include 'stocks/includes/transaction_list.html' with xas=xas table_title=table_title%}
+          <!-- Placeholder for dynamically loaded content -->
+          <div id="included-content">
+          </div>
         </div>
     </div>
+
+    <script>
+
+        function update_xas(){
+           let xfer_to_id = document.getElementById("id_accounts").value
+
+            if ( xfer_to_id !== "" ) {
+                console.log(xfer_to_id)
+                $.ajax({                       // initialize an AJAX request
+                    url: '/stocks/api/xa_list/',
+                    data: {
+                        'account_id': xfer_to_id
+                    },
+                    success: function (data) {   // `data` is the return of the `load_cities` view function
+                        $("#included-content").html(data);  // replace the contents of the city input with the data that came from the server
+                        showDiv('included-content')
+                    },
+                    error: function (ts) {
+                        console.log(ts.responseText)
+                    }
+                });
+            } else {
+                hideDiv('included-content')
+            }
+        }
+
+        $(document).ready(function() {
+            hideDiv('included-content')
+            document.getElementById("id_accounts").addEventListener("change", update_xas)
+        });
+    </script>
+
 
 {% endblock %}

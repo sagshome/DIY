@@ -32,7 +32,7 @@ def get_action_list(request):
         my_set = ('Deposit', 'Withdraw', 'Buy', 'Sell', 'Value', 'Transfer Out')
     for item in my_set:
         result[value_map[item]] = item
-    return json
+    # return json
     return render(request, "generic_selection.html", {"values": result})
 
 
@@ -81,6 +81,20 @@ def get_equity_list(request):
 
     return JsonResponse({"results": results})
     # return render(request, "generic_selection.html", {"values": value_dictionary})
+
+
+@login_required
+def get_transaction_list(request):
+    title = 'Account not found'
+    xas = None
+    if request.GET.get("account_id"):
+        try:
+            account = Account.objects.get(id=request.GET.get("account_id"), user=request.user)
+            title = f'{account.name} (First 5)'
+            xas = account.transactions.filter(xa_action__in=Transaction.MAJOR_TRANSACTIONS).order_by('real_date')[:5]
+        except Account.DoesNotExist:
+            pass
+    return render(request, 'stocks/includes/transaction_list.html',{'hide_new_xa': True, 'table_title': title, 'xas': xas})
 
 
 @login_required

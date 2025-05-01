@@ -26,14 +26,13 @@ from base.utils import DIYImportException, normalize_today, normalize_date
 from base.models import Profile
 from base.views import BaseDeleteView
 
-from .models import Account, Portfolio, Equity, EquityEvent, EquityValue, Transaction, BaseContainer, FundValue, DataSource
+from .models import Account, Portfolio, Equity, EquityEvent, EquityValue, Transaction, BaseContainer, FundValue, DataSource, CashAccount, ValueAccount, InvestmentAccount
 from .tasks import equity_new_estimates
 from .forms import TransactionForm, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountForm, UploadFileForm, AccountAddForm, TransactionSetValueForm, ManualUpdateEquityForm, AddEquityForm, SimpleCashReconcileFormSet, SimpleReconcileFormSet, ReconciliationFormSet
 from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEADERS
 
 
 logger = logging.getLogger(__name__)
-
 
 
 class AccountDeleteView(BaseDeleteView):
@@ -59,7 +58,7 @@ class PortfolioDeleteView(BaseDeleteView):
         context = super().get_context_data(**kwargs)
         context['object_type'] = 'Portfolio'
         context['extra_text'] = 'Deleting a portfolio will NOT delete the accounts it contains,  you will need to delete them separately.'
-        return context
+        return context  # pragma: no cover
 
 
 class TransactionDeleteView(BaseDeleteView):
@@ -80,9 +79,13 @@ class TransactionDeleteView(BaseDeleteView):
             pass
         return response
 
+
 class StocksMain(LoginRequiredMixin, ListView):
     model = Account
     template_name = 'stocks/stocks_main.html'
+
+    def get_object(self):
+        return super().get_object(queryset=Account.objects.filter(user=self.request.user))
 
     def get_context_data(self, **kwargs):
         """
@@ -103,6 +106,7 @@ class StocksMain(LoginRequiredMixin, ListView):
         context['account_list_data'] = account_list_data
         context['help_file'] = 'stocks/help/stocks_main.html'
         return context
+
 
 class ContainerTableView(LoginRequiredMixin, DetailView):
     template_name = 'stocks/account_table.html'
@@ -196,6 +200,7 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
 
     @staticmethod
     def equity_data(myobj: BaseContainer):
+        logger.debug('Going after equity_data for %s' % myobj)
         this_date = np.datetime64(normalize_today())
         df = myobj.e_pd
         equity_data = df.loc[df['Date'] == this_date].groupby(['Date', 'Equity', 'Object_ID', 'Object_Type']).agg(
@@ -205,11 +210,13 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
 
         equity_data.replace(np.nan, 0, inplace=True)
         equity_data.sort_values(by=['Value', 'Shares', 'Equity'], inplace=True, ascending=[False, False, True])
+        equity_data['Object_ID'] = equity_data['Object_ID'].astype('int')  # Ensure this is an integer
         return equity_data
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
+        run_date = normalize_today()
         if 'portfolio' in context:
             context['account'] = context['portfolio']
             context['object_type'] = 'Portfolio'
@@ -217,19 +224,14 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
         else:  # context['account'] is already set.
             context['object_type']  = 'Account'
             context['can_update'] = True
+            if self.object.closed:
+                run_date = normalize_date(self.object._end)
 
-        # funded = context['account'].transactions.filter(xa_action=Transaction.FUND)
-        # redeemed = context['account'].transactions.filter(xa_action=Transaction.REDEEM)
-        df = self.object.p_pd
-        data = df.loc[df['Date'] == pd.to_datetime(normalize_today())]
-
-        net_dep = 0 if data.empty else data['Funds'] - abs(data['Redeemed'])
-        context['funded'] = 0 if data.empty else data['Funds'] - abs(data['Redeemed'])
-        context['net_funded'] = 0 if data.empty else round(net_dep.item(), 2)
-        context['value'] = 0 if data.empty else round(data['Value'].item(), 2)
-        context['p_and_l'] = 0 if data.empty else round(context['value'] - net_dep, 2)
-        context['dividends'] = 0 if data.empty else round(data['TotalDividends'].item(), 2)
-        context['redeemed'] = 0 if data.empty else round(abs(data['Redeemed'].item()), 2)
+        summary_values = self.object.summary_by_date(run_date)
+        context['net_funded'] = round(summary_values['cost'], 2)
+        context['value'] = round(summary_values['value'], 2)
+        context['p_and_l'] = round(summary_values['profit'], 2)
+        context['dividends'] = round(summary_values['dividends'], 2)
 
         equity_data = self.equity_data(context['account'])
         context['equity_list_data'] = json.loads(equity_data.to_json(orient='records'))
@@ -285,11 +287,17 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
     template_name = 'stocks/account_close.html'
     form_class = AccountCloseForm
 
+    def valid_accounts(self):
+        accounts = Account.objects.filter(user=self.request.user, account_type__in=['Investment', 'Value'], _end__isnull=True).exclude(id=self.object.id)
+        if self.object.portfolio:
+            accounts = accounts.filter(portfolio=self.object.portfolio)
+        return accounts
+
     def get_object(self, queryset=None):
         return super().get_object(queryset=Account.objects.filter(user=self.request.user))
 
     def get_success_url(self):
-        try:
+        try:  # todo: Close should never go back to delete transaction,  if it does,  just go the the account details page
             url = self.request.POST["success_url"]
         except AttributeError:
             url = reverse('stocks_main', kwargs={})
@@ -298,14 +306,16 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        context['xas'] = self.object.transactions.filter(xa_action__in=Transaction.MAJOR_TRANSACTIONS).order_by('-real_date')[:5]
+        context['hide_new_xa'] = True
+        context['table_title'] = f'{self.object.account_name} (Last 5)'
+        context['help_file'] = 'stocks/help/account_close.html'
+
         return context
 
     def get_initial(self):
         super().get_initial()
-        accounts = Account.objects.filter(user=self.request.user, account_type=self.object.account_type, _end__isnull=True).exclude(id=self.object.id)
-        if self.object.portfolio:
-            accounts = accounts.filter(portfolio=self.object.portfolio)
-        self.initial['accounts'] = accounts
+        self.initial['accounts'] = self.valid_accounts()
         self.initial['user'] = self.request.user.id
         self.initial['_end'] = self.object.last_date
         return self.initial
@@ -318,7 +328,6 @@ class AccountCloseView(LoginRequiredMixin, UpdateView):
                 close_to = Account.objects.get(id=request.POST['accounts'])
             self.object.close(self.object._end, transfer_to=close_to, re_close=True)
         return response
-
 
 
 class PortfolioEdit(PortfolioView, UpdateView):
@@ -369,7 +378,11 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
         return super().get_object(queryset=Account.objects.filter(user=self.request.user))
 
     def get_success_url(self):
-        return reverse('stocks_main')
+        try:
+            url = self.request.POST["success_url"]
+        except AttributeError:
+            url = reverse('stocks_main', kwargs={})
+        return url
 
     def get_initial(self):
         original = Account.objects.get(pk=self.kwargs['pk'])
@@ -383,6 +396,7 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Edit'
         context['help_file'] = 'stocks/help/add_account.html'
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
         return context
 
 
@@ -495,17 +509,15 @@ def add_account(request):
         form = AccountAddForm(request.POST, initial={'user': request.user})
         if form.is_valid():
             account_type = form.cleaned_data['account_type']
-            Account(user=request.user,
-                              account_name=form.cleaned_data['account_name'],
-                              name=form.cleaned_data['name'],
-                              account_type=account_type,
-                              currency=form.cleaned_data['currency'],
-                              managed=form.cleaned_data['managed']).save()
-            account = Account.objects.get(user=request.user, account_name=form.cleaned_data['account_name'])
-            if account.account_type == 'Cash':
-                Equity.objects.create(symbol=account.f_key, currency=account.currency, name=account.f_key, equity_type='Cash')
-            elif account.account_type == 'Value':
-                Equity.objects.create(symbol=account.f_key, currency=account.currency, name=account.f_key, equity_type='Value')
+            if account_type == 'Cash':
+                model = CashAccount
+            elif account_type == 'Value':
+                model = ValueAccount
+            else:
+                model = InvestmentAccount
+
+            model(user=request.user, account_name=form.cleaned_data['account_name'], name=form.cleaned_data['name'],
+                  currency=form.cleaned_data['currency'], managed=form.cleaned_data['managed']).save()
             return HttpResponseRedirect(reverse('stocks_main'))
 
     form = AccountAddForm(initial={'user': request.user, 'currency': request.user.profile.currency, 'managed': False})
@@ -524,23 +536,30 @@ def add_transaction(request, account_id):
         form = TransactionForm(request.POST, initial={'user': request.user, 'account': account })
         if form.is_valid():
             equity = form.cleaned_data['equity'] if 'equity' in form.cleaned_data else None
-            transaction = Transaction(user=request.user,
-                                      real_date=form.cleaned_data['real_date'],
-                                      price=form.cleaned_data['price'],
-                                      quantity=form.cleaned_data['quantity'],
-                                      value=form.cleaned_data['value'],
-                                      xa_action=form.cleaned_data['xa_action'],
-                                      account=account,
-                                      equity=equity,
-                                      )
-            transaction.save()
+            if form.cleaned_data['xa_action'] == Transaction.TRANS_OUT:
+                if equity:
+                    account.transfer_equity(equity, form.cleaned_data['to_account'], form.cleaned_data['real_date'])
+                else:
+                    account.transfer_funding(form.cleaned_data['to_account'], form.cleaned_data['real_date'], amount=form.cleaned_data['value'])
+            else:
+                transaction = Transaction(user=request.user,
+                                          real_date=form.cleaned_data['real_date'],
+                                          price=form.cleaned_data['price'],
+                                          quantity=form.cleaned_data['quantity'],
+                                          value=form.cleaned_data['value'],
+                                          xa_action=form.cleaned_data['xa_action'],
+                                          account=account,
+                                          equity=equity,
+                                          )
+                transaction.save()
+
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
-                equity = transaction.equity.id if transaction.equity else None
+                equity = equity.id if equity else None
                 form = TransactionForm(initial={'user': request.user,
                                                 'account': account,
                                                 'equity': equity,
-                                                'real_date': transaction.real_date,
-                                                'xa_action': transaction.xa_action})
+                                                'real_date': form.cleaned_data['real_date'],
+                                                'xa_action': form.cleaned_data['xa_action']})
 
             else:
                 account.reset()
@@ -585,8 +604,7 @@ def set_transaction(request, account_id, action):
             valid = True
             value = form.cleaned_data['value']
             real_date = form.cleaned_data['real_date']
-            if (account.account_type in ['Cash'] and xa_action == Transaction.BALANCE) or \
-                    (account.account_type == 'Value' and xa_action == Transaction.VALUE):
+            if (account.account_type == 'Cash' and xa_action == Transaction.BALANCE) or (account.account_type == 'Value' and xa_action == Transaction.VALUE):
                 result = account.set_value(value, real_date)
                 if not result:
                     form.add_error(None, str(result))
@@ -668,7 +686,6 @@ def account_equity_date_update(request, p_pk, e_pk, date_str):
 @login_required
 def account_update(request, pk):
     account = get_object_or_404(Account, pk=pk, user=request.user)
-
     profile = Profile.objects.get(user=request.user)
     key = profile.av_api_key if profile.av_api_key else None
     for equity in account.equities.filter(searchable=True):
@@ -709,7 +726,7 @@ def reconcile_value(request, pk):
     """
     Does not seem to be a standard way to do this,  so I will need to use a non-generic View
     """
-    def set_initial() -> List[Dict]:
+    def set_initial(is_superuser) -> List[Dict]:
         """
         Build the list of dictionaries for the forms based on existing data
         """
@@ -719,9 +736,9 @@ def reconcile_value(request, pk):
         else:
             last_value = FundValue.objects.filter(equity__symbol=account.f_key).latest('date')
 
-        funded = dict(account.transactions.filter(xa_action=Transaction.FUND).annotate(month=TruncMonth('date')).
+        funded = dict(account.transactions.filter(xa_action__in=[Transaction.FUND, Transaction.TRANS_IN]).annotate(month=TruncMonth('date')).
                       values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
-        redeemed = dict(account.transactions.filter(xa_action=Transaction.REDEEM).annotate(month=TruncMonth('date')).
+        redeemed = dict(account.transactions.filter(xa_action__in=[Transaction.REDEEM, Transaction.TRANS_OUT]).annotate(month=TruncMonth('date')).
                         values('month').annotate(sum=Sum('value')).values_list('month', 'sum'))
 
         result = []
@@ -733,8 +750,9 @@ def reconcile_value(request, pk):
         for record in FundValue.objects.filter(equity__symbol=account.f_key, date__lte=last_value.date).order_by('-date'):
             this_funded = funded[record.date] if record.date in funded else 0
             this_redeemed = redeemed[record.date] if record.date in redeemed else 0
-            result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': DataSource(record.source).name,
-                           'deposited': int(this_funded), 'withdrawn': int(this_redeemed)})
+            form_source = str(DataSource(record.source).value) if is_superuser else DataSource(record.source).name
+            result.append({'date': record.date, 'reported_date': record.real_date, 'value': int(record.value), 'source': form_source,
+                           'deposited': int(this_funded), 'withdrawn': int(this_redeemed), 'super_user': is_superuser})
 
         for funded_key in funded.keys():
             if funded_key < first_value.date:
@@ -744,71 +762,70 @@ def reconcile_value(request, pk):
 
     account = get_object_or_404(Account, pk=pk, account_type='Value', user=request.user)
     if request.method == 'POST':
-        initial = set_initial()
-        formset = SimpleReconcileFormSet(request.POST)
+        initial = set_initial(request.user.is_superuser)
+        formset = SimpleReconcileFormSet(request.POST, initial=initial)
         if formset.is_valid():
-            as_dict = {d['date']: d for d in initial}
-            for form in formset:
-                if as_dict[form.cleaned_data['date']]['reported_date'] != form.cleaned_data['reported_date'] or \
-                        as_dict[form.cleaned_data['date']]['value'] != form.cleaned_data['value']:
-                    logger.debug('Change date or value detected %s:%s' % (form.cleaned_data['reported_date'], form.cleaned_data['value']))
-                    try:
-                        fund_value = FundValue.objects.get(equity__symbol=account.f_key, date=form.cleaned_data['date'])
-                    except FundValue.DoesNotExist:
-                        fund = Equity.objects.get(symbol=account.f_key)
-                        fund_value = FundValue(equity=fund, date=form.cleaned_data['date'])
-                    fund_value.value = form.cleaned_data['value']
-                    fund_value.real_date = form.cleaned_data['reported_date']
-                    fund_value.source = DataSource.USER.value
-                    fund_value.save()
-
-                if as_dict[form.cleaned_data['date']]['deposited'] != form.cleaned_data['deposited']:
-                    diff = form.cleaned_data['deposited'] - as_dict[form.cleaned_data['date']]['deposited']
-                    # Case 1 - original was 0,  just make a deposit record
-                    # Case 2 - this was more,  make a new deposit record
-                    # Case 3 - this was less, since negative can not pass the clean,  a record or records must exist
-                    if diff > 0:
-                        Transaction.objects.create(real_date=form.cleaned_data['reported_date'], xa_action=Transaction.FUND, account=account, value=diff, estimated=False)
-                    else:
-                        diff = abs(diff)
-                        for transaction in Transaction.objects.filter(date=form.cleaned_data['date'], xa_action=Transaction.FUND, account=account):
-                            if transaction.value >= diff:
-                                transaction.value -= diff
-                                transaction.estimated = False
-                                transaction.save()
-                                break
-                            else:
-                                diff -= transaction.value
-                                transaction.value = 0
-                                transaction.estimated = False
-                                transaction.save()
-
-                if as_dict[form.cleaned_data['date']]['withdrawn'] != form.cleaned_data['withdrawn']:
-                    diff = form.cleaned_data['withdrawn'] - as_dict[form.cleaned_data['date']]['withdrawn']
-                    # Case 1 - original was 0,  just make a deposit record
-                    # Case 2 - this was more,  make a new deposit record
-                    # Case 3 - this was less, since negative can not pass the clean,  a record or records must exist
-                    if diff > 0:
-                        Transaction.objects.create(real_date=form.cleaned_data['reported_date'], xa_action=Transaction.REDEEM, account=account, value=diff, estimated=False)
-                    else:
-                        diff = abs(diff)
-                        for transaction in Transaction.objects.filter(date=form.cleaned_data['date'], xa_action=Transaction.REDEEM, account=account):
-                            if transaction.value >= diff:
-                                transaction.value -= diff
-                                transaction.estimated = False
-                                transaction.save()
-                                break
-                            else:
-                                diff -= transaction.value
-                                transaction.value = 0
-                                transaction.estimated = False
-                                transaction.save()
+            for form in formset.forms:
+                if form.has_changed():
+                    if 'reported_date' in form.changed_data or 'value' in form.changed_data or 'source' in form.changed_data:
+                        try:
+                            fund_value = FundValue.objects.get(equity__symbol=account.f_key, date=form.cleaned_data['date'])
+                        except FundValue.DoesNotExist:
+                            fund = Equity.objects.get(symbol=account.f_key)
+                            fund_value = FundValue(equity=fund, date=form.cleaned_data['date'])
+                        if 'value' in form.changed_data:
+                            fund_value.value = form.cleaned_data['value']
+                        if 'reported_date' in form.changed_data:
+                            fund_value.real_date = form.cleaned_data['reported_date']
+                        if 'source' in form.changed_data:
+                            fund_value.source = int(form.cleaned_data['source'])
+                        else:
+                            fund_value.source = DataSource.USER.value
+                        fund_value.save()
+                    if 'deposited' in form.changed_data:
+                        diff = form.cleaned_data['deposited'] - form.initial['deposited']
+                        # Case 1 - original was 0,  just make a deposit record
+                        # Case 2 - this was more,  make a new deposit record
+                        # Case 3 - this was less, since negative can not pass the clean,  a record or records must exist
+                        if diff > 0:
+                            Transaction.objects.create(real_date=form.cleaned_data['reported_date'], xa_action=Transaction.FUND, account=account, value=diff, estimated=False)
+                        else:
+                            diff = abs(diff)
+                            for transaction in Transaction.objects.filter(date=form.cleaned_data['date'], xa_action=Transaction.FUND, account=account):
+                                if transaction.value >= diff:
+                                    transaction.value -= diff
+                                    transaction.estimated = False
+                                    transaction.save()
+                                    break
+                                else:
+                                    diff -= transaction.value
+                                    transaction.value = 0
+                                    transaction.estimated = False
+                                    transaction.save()
+                    if 'withdrawn' in form.changed_data:
+                        diff = form.cleaned_data['withdrawn'] - form.initial['withdrawn']
+                        # Case 1 - original was 0,  just make a deposit record
+                        # Case 2 - this was more,  make a new deposit record
+                        # Case 3 - this was less, since negative can not pass the clean,  a record or records must exist
+                        if diff > 0:
+                            Transaction.objects.create(real_date=form.cleaned_data['reported_date'], xa_action=Transaction.REDEEM, account=account, value=diff, estimated=False)
+                        else:
+                            diff = abs(diff)
+                            for transaction in Transaction.objects.filter(date=form.cleaned_data['date'], xa_action=Transaction.REDEEM, account=account):
+                                if transaction.value >= diff:
+                                    transaction.value -= diff
+                                    transaction.estimated = False
+                                    transaction.save()
+                                    break
+                                else:
+                                    diff -= transaction.value
+                                    transaction.value = 0
+                                    transaction.estimated = False
+                                    transaction.save()
             account.reset()
-        else:
-            pass
-
-    initial = set_initial()  # This is called twice on POST since I may have changed the data.
-    formset = SimpleReconcileFormSet(initial=initial)
+    else:
+        initial = set_initial(request.user.is_superuser)  # This is called twice on POST since I may have changed the data.
+        formset = SimpleReconcileFormSet(initial=initial)
     return render(request, 'stocks/value_reconciliation.html',
                   {'formset': formset, 'account': account, 'xas': account.transactions.order_by('real_date'),
                    'view_type': 'Data',
@@ -868,7 +885,7 @@ def reconciliation(request, a_pk, date_str):
         view_date = datetime.strptime(date_str, '%b-%Y').date()
         pd_date = pd.to_datetime(view_date)
     except ValueError:
-        return render(request, '404.html',)
+        raise Http404('Invalid request')
 
     account.e_pd['Date'] = account.e_pd['Date'].dt.strftime('%b-%Y')
     initial = account.e_pd.loc[account.e_pd['Date'] == pd_date][['Equity', 'Object_ID', 'Cost', 'Value', 'Shares', 'Dividends', 'TotalDividends', 'Price']].sort_values(by='Value', ascending=False).to_dict(orient='records')

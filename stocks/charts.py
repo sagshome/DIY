@@ -175,7 +175,7 @@ def acc_summary(request):
         else:
             this = Portfolio.objects.get(id=object_id)
             accounts = Account.objects.filter(user=user, portfolio_id=object_id)
-    else:
+    else:  # Everything
         accounts = Account.objects.filter(user=user)
 
     if accounts.exists():
@@ -190,51 +190,54 @@ def acc_summary(request):
     else:
         return JsonResponse({'labels': [], 'datasets': []})
 
-    if not object_type:  # This is a 'Everything' - so remove accounts with a portfolio
+    if not object_type:  # This is an 'Everything' - so remove accounts with a portfolio
         accounts = accounts.exclude(portfolio__isnull=False)
 
     date_range = pd.date_range(start=start, end=end, freq='MS')
     month_df = pd.DataFrame({'Date': date_range, 'Value': 0})
 
     labels = [this_date.strftime('%Y-%b') for this_date in month_df['Date'].to_list()]
-    df = pd.DataFrame(columns=ACCOUNT_COL)
+    df = pd.DataFrame()
     datasets = []
     for account in accounts:
-        color = colors[ci]
-        ci += 1
-        datasets.append({
-            'label': account.name,
-            'fill': False,
-            'data': pd.concat([month_df, account.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
-            'boarderColor': color, 'backgroundColor': color,
-            'stack': 1,
-            'order': 1,
-        })
-        df = pd.concat([df, account.p_pd]).groupby('Date', as_index=False).sum()
-
-    if not object_type:  # This is a 'Everything' - process portfolios a portfolio
-        for portfolio in Portfolio.objects.filter(user=user):
+        if not account.p_pd.empty:
             color = colors[ci]
             ci += 1
-
             datasets.append({
-                'label': portfolio.name,
+                'label': account.name,
                 'fill': False,
-                'data': pd.concat([month_df,  portfolio.e_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
-                'boarderColor': color,  'backgroundColor': color,
+                'data': pd.concat([month_df, account.p_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+                'boarderColor': color, 'backgroundColor': color,
                 'stack': 1,
                 'order': 1,
             })
-            df = pd.concat([df, portfolio.p_pd]).groupby('Date', as_index=False).sum()
+            df = pd.concat([df, account.p_pd]).groupby('Date', as_index=False).sum()
+
+    if not object_type:  # This is an 'Everything' - process portfolios a portfolio
+        for portfolio in Portfolio.objects.filter(user=user):
+            if not portfolio.p_pd.empty:
+                color = colors[ci]
+                ci += 1
+                if not portfolio.p_pd.empty:
+                    datasets.append({
+                        'label': portfolio.name,
+                        'fill': False,
+                        'data': pd.concat([month_df,  portfolio.p_pd.loc[:, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+                        'boarderColor': color,  'backgroundColor': color,
+                        'stack': 1,
+                        'order': 1,
+                    })
+                    df = pd.concat([df, portfolio.p_pd]).groupby('Date', as_index=False).sum()
     else:
-        datasets.append({
-            'label': 'Cash',
-            'fill': False,
-            'data': pd.concat([month_df, this.p_pd.loc[:, ['Date', 'Cash']]]).groupby('Date')['Cash'].sum().to_list(),
-            'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
-            'stack': 1,
-            'order': 1,
-        })
+        if not this.p_pd.empty:
+            datasets.append({
+                'label': 'Cash',
+                'fill': False,
+                'data': pd.concat([month_df, this.p_pd.loc[:, ['Date', 'Cash']]]).groupby('Date')['Cash'].sum().to_list(),
+                'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
+                'stack': 1,
+                'order': 1,
+            })
 
     if object_type == 'Account':
         df['Cost'] = df['Funds'] + df['TransIn'] + df['Redeemed'] + df['TransOut']
@@ -285,33 +288,48 @@ def equity_summary(request):
 
     labels = [this_date.strftime('%Y-%b') for this_date in month_df['Date'].to_list()]
     datasets = []
-    datasets.append({
-        'label': 'Cash',
-        'fill': False,
-        'data': this_pd['Cash'].to_list(),
-        'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
-        'stack': 1,
-        'order': 1,
-    })
-    ci = 0
-    for equity in this.equities:
-        color = colors[ci]
-        ci += 1
-        label = equity.symbol if equity.equity_type == 'Equity' else equity.equity_type
+    if object_type == 'Account' and this.account_type == 'Cash':
         datasets.append({
-            'label': label,
+            'label': 'Cash',
             'fill': False,
-            'data': pd.concat([month_df, this_ed.loc[this_ed['Object_ID'] == equity.id, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
-            'boarderColor': color, 'backgroundColor': color,
+            'data': this_pd['Cash'].to_list(),
+            'boarderColor': PALETTE['green'], 'backgroundColor': PALETTE['green'],
             'stack': 1,
             'order': 1,
         })
+    else:
+        ci = 0
+        for equity in this.equities:
+            color = colors[ci]
+            ci += 1
+            label = equity.symbol if equity.equity_type == 'Equity' else equity.equity_type
+            if equity.equity_type == 'Value':
+                datasets.append({
+                    'label': label,
+                    'fill': False,
+                    'data': this_pd['Value'].to_list(),
+                    'boarderColor': color, 'backgroundColor': color,
+                    'stack': 1,
+                    'order': 1,
+                })
+            else:
+                datasets.append({
+                    'label': label,
+                    'fill': False,
+                    'data': pd.concat([month_df, this_ed.loc[this_ed['Object_ID'] == equity.id, ['Date', 'Value']]]).groupby('Date')['Value'].sum().to_list(),
+                    'boarderColor': color, 'backgroundColor': color,
+                    'stack': 1,
+                    'order': 1,
+                })
+
 
     # Redeemed and TransOut are negative numbers so add them to subtract them.
     if object_type == 'Account':
         cost_df = this_pd['Funds'] + this_pd['TransIn'] + this_pd['Redeemed'] + this_pd['TransOut']
     else:
         cost_df = this_pd['Funds'] + this_pd['Redeemed']
+    # df = cost_df.applymap(lambda x: 0 if x < 0 else x)
+    cost_df[cost_df < 0] = 0
 
     datasets.append({
         'label': 'Cost',

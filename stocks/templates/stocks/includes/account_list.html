@@ -2,15 +2,10 @@
 
 {% for account in account_list %}
     <tr>
-        <td class="w3-container">{{account.name}}</a></td>
+        <td class="w3-container">{{account.name}}</td>
         <td class="w3-container w3-center">
-            <a href="{% url 'account_details' account.id %}"><button class="w3-button-small w3-round-xlarge diy-button diy-green"> Chart </button></a>
-            {% if account.account_type == 'Investment' %}
-              <a href="{% url 'account_table' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-            {% else %}
-               <a href="{% url 'value_account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
-            {% endif %}
-
+            <a href="{{ account.get_absolute_url }}"><button class="w3-button-small w3-round-xlarge diy-button diy-green"> Chart </button></a>
+            <a href="{{ account.get_data_url}}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
         </td>
         <td class="w3-container w3-center w3-hide-small">{% month_year account 'start' %}</td>
         <td class="w3-container w3-center w3-hide-small">
@@ -18,15 +13,14 @@
                 {% month_year account 'end' %}
             {% endif %}
         </td>
-
         <td class="w3-container w3-hide-small">${{account.cost|floatformat:'0g'}}</td>
         <td class="w3-container">${{account.value|floatformat:'0g'}}</td>
         <td class="w3-container">${{account.growth|floatformat:'0g'}}</td>
         <td class="w3-container">${{account.dividends|floatformat:'0g'}}</td>
         <td class="w3-container w3-center">
-            <a class="w3-hide-small" href="{% url 'account_edit' account.id %}"><button class="w3-button-small w3-round-xlarge diy-button diy-orange"> Edit </button></a>
-            {% if not account.end %}
-                <a class="w3-hide-small" href="{% url 'account_close' account.id %}"><button class="w3-button-small w3-round-xlarge diy-button diy-red">Close</button></a>
+            <a class="w3-hide-small" href="{{account.edit_url}}"><button class="w3-button-small w3-round-xlarge diy-button diy-orange"> Edit </button></a>
+            {% if not account.closed %}
+                <a class="w3-hide-small" href="{{account.close_url}}"><button class="w3-button-small w3-round-xlarge diy-button diy-red">Close</button></a>
             {% endif %}
         </td>
     </tr>

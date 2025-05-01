@@ -15,6 +15,44 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+class ReadonlyFieldsMixin:
+    readonly_fields: list[str] = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Optional: make fields readonly in the UI
+        for field_name in self.readonly_fields:
+            if field_name in self.fields:
+                self.fields[field_name].widget.attrs['readonly'] = True
+
+                style = self.fields[field_name].widget.attrs.get('style', '')
+                if not style.endswith(';') and style:
+                    style += ';'
+                self.fields[field_name].widget.attrs['style'] = f"{style} background-color:Wheat;"
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        if self.instance.pk:  # only check if updating an existing instance
+            for field_name in self.readonly_fields:
+                original_value = getattr(self.instance, field_name, None)
+                new_value = cleaned_data.get(field_name)
+
+                if original_value != new_value:
+                    self.add_error(field_name, f"{field_name} cannot be changed.")
+                    # Revert to original value to be extra safe
+                    cleaned_data[field_name] = original_value
+
+        return cleaned_data
+
+def append_styles(widget, **styles):
+    existing_style = widget.attrs.get('style', '')
+    style_dict = dict([s.split(':') for s in existing_style.rstrip(';').split(';') if ':' in s])
+    style_dict.update(styles)
+    new_style = '; '.join(f'{k.strip()}: {v.strip()}' for k, v in style_dict.items()) + ';'
+    widget.attrs['style'] = new_style
+
 
 class DIYImportException(Exception):
     pass
@@ -190,7 +228,7 @@ def clear_simple_cache(key):
         cache.delete(key)
 
 
-def cache_dataframe(key, dataframe, timeout=36000):
+def cache_dataframe(key: str, dataframe: pd.DataFrame, timeout=36000):
     """
     Cache a Pandas DataFrame.
 
@@ -202,6 +240,9 @@ def cache_dataframe(key, dataframe, timeout=36000):
     # Serialize the DataFrame to a binary format
     if not settings.NO_CACHE:
         dataframe = dataframe.reset_index(drop=True)
+        #  Used when debugging.
+        if key.endswith('Components') and 'TBuy' not in list(dataframe.columns):
+            assert False, f'Saving corrupt Dataframe for {key}'
         cache.set(key, dataframe.to_json(), timeout)
 
 
@@ -222,7 +263,7 @@ def get_cached_dataframe(key):
     """
     # Retrieve the binary data from the cache
     if not settings.NO_CACHE:
-        logger.debug('going after the cache')
+        logger.debug('going after the %s cache' % key)
         try:
             json_data = cache.get(key)
             if json_data:
