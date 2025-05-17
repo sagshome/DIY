@@ -642,7 +642,7 @@ class Equity(models.Model):
                 if result_key in existing_price:
                     #  has not been 'fixed' and used api is better or equal to existing api AND existing price != new API price
                     if not existing_price[result_key]['split_fixed'] and results_api <= existing_price[result_key]['api'] and results[result_key][0] != existing_price[result_key]['price']:
-                        EquityValue.objects.filter(date=result_key, equity=self).update(price=results[result_key][0], api=results_api)
+                        EquityValue.objects.filter(date=result_key, equity=self).update(price=results[result_key][0], api=results_api, source=DataSource.API.value)
                 else:
                     EquityValue.objects.create(date=result_key, equity=self, real_date=result_key,
                                                source=DataSource.API.value, api=results_api, price=results[result_key][0])
