@@ -114,7 +114,7 @@ class API(models.Model):
     def pause(cls, name, reason='Undefined'):
         try:
             url = cls.objects.get(name=name)
-            if not url._active:
+            if url._active:
                 url._active = False
                 url._last_fail = datetime.now()
                 url.fail_length = cls.DEFAULT_FAIL_LENGTH

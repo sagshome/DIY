@@ -9,7 +9,7 @@ from django.contrib.auth.views import PasswordContextMixin, PasswordResetConfirm
 from django.contrib.sites.shortcuts import get_current_site
 
 from django.core.mail import EmailMultiAlternatives
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.template import loader
 from django.urls import reverse
@@ -91,6 +91,9 @@ class NewAccountComplete(PasswordResetCompleteView):
     class PasswordResetCompleteView(PasswordContextMixin, TemplateView):
         template_name = "registration/password_reset_complete.html"
 
+
+def diy_check(request):
+    return JsonResponse({'success': True})
 
 def profile_create(request):
     if request.method == 'POST':

@@ -8,10 +8,12 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from io import StringIO
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.mail import send_mail
+from django.template import loader
 
 logger = logging.getLogger(__name__)
 
@@ -358,7 +360,42 @@ def load_dataframe(filepath: str, header: bool = True) -> pd.DataFrame:
 
     return pd.DataFrame()
 
+def send_basic_mail(subject: str, to: str=settings.EMAIL_HOST_USER, template: str='base/basic_mail.html', context: dict = None):
+    template = 'base/basic_mail.html'
+    if 'subject' not in context:
+        context['subject'] = subject
+
+    body = loader.render_to_string(template, context)
+    try:
+        send_mail(subject=subject, message=body, from_email=settings.EMAIL_HOST_USER, recipient_list=[to,], html_message=body)
+    except Exception:
+        logger.exception("Failed to send %s to %s", (subject, to))
 
 
+
+
+def send_diy_mail(subject, to, template, data):
+    from django.template import loader
+    from django.core.mail import EmailMultiAlternatives
+    site_name = 'IOOM'
+    domain = 'itsonlyourmoney.com'
+    context = {
+        "email": to,
+        "domain": domain,
+        "site_name": site_name,
+        "user": to,
+        "protocol": "http"}
+
+    for item in data:
+        context[item] = data[item]
+
+    subject = subject
+    body = loader.render_to_string(template, context)
+    email_message = EmailMultiAlternatives(subject, body, None, to)
+
+    try:
+        email_message.send()
+    except Exception:
+        logger.exception("Failed to send to %s", to)
 
 

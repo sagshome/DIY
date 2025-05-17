@@ -1,5 +1,8 @@
 import logging
 import random
+import requests
+
+from celery import shared_task
 
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -11,7 +14,7 @@ from django.db.models import Sum
 from django.db.models.functions import TruncYear
 
 from base.models import Profile
-from base.utils import normalize_date
+from base.utils import normalize_date, send_basic_mail
 from expenses.models import Item, Category, SubCategory
 from stocks.models import Portfolio, Transaction, EquityValue, Equity, Inflation, Account, FundValue
 
@@ -215,3 +218,19 @@ def daily_refresh():
 
     create_expenses(user)
     create_salary(user)
+
+@shared_task
+def test_site_up():
+    test_list = ['https://www.itsonlyourmoney.com', 'http://www.itsonlyourmoney.com', 'https://itsonlyourmoney.com', 'http://itsonlyourmoney.com']
+    data = []
+    for site in test_list:
+        try:
+            result = requests.get(f'{site}/health_check/')
+            if result.status_code != 200:
+                data.append(f'Site {site} error status code:{result.status_code} reason:{result.reason}.')
+        except requests.exceptions.RequestException as e:
+            data.append(f"Site {site} Exception caught: {e}")
+
+    if data:
+        send_basic_mail('Health Check', to='scott.sargent61@gmail.com', context={'data':data})
+

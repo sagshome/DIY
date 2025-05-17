@@ -689,7 +689,7 @@ def account_update(request, pk):
     profile = Profile.objects.get(user=request.user)
     key = profile.av_api_key if profile.av_api_key else None
     for equity in account.equities.filter(searchable=True):
-        equity.yp_update(daily=False)
+        equity.update(daily=False)
     return HttpResponse(status=200)
 
 

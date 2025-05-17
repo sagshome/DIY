@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Email {{ subject }}</title>
+</head>
+<body>
+<div class="w3-container">
+  Subject: {{ subject }}<br>
+</div>
+{% for line in data %}
+  <div class="w3-container">
+    <p>{{ line }}</p>
+  </div>
+{% endfor %}
+</body>
+</html>

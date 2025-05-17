@@ -544,7 +544,12 @@ class Equity(models.Model):
         result ={}
         if API.status('ypfinance'):  # Currently set manually in admin tool
             if self.equity_type == 'Equity':
-                df = yf.Ticker(self.key).history(interval='1mo', period=period, auto_adjust=False)
+                try:
+                    df = yf.Ticker(self.key).history(interval='1mo', period=period, auto_adjust=False)
+                except yf.exceptions.YFRateLimitError:
+                    logger.error('YF rate limit error')
+                    API.pause('ypfinance', 'Rate Limit Exceeded')
+                    return result
                 if isinstance(df, pd.DataFrame) and not df.empty:
                     data = df[['Close', 'Dividends']].to_records()
                     if len(data):

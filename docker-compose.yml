@@ -55,8 +55,9 @@ services:
     container_name: ioom_nginx
     hostname: nginx.itsonlyourmoney.com
     volumes:
-      - /mnt/shared/project/diy/certbot/www:/var/www/certbot
-      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/letsencrypt:/etc/letsencrypt
+      - ./nginx/www:/var/www/certbot
     depends_on:
       - certbot
       - django
@@ -69,11 +70,10 @@ services:
     image: certbot/certbot
     container_name: ioom_certbot
     volumes:
-      - /mnt/shared/project/diy/certbot/www:/var/www/certbot
-      - /mnt/shared/project/diy/certbot/conf:/etc/letsencrypt
-    command: certonly --webroot --webroot-path=/var/www/certbot --agree-tos --email scott.sargent61@gmail.com -d itsonlyourmoney.com -d www.itsonlyourmoney.com --non-interactive
+      - ./nginx/letsencrypt:/etc/letsencrypt
+      - ./nginx/www:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done'
 
-    # entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 2073600; done'"
 
 
     # command: certonly --webroot --webroot-path=/var/www/certbot --email scott.sargent61@gmail.com --agree-tos --non-interactive --expand --domains www.itsonlyourmoney.com --domains mail.itsonlyourmoney.com
@@ -91,7 +91,6 @@ services:
     volumes:
       - redis_data:/data
     restart: always
-
 
   celery:
     build:
@@ -130,6 +129,7 @@ services:
       - redis
       - django
       - mysql
+
 volumes:
   redis_data:
 
