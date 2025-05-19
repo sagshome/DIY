@@ -151,6 +151,7 @@ class AddTemplateView(LoginRequiredMixin, CreateView):
     model = Template
     form_class = TemplateForm
     success_url = reverse_lazy('expenses_assign')
+    template_name = 'expenses/template_form.html'
 
     def get_initial(self):
         super().get_initial()
@@ -404,23 +405,28 @@ def upload_confirm(request, uuid: uuid, headings):
         if request.method == "POST":
             formset = ColumnConfirmFormset(request.POST)
             if formset.is_valid():
+                existing = df.columns.values
+                index = 0
                 headings = []
                 for form in formset.forms:
                     heading = form.cleaned_data['heading']
                     if heading != 'ignore':
                         headings.append(heading)
-                new_dataframe = df[headings]
+                        value = int(existing[index]) if isinstance(existing[index], np.int64) else str(existing[index])
+                        df.rename({value:heading}, inplace=True, axis='columns' )
+                    index += 1
+                df.fillna(0, inplace=True)
+                df = df[headings]
                 if 'Amount' not in headings:
-                    new_dataframe['Amount'] = new_dataframe['Debit'] - new_dataframe['Credit']
+                    df['Amount'] = df['Debit'] - df['Credit']
 
                 # Save a file in csv format.
                 file_name = os.path.splitext(uuid)[0] + '.csv'
                 file_path = default_storage.base_location.joinpath('uploads', file_name)
                 set_simple_cache(file_name, file_path, 600)  # Cache prevents file from being deleted (for 10 minutes)
-                df.to_csv(file_path)
+                df.to_csv(file_path, index=False)
                 return HttpResponseRedirect(reverse('upload_process', kwargs={'uuid': uuid}))
             errors = f'{uuid} no data available'
-
     max_examples = 5 if len(df) > 5 else len(df)
     columns = df.columns.tolist()
     initial = []
@@ -437,11 +443,12 @@ def upload_confirm(request, uuid: uuid, headings):
 
 @login_required
 def upload_process(request, uuid: uuid):
-    df = load_dataframe(uuid, True)
+    file_path = default_storage.base_location.joinpath('uploads', uuid)
+    df = load_dataframe(file_path, True)
     if not df.empty:
         existing = pd.DataFrame.from_records(Item.objects.filter(user=request.user).values_list('date', 'description', 'amount'))
         existing.columns = ['Date', 'Description', 'Amount']
-        existing['Date'] = pd.to_datetime(existing['Date'])
+        # existing['Date'] = pd.to_datetime(existing['Date'])
         existing['Amount'] = pd.to_numeric(existing['Amount'])  # Decimal to Float
         df = df.round(2)  # Fix up any crazy rounding issues.
 
@@ -450,12 +457,7 @@ def upload_process(request, uuid: uuid):
         to_process = to_process.loc[to_process._merge == 'left_only', to_process.columns != '_merge']
         if len(to_process) > 0:
             errors = import_dataframe(to_process, request.user)
-
-
-
-
-
-    return render(request, "expenses/main")
+    return HttpResponseRedirect(reverse('expense_main'))
 
 @login_required
 def export_expense_page(request):

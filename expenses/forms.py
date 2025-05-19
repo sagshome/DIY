@@ -156,11 +156,11 @@ class UploadColumnForm(forms.Form):
 
     heading = forms.ChoiceField(choices=tuple(list({'ignore': '-----'}.items()) + list(DEFAULT.items()) + list(EXTRA.items())))
 
-    example0 = forms.CharField(required=False, max_length=64)
-    example1 = forms.CharField(required=False, max_length=64)
-    example2 = forms.CharField(required=False, max_length=64)
-    example3 = forms.CharField(required=False, max_length=64)
-    example4 = forms.CharField(required=False, max_length=64)
+    example0 = forms.CharField(required=False, max_length=128)
+    example1 = forms.CharField(required=False, max_length=128)
+    example2 = forms.CharField(required=False, max_length=128)
+    example3 = forms.CharField(required=False, max_length=128)
+    example4 = forms.CharField(required=False, max_length=128)
 
     def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)

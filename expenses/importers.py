@@ -114,12 +114,12 @@ def find_headers_errors(headers: List[str]) -> List[List[str]]:
     if 'Description' not in headings:
         errors = _add_error(errors, 0, 'A Description column is required')
 
-    if 'Amount' in headings:
-        if 'Debit' in headings:
-            errors = _add_error(errors, headings.index('Debit'), 'Invalid when Amount is selected')
-        if 'Credit' in headings:
-            errors = _add_error(errors, headings.index('Credit'), 'Invalid when Amount is selected')
-    else:
+    if 'Amount' not in headings:
+        # if 'Debit' in headings:
+        #     errors = _add_error(errors, headings.index('Debit'), 'Invalid when Amount is selected')
+        # if 'Credit' in headings:
+        #     errors = _add_error(errors, headings.index('Credit'), 'Invalid when Amount is selected')
+    # else:
         if not ('Credit' in headings and 'Debit' in headings):
             errors = _add_error(errors, 0, 'Amount or Debit and Credit are required')
     return errors
