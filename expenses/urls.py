@@ -35,6 +35,6 @@ urlpatterns = [
 
     path('ajax/expense-pie', views.expense_pie, name='ajax-expense-pie'),
     path('ajax/expense-bar', views.expense_bar, name='ajax-expense-bar'),
-    path('api/cash_flow', views.cash_flow_chart, name='cash_flow_data')
+    path('api/cash_flow', views.cash_flow_chart_v2, name='cash_flow_data')
 ]
 

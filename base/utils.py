@@ -8,6 +8,7 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from io import StringIO
 from pathlib import Path
+from pandas import Period
 from typing import Dict, List
 
 from django.conf import settings
@@ -76,34 +77,81 @@ class DateUtil:
     """
     A class to set step and start date based on period and span
     This keeps our code DRY
+    Examples using Sep 27th, 2024, span 4 years
+        YEAR = End: Dec 31st 2023  Start Jan 1st 2020
+        MONTH = End: Aug 31st, 2024,  Start Sep 1st, 2020
+        QTR = End: Jun 30th, 2024, Start Apr 1st, 2020
+
+        Jan 1st - Mar 31st
+        Apr 1st = Jun 30th
+        July 1st = Sep 30th
+        Oct 1st = Dec 31st
+
+
     """
 
-    def __init__(self, period: str = 'QTR', span: int = 3):
-        self.period = period if period else 'QTR'
+    def __init__(self, period: str = 'QTR', span: int = 3, initial=datetime.now().date(), use_today=False):
+        if period not in ['YEAR', 'MONTH', 'QTR']:
+            logger.error('Invalid PERIOD value:%s' % period)
+            period = 'QTR'
+        self.period = period
+
         try:
             self.span = int(span)
         except ValueError:
-            logger.error('Invalid SPAN value: %s' % span)
+            logger.error('Invalid SPAN value:%s' % span)
             self.span = 3
-        self.today = datetime.now().date().replace(day=1)
+
+        if not use_today:
+            initial = initial.replace(day=1)
+
+        # initial = datetime.now().date().replace(day=1)  # Always start at the start of a month
 
         if period == 'YEAR':
+            self.start_date = initial.replace(month=1).replace(day=1) - relativedelta(years=self.span)
+            if use_today:
+                self.end_date = initial.replace(month=12).replace(day=31)
+            else:
+                self.end_date = initial.replace(month=12).replace(day=31) - relativedelta(years=1)
             self.step = 12
-            self.start_date = self.today.replace(year=self.today.year - (self.span + 1)).replace(month=1)  # Nov/2024 -> Dec/2021
+
         elif period == 'MONTH':
-            self.start_date = self.today.replace(year=self.today.year - self.span)  # Nov/2024 -> Nov 2022
+            self.end_date = initial   # use_today,  just pass in the date as initial
+            self.start_date = initial - relativedelta(years=self.span)  # Nov/2024 -> Nov 2022
             self.step = 1
         else:  # QTR
             self.step = 3
-            start_date = self.today.replace(year=(self.today.year - self.span))
-            if self.today.month < 4:
-                self.start_date = start_date.replace(month=1)
-            elif self.today.month < 7:
-                self.start_date = start_date.replace(month=4)
-            elif self.today.month < 10:
-                self.start_date = start_date.replace(month=7)
+            if initial.month < 4:
+                self.start_date = initial.replace(month=1) - relativedelta(years=self.span-1)
+                self.end_date = initial.replace(month=12).replace(day=31)
+            elif initial.month < 7:  # in 2nd QTR so end is 1st
+                self.start_date = initial.replace(month=4) - relativedelta(years=self.span)
+                self.end_date = initial.replace(month=3).replace(day=31)
+            elif initial.month < 10:
+                self.start_date = initial.replace(month=7) - relativedelta(years=self.span)
+                self.end_date = initial.replace(month=6).replace(day=30)
             else:
-                self.start_date = start_date.replace(month=10)
+                self.start_date = initial.replace(month=10) - relativedelta(years=self.span)
+                self.end_date = initial.replace(month=9).replace(day=30)
+
+    def date_range(self):
+        start = self.start_date.strftime('%Y-%m-%d')
+        end = self.end_date.strftime('%Y-%m-%d')
+        if self.is_quarter:
+            date_range = pd.date_range(start, end, freq='QS')
+            formatted_dates = date_range.strftime('%Y')
+        elif self.is_year:
+            date_range = pd.date_range(start, end, freq='YS')
+            formatted_dates = date_range.strftime('%Y')
+        else:
+            date_range = pd.date_range(start, end, freq='MS')
+            formatted_dates = date_range.strftime('%Y-%b')
+
+        dataframe = pd.DataFrame({'Date': date_range, 'Label': formatted_dates})
+        if self.is_quarter:  # todo: fix this is the actual clause above,  this is a hack
+            dataframe['Label'] = dataframe['Date'].dt.year.astype(str) + '-Q' + dataframe['Date'].dt.quarter.astype(str)
+
+        return dataframe
 
     @classmethod
     def label_to_values(cls, label: str):

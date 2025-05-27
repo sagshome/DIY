@@ -185,3 +185,14 @@ Transfer OUT / Transfer IN are special functions - they do not require a sale,  
 
 So if I transfer out 100K,  but I funded 75K,   Should I need to tell it where I am transfering in to and move the funding records over and a CASH record?
 
+docker run -it --rm \
+  -v ./nginx/letsencrypt:/etc/letsencrypt \
+  -v ./nginx/lib:/var/lib/letsencrypt \
+  -v ./nginx/var/www/html:/var/www/html \
+  certbot/certbot certonly \
+  --webroot \
+  --webroot-path=/var/www/html \
+  --email scott.sargent61@gmail.com \
+  --agree-tos \
+  --no-eff-email \
+  -d itsonlyourmoney.com -d www.itsonlyourmoney.com

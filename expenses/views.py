@@ -681,3 +681,69 @@ def cash_flow_chart(request):
                           'borderDash': [5, 5]})
 
     return JsonResponse({'labels': labels, 'datasets': data_sets})
+
+
+@login_required
+def cash_flow_chart_v2(request):
+    """
+    Build the chart data required for the timespan with the following data
+    1.  Income
+    2.  Expenses
+
+        ('MONTH', 'Months'),
+        ('QTR', 'Quarters'),
+        ('YEAR', 'Years'),
+
+    period = forms.ChoiceField(choices=PERIODS)
+    years = forms.IntegerField(required=False, max_value=10)
+    show_trends = forms.ChoiceField(required=False, choices=[('Show', 'Yes'), ('Hide', 'No')])
+
+    """
+
+    date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
+    date_range = date_util.date_range()
+
+    show_trends = True if request.GET.get('trends') == 'Show' else False
+    income = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date, date__lte=date_util.end_date, category__name='Income')
+    expense = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date, date__lte=date_util.end_date).exclude(category__name='Income')
+
+    key = 'period'
+    if date_util.is_quarter:
+        income_set = income.annotate(period=TruncQuarter('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        expense_set = expense.annotate(period=TruncQuarter('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+    elif date_util.is_year:
+        income_set = income.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        expense_set = expense.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+    elif date_util.is_month:
+        income_set = income.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        expense_set = expense.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+    else:
+        key = 'date'
+        income_set = income.values('date').annotate(total=Sum('amount')).order_by('date')
+        expense_set = expense.values('date').annotate(total=Sum('amount')).order_by('date')
+
+    income_df = pd.DataFrame.from_dict(income_set)
+    expense_df = pd.DataFrame.from_dict(expense_set)
+    income_df.rename(columns={'period': 'Date', 'total': 'Income'}, inplace=True)
+    expense_df.rename(columns={'period': 'Date', 'total': 'Expenses'}, inplace=True)
+    income_df['Date'] = pd.to_datetime(income_df['Date'])
+    expense_df['Date'] = pd.to_datetime(expense_df['Date'])
+
+    master = pd.merge(date_util.date_range(), income_df, on='Date', how='left')
+    master = pd.merge(master, expense_df, on='Date', how='left')
+    master.fillna(0, inplace=True)
+
+    labels = master['Label'].tolist()
+    data_sets = [
+        {'label': 'Expenses', 'fill': False, 'data': master['Expenses'].tolist(), 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1},
+        {'label': 'Income', 'fill': False, 'data': master['Income'].tolist(), 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'tension': 0.1}]
+
+    if show_trends:
+        master['RI'] = master['Income'].rolling(window=7, min_periods=1, center=False).mean()
+        master['RE'] = master['Expenses'].rolling(window=7, min_periods=1, center=False).mean()
+        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': master['RE'].tolist(), 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'],
+                          'borderDash': [5, 5]})
+        data_sets.append({'label': 'Income-Trend', 'fill': False, 'data': master['RI'].tolist(), 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'],
+                          'borderDash': [5, 5]})
+
+    return JsonResponse({'labels': labels, 'datasets': data_sets})

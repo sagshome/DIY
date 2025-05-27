@@ -1,3 +1,33 @@
+# Steps for initial letsencrypt certificates
+This only needs to be done if you destroy certificates or I need to start again
+## Stop some service
+docker compose stop nginx
+docker compose stop certbot
+## Edit some config
+Change docker-compose.yml
+  - Edit out entrypoint on service certbot
+
+Change nginx-Dockerfile
+  - COPY build/nginx.conf /etc/nginx/conf.d/default.conf
+
+to
+  - COPY build/initial-nginx.conf /etc/nginx/conf.d/default.conf
+## Rebuid nginx
+docker compose build nginx
+docker compose up nginx
+## Request Tokens
+   docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email auth_email --agree-tos --non-interactive  --domains itsonlyourmoney.com
+   
+   docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email auth_email --agree-tos --non-interactive  --domains www.itsonlyourmoney.com
+
+   note,  may test above by adding --dry-run
+## Final Changes
+docker compose stop nginx
+
+undo edits above
+docker compose build nginx
+docker compose up -d 
+
 Needed for Launch
 1) ~~Support Income~~
    2) Income will come from bank statement (mostly) - Just like expenses

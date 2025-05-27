@@ -55,11 +55,9 @@ services:
     container_name: ioom_nginx
     hostname: nginx.itsonlyourmoney.com
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/letsencrypt:/etc/letsencrypt
-      - ./nginx/www:/var/www/certbot
+      - ./webstore/certbot/www:/var/www/certbot
+      - ./webstore/certbot/conf:/etc/letsencrypt
     depends_on:
-      - certbot
       - django
     networks:
       ioom_network:
@@ -70,13 +68,9 @@ services:
     image: certbot/certbot
     container_name: ioom_certbot
     volumes:
-      - ./nginx/letsencrypt:/etc/letsencrypt
-      - ./nginx/www:/var/www/certbot
+      - ./webstore/certbot/www:/var/www/certbot
+      - ./webstore/certbot/conf:/etc/letsencrypt
     entrypoint: /bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done'
-
-
-
-    # command: certonly --webroot --webroot-path=/var/www/certbot --email scott.sargent61@gmail.com --agree-tos --non-interactive --expand --domains www.itsonlyourmoney.com --domains mail.itsonlyourmoney.com
 
   redis:
     # Since this is not visible outside the docker network.   No need to expose the port
@@ -140,7 +134,3 @@ networks:
       driver: default
       config:
         - subnet: "172.20.0.0/16"
-
-
-
-
