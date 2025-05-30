@@ -183,14 +183,23 @@ class PortfolioTableView(ContainerTableView):
         context['equities'] = context['account'].equities.order_by('symbol')
 
         summary_data = self.container_data(context['account'])
-        summary_data['Date'] = summary_data['Date'].dt.strftime('%b-%Y')
-        context['summary_data'] =  json.loads(summary_data.to_json(orient='records'))
-        context['account_list'] = context['account'].account_set.all().order_by('-_start')
-        context['view_type'] = 'Data'
-        context['equity_count'] = context['equities'].count()
-        context['can_reconcile'] = False
-        context['object_type'] = 'Portfolio'
-        context['xas'] = context['account'].transactions.all().order_by('-real_date')
+        if summary_data.empty:
+            context['summary_data'] = None
+            context['account_list'] = None
+            context['view_type'] = 'Data'
+            context['equity_count'] = 0
+            context['can_reconcile'] = False
+            context['object_type'] = 'Portfolio'
+            context['xas'] = None
+        else:
+            summary_data['Date'] = summary_data['Date'].dt.strftime('%b-%Y')
+            context['summary_data'] = json.loads(summary_data.to_json(orient='records'))
+            context['account_list'] = context['account'].account_set.all().order_by('-_start')
+            context['view_type'] = 'Data'
+            context['equity_count'] = context['equities'].count()
+            context['can_reconcile'] = False
+            context['object_type'] = 'Portfolio'
+            context['xas'] = context['account'].transactions.all().order_by('-real_date')
         return context
 
 

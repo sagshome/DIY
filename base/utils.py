@@ -292,7 +292,7 @@ def cache_dataframe(key: str, dataframe: pd.DataFrame, timeout=36000):
         dataframe = dataframe.reset_index(drop=True)
         #  Used when debugging.
         if key.endswith('Components') and 'TBuy' not in list(dataframe.columns):
-            assert False, f'Saving corrupt Dataframe for {key}'
+            logger.error('Saving corrupt Dataframe for %s' % key)
         cache.set(key, dataframe.to_json(), timeout)
 
 
