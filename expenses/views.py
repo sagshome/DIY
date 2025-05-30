@@ -726,24 +726,41 @@ def cash_flow_chart_v2(request):
     expense_df = pd.DataFrame.from_dict(expense_set)
     income_df.rename(columns={'period': 'Date', 'total': 'Income'}, inplace=True)
     expense_df.rename(columns={'period': 'Date', 'total': 'Expenses'}, inplace=True)
-    income_df['Date'] = pd.to_datetime(income_df['Date'])
-    expense_df['Date'] = pd.to_datetime(expense_df['Date'])
 
-    master = pd.merge(date_util.date_range(), income_df, on='Date', how='left')
-    master = pd.merge(master, expense_df, on='Date', how='left')
+    master = date_util.date_range()
+    data_sets = []
+    if not income_df.empty:
+        income_df['Date'] = pd.to_datetime(income_df['Date'])
+        master = pd.merge(master, income_df, on='Date', how='left')
+    else:
+        master['Income'] = 0
+
+    if not expense_df.empty:
+        expense_df['Date'] = pd.to_datetime(expense_df['Date'])
+        master = pd.merge(master, expense_df, on='Date', how='left')
+    else:
+        master['Expenses'] = 0
+
     master.fillna(0, inplace=True)
 
     labels = master['Label'].tolist()
-    data_sets = [
-        {'label': 'Expenses', 'fill': False, 'data': master['Expenses'].tolist(), 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1},
-        {'label': 'Income', 'fill': False, 'data': master['Income'].tolist(), 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'tension': 0.1}]
-
+    data_sets.append(
+        {'label': 'Expenses', 'fill': False, 'data': master['Expenses'].tolist(),
+         'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1})
     if show_trends:
         master['RI'] = master['Income'].rolling(window=7, min_periods=1, center=False).mean()
+        data_sets.append(
+            {'label': 'Income-Trend', 'fill': False, 'data': master['RI'].tolist(), 'borderColor': PALETTE['olive'],
+             'backgroundColor': PALETTE['olive'],
+             'borderDash': [5, 5]})
+
+    data_sets.append(
+        {'label': 'Income', 'fill': False, 'data': master['Income'].tolist(),
+         'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'tension': 0.1})
+    if show_trends:
         master['RE'] = master['Expenses'].rolling(window=7, min_periods=1, center=False).mean()
-        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': master['RE'].tolist(), 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'],
-                          'borderDash': [5, 5]})
-        data_sets.append({'label': 'Income-Trend', 'fill': False, 'data': master['RI'].tolist(), 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'],
+        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': master['RE'].tolist(),
+                          'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'],
                           'borderDash': [5, 5]})
 
     return JsonResponse({'labels': labels, 'datasets': data_sets})
