@@ -695,13 +695,23 @@ def account_update(request, pk):
 
 @login_required
 def portfolio_update(request, pk):
+    """
+    This is only called from the main wealth page,  so we may as well update the page too
+    """
     portfolio = get_object_or_404(Portfolio, pk=pk, user=request.user)
 
     profile = Profile.objects.get(user=request.user)
     key = profile.av_api_key if profile.av_api_key else None
-    for equity in portfolio.equities.filter(searchable=True):
+
+    for equity in Equity.objects.filter(
+            searchable=True,
+            id__in=Transaction.objects.filter(account__portfolio=portfolio, account___end__isnull=True, xa_action__in=Transaction.SHARE_TRANSACTIONS)):
         equity.update(key=key, daily=False)
-    return HttpResponse(status=200)
+
+    for account in portfolio.account_set.filter(_end__isnull=True):
+        account.update_static_values()
+
+    return HttpResponseRedirect(reverse('stocks_main'))
 
 
 @login_required

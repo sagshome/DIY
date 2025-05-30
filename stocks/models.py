@@ -1378,6 +1378,13 @@ class Portfolio(BaseContainer):
         summary = super().summary
         summary['Type'] = 'Portfolio'
         summary['Id'] = self.id
+        if self.account_set.filter(_end__isnull=True).count() == 1:
+            summary['OneActive'] = True
+            one_account = self.account_set.get(_end__isnull=True)
+            summary['OneId'] = one_account.id
+            summary['OneAccountType'] = one_account.account_type
+        else:
+            summary['OneActive'] = False
         return summary
 
 

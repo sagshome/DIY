@@ -104,12 +104,24 @@
                     {% endif %}
                     <td class="w3-right-align w3-small ">
                         {% if item.Type == 'Portfolio' %}
-                            <button onclick="fetchDataWithTimeout('{% url 'portfolio_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
+                            {% if item.OneActive %}
+                                {% if item.OneAccountType == 'Cash' %}
+                                    <a class="w3-hide-small" href="{% url 'set_balance' item.OneId %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                                {% elif item.OneAccountType == 'Value' %}
+                                   <a href="{% url 'set_value' account.OneId %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Update </button></a>
+                                {% else %}
+                                   <a class="w3-hide-small" href="{% url 'portfolio_update' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                                {% endif %}
+                            {% else %}
+                                <a class="w3-hide-small" href="{% url 'portfolio_table' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-green"> Update </button></a>
+                            {% endif %}
                             <a class="w3-hide-small" href="{% url 'portfolio_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
                             <a class="w3-hide-small" href="{% url 'portfolio_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% else %}
                             {% if item.AccountType == 'Cash' %}
                                 <a class="w3-hide-small" href="{% url 'set_balance' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                            {% elif item.AccountType == 'Value' %}
+                               <a href="{% url 'set_value' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Update </button></a>
                             {% else %}
                                 <button onclick="fetchDataWithTimeout('{% url 'account_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
                             {% endif %}
