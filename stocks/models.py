@@ -45,6 +45,8 @@ For Equity.Cash
 #  1. Warning them and silently give them the cash ?  If they fix it up by doing a proper transaction,  how do I clear
 #     old one.
 
+# https://www.itsonlyourmoney.com/stocks/account/Portfolio/10/22/details/   is kind of messed up,  it looks like I lost money but I didn't
+
 import logging
 import pandas as pd
 import numpy as np
@@ -1135,6 +1137,7 @@ class BaseContainer(models.Model):
         summary['Name'] = self.name
         summary['Start'] = self.start
         summary['End'] = self.end
+        summary['LiteralDate'] = datetime.today().strftime('%b-%Y')
         return summary
 
     def summary_by_date(self, summary_date: datetime):
@@ -1313,12 +1316,9 @@ class Portfolio(BaseContainer):
             values.append(equity.key)
         return values
 
-    def reset(self, all=False):
+    def reset(self):
         clear_cached_dataframe(self.container_cache_key)
         clear_cached_dataframe(self.component_cache_key)
-        if all:
-            for account in self.account_set.all():
-                account.reset()
 
     @property
     def transactions(self) -> QuerySet['Transaction']:
@@ -1378,11 +1378,18 @@ class Portfolio(BaseContainer):
         summary = super().summary
         summary['Type'] = 'Portfolio'
         summary['Id'] = self.id
+        active_equities = self.e_pd.loc[(self.e_pd['Date'] == pd.Timestamp(normalize_today())) & (self.e_pd['Shares'] != 0)]['Object_ID'].to_list()
+
         if self.account_set.filter(_end__isnull=True).count() == 1:
             summary['OneActive'] = True
             one_account = self.account_set.get(_end__isnull=True)
             summary['OneId'] = one_account.id
             summary['OneAccountType'] = one_account.account_type
+            if one_account.account_type == 'Investment' and Equity.objects.filter(id__in=active_equities, searchable=False).exists():
+                summary['OneAccountType'] = 'Manual'  # Manual is used in the template
+
+        elif self.account_set.exclude(account_type='Investment').count() == 0 and not Equity.objects.filter(id__in=active_equities, searchable=False).exists():
+            summary['OneAccountType'] = 'Investment'
         else:
             summary['OneActive'] = False
         return summary
@@ -1571,7 +1578,6 @@ class Account(BaseContainer):
     @cached_property
     def last_date(self):
         return self.child.get_last_date
-
 
     @property
     def get_last_date(self):
@@ -1779,7 +1785,7 @@ class Account(BaseContainer):
         self.reset()
         df = self.p_pd
         self._cost = self.get_pattr('Cost', df=df)
-        self._value = self.get_pattr('Actual', df=df)
+        self._value = self.get_pattr('Value', df=df)
         self._dividends = self.get_pattr('TotalDividends', df=df)
 
         self._start = self.p_pd['Date'].min()

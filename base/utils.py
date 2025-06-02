@@ -313,12 +313,14 @@ def get_cached_dataframe(key):
     """
     # Retrieve the binary data from the cache
     if not settings.NO_CACHE:
-        logger.debug('going after the %s cache' % key)
         try:
             json_data = cache.get(key)
             if json_data:
+                logger.debug('Retrieved %s from cache' % key)
                 # Deserialize the binary data back into a DataFrame
                 return pd.read_json(StringIO(json_data))
+            else:
+                logger.debug('No cache for %s' % key)
         except TypeError:
             logger.debug('Had some strange data with key %s -> clearing the data' % key)
             clear_cached_dataframe(key)
@@ -376,6 +378,7 @@ df.columns = ['a', 'b', 'c', 'd']...
     
 '''
 
+
 def load_dataframe(filepath: str, header: bool = True) -> pd.DataFrame:
     file_ext = os.path.splitext(filepath)[1]
     try:
@@ -408,6 +411,7 @@ def load_dataframe(filepath: str, header: bool = True) -> pd.DataFrame:
 
     return pd.DataFrame()
 
+
 def send_basic_mail(subject: str, to: str=settings.EMAIL_HOST_USER, template: str='base/basic_mail.html', context: dict = None):
     template = 'base/basic_mail.html'
     if 'subject' not in context:
@@ -418,8 +422,6 @@ def send_basic_mail(subject: str, to: str=settings.EMAIL_HOST_USER, template: st
         send_mail(subject=subject, message=body, from_email=settings.EMAIL_HOST_USER, recipient_list=[to,], html_message=body)
     except Exception:
         logger.exception("Failed to send %s to %s", (subject, to))
-
-
 
 
 def send_diy_mail(subject, to, template, data):

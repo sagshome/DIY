@@ -20,6 +20,13 @@
         <td class="w3-container w3-center">
             <a class="w3-hide-small" href="{{account.edit_url}}"><button class="w3-button-small w3-round-xlarge diy-button diy-orange"> Edit </button></a>
             {% if not account.closed %}
+                {% if account.account_type == 'Cash' %}
+                    <a class="w3-hide-small" href="{% url 'set_balance' account.id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> BUpdate</button></a>
+                {% elif account.account_type == 'Value' %}
+                    <a href="{% url 'value_account_reconcile' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> VUpdate </button></a>
+                {% else %}
+                    <a href="{% url 'update_account_date' account.id literal_date %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> IUpdate </button></a>
+                {% endif %}
                 <a class="w3-hide-small" href="{{account.close_url}}"><button class="w3-button-small w3-round-xlarge diy-button diy-red">Close</button></a>
             {% endif %}
         </td>

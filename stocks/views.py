@@ -130,6 +130,7 @@ class ContainerTableView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['help_file'] = 'stocks/help/account_table.html'
+        context['literal_date'] = datetime.now().strftime('%b-%Y')
         return context
 
 
@@ -389,7 +390,7 @@ class AccountEdit(LoginRequiredMixin, UpdateView, DateMixin):
     def get_success_url(self):
         try:
             url = self.request.POST["success_url"]
-        except AttributeError:
+        except:
             url = reverse('stocks_main', kwargs={})
         return url
 

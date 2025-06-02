@@ -104,13 +104,15 @@
                     {% endif %}
                     <td class="w3-right-align w3-small ">
                         {% if item.Type == 'Portfolio' %}
-                            {% if item.OneActive %}
+                            {% if item.OneAccountType == 'Investment' %}
+                                <a class="w3-hide-small" href="{% url 'portfolio_update' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                            {% elif item.OneActive %}
                                 {% if item.OneAccountType == 'Cash' %}
                                     <a class="w3-hide-small" href="{% url 'set_balance' item.OneId %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
                                 {% elif item.OneAccountType == 'Value' %}
-                                   <a href="{% url 'set_value' account.OneId %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Update </button></a>
+                                   <a href="{% url 'set_value' item.OneId %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Update </button></a>
                                 {% else %}
-                                   <a class="w3-hide-small" href="{% url 'portfolio_update' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                                   <a class="w3-hide-small" href="{% url 'update_account_date' item.OneId item.LiteralDate %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
                                 {% endif %}
                             {% else %}
                                 <a class="w3-hide-small" href="{% url 'portfolio_table' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-green"> Update </button></a>
