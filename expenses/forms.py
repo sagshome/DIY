@@ -118,25 +118,16 @@ class TemplateForm(forms.ModelForm):
 
     def clean_expression(self):
         if self.cleaned_data['expression'].find('$') != -1:
-            raise forms.ValidationError('Expression can not contain a "$" character')
+            raise forms.ValidationError('Expression can not contain the "$" character')
+
+        if 'type' not in self.cleaned_data:
+            raise forms.ValidationError('An expression type must be selected')
 
         if not Template.test_expression(self.cleaned_data['type'], self.initial['expression'],  self.cleaned_data['expression']):
             raise forms.ValidationError(
                 f"Expression {self.cleaned_data['expression']} is not valid with \"{Template.choice(self.cleaned_data['type'])}\"  {self.initial['expression']}")
 
         return self.cleaned_data['expression']
-
-    def clean_subcategory(self):
-        if not self.cleaned_data['subcategory']:
-            if self.cleaned_data['category']:
-                raise forms.ValidationError('A subcategory is required if you enter a category')
-        return self.cleaned_data['subcategory']
-
-    def clean_category(self):
-        if not self.cleaned_data['category']:
-            if "subcategory" in self.cleaned_data:
-                raise forms.ValidationError('A category is required if you enter a subcategory')
-        return self.cleaned_data['category']
 
     def clean_ignore(self):
         if self.cleaned_data['ignore']:
@@ -245,8 +236,6 @@ class ItemListEditForm(BaseItemForm):
 
     def clean(self):
         super().clean()
-        if self.cleaned_data["category"] and not self.cleaned_data["subcategory"]:
-            raise forms.ValidationError(f'Error: Category {self.cleaned_data["category"]} missing Subcategory.')
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
             raise forms.ValidationError(f'Error: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
 
@@ -297,10 +286,8 @@ class ItemEditForm(BaseItemForm):
 
     def clean(self):
         super().clean()
-        if self.cleaned_data["category"] and not self.cleaned_data["subcategory"]:
-            raise forms.ValidationError(f'Warning: Category {self.cleaned_data["category"]} missing subcategory.')
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
-            raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
+            raise forms.ValidationError(f'Warning: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
 
         if self.cleaned_data["amortize_months"] and self.cleaned_data["amortize_months"] != 0:
             if self.instance.amortized:
@@ -365,10 +352,9 @@ class ItemForm(BaseItemForm):
 
     def clean(self):
         super().clean()
-        if self.cleaned_data["category"] and not self.cleaned_data["subcategory"]:
-            raise forms.ValidationError(f'Warning: Category {self.cleaned_data["category"]} missing subcategory.')
+
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
-            raise forms.ValidationError(f'Warning: Subategory {self.cleaned_data["subcategory"]} missing Category.')
+            raise forms.ValidationError(f'Warning: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
 
 
 class SingleItemForm(ItemForm):

@@ -166,6 +166,7 @@ class AddTemplateView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['action'] = 'Create'
+        context['success_url'] = self.request.META.get('HTTP_REFERER', reverse('expenses_assign'))
         return context
 
 
@@ -206,6 +207,7 @@ def edit_template(request, pk: int):
         'template_form': template_form,
         'formset': formset,
         'view_verb': 'Update',
+        'success_url': request.META.get('HTTP_REFERER', reverse('expenses_templates')),
         'me': obj,
     })
 
@@ -327,6 +329,8 @@ def assign_expenses(request):
             count = filtered_set.count()
             queryset = Item.objects.filter(id__in=list(filtered_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')
             formset = AssignFormSet(queryset=queryset)
+            if count == 0:
+                return HttpResponseRedirect(reverse('expense_main'))
     else:
         queryset = Item.objects.filter(id__in=list(basic_filter.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')
         formset = AssignFormSet(queryset=queryset)

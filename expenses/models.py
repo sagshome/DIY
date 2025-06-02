@@ -132,7 +132,7 @@ for t in Template.objects.all():
    ...:                 print (f'Item:{i} Existing Template:----------  Also...{t.type} {t}')
     """
 
-    CHOICES = [("", "-----"),
+    CHOICES = [("-", "-----"),
                ("starts", "Starts With"),
                ("ends", "Ends With"),
                ("contains", "Contains")]
@@ -146,15 +146,15 @@ for t in Template.objects.all():
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
 
     def __str__(self):
-        return(self.expression)
+        return self.expression
 
     def save(self, *args, **kwargs):
         if self.ignore:
             self.category = None
             self.subcategory = None
         else:
-            if not self.category or not self.subcategory:
-                logger.critical('Attempting to save template without category and subcategory')
+            if not self.category:
+                logger.critical('Attempting to save template without category or ignore')
                 return
         super().save(*args, **kwargs)
 
@@ -404,7 +404,7 @@ class Item(models.Model):
 
     @classmethod
     def unassigned(cls, user):
-        return Item.objects.filter(user=user).filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
+        return Item.objects.filter(user=user, category__isnull=True).exclude(ignore=True)
 
     @classmethod
     def update_templates(cls):
