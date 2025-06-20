@@ -14,7 +14,7 @@ from .utils import BoolReason
 # We can not import CURRENCIES since it will be an import loop - from stocks.models import CURRENCIES
 CURRENCIES = (
     ('CAD', 'Canadian Dollar'),
-    ('USD', 'US Dollar')
+    ('USD', 'US Dollar'),
 )
 
 logger = logging.getLogger(__name__)

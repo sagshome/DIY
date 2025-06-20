@@ -1,3 +1,13 @@
+Can I just use a morningstar get request and parse out values ?
+
+attributes on Model Equity
+update_url
+update_source  (which I already have)
+
+https://www.morningstar.ca/ca/report/fund/performance.aspx?t=0P00011J9I&FundServCode=MMF1492@7&lang=en-CA
+
+
+
 coverage run --source=expenses manage.py test expenses
 coverage report -m
 

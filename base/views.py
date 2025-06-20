@@ -1,5 +1,5 @@
 import logging
-
+from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
@@ -69,6 +69,22 @@ def diy_main(request):
             add_to_cache.delay(request.user.id)  # Update the redis cache for the accounts owned by this user.
     return render(request, "base/diy_main.html", {
         'form': form, 'span': span, 'period': period, 'trends': trends, "help_file": "base/help/diy_main.html"})
+
+
+@login_required
+def diy_main_mobile(request):
+    labels = [(datetime.today() - timedelta(days=i)).strftime('%b %d') for i in reversed(range(7))]
+    chart1_values = [100 + i * 5 for i in range(7)]
+    chart2_values = [200 - i * 3 for i in range(7)]
+    table_data = [{'date': labels[i], 'value': chart1_values[i]} for i in range(7)]
+
+    return render(request, 'base/mobile/mobile_main.html', {
+        'chart1_labels': labels,
+        'chart1_values': chart1_values,
+        'chart2_labels': labels,
+        'chart2_values': chart2_values,
+        'table_data': table_data
+    })
 
 
 class NewAccountConfirmView(PasswordResetConfirmView):

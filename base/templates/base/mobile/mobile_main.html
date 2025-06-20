@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load static %}
+
+
+{% block content %}
+  <h1 class="text-xl font-semibold mb-4">Mobile Dashboard</h1>
+
+  <!-- Chart 1 -->
+  <div class="bg-white rounded-2xl shadow p-4 mb-6">
+    <h2 class="text-md font-medium mb-2">Line Chart 1</h2>
+    <canvas id="chart1" class="w-full h-48"></canvas>
+  </div>
+
+  <!-- Chart 2 -->
+  <div class="bg-white rounded-2xl shadow p-4 mb-6">
+    <h2 class="text-md font-medium mb-2">Line Chart 2</h2>
+    <canvas id="chart2" class="w-full h-48"></canvas>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-white rounded-2xl shadow p-4">
+    <h2 class="text-md font-medium mb-2">Recent Data</h2>
+    <table class="min-w-full text-sm text-left">
+      <thead>
+        <tr class="border-b text-gray-600">
+          <th class="py-2">Date</th>
+          <th class="py-2">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table_data %}
+        <tr class="border-b hover:bg-gray-50">
+          <td class="py-2">{{ row.date }}</td>
+          <td class="py-2">{{ row.value }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const ctx1 = document.getElementById('chart1').getContext('2d');
+    const chart1 = new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: {{ chart1_labels|safe }},
+        datasets: [{
+          label: 'Metric A',
+          data: {{ chart1_values|safe }},
+          borderColor: 'rgba(59, 130, 246, 1)',
+          backgroundColor: 'rgba(59, 130, 246, 0.2)',
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+
+    const ctx2 = document.getElementById('chart2').getContext('2d');
+    const chart2 = new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: {{ chart2_labels|safe }},
+        datasets: [{
+          label: 'Metric B',
+          data: {{ chart2_values|safe }},
+          borderColor: 'rgba(234, 88, 12, 1)',
+          backgroundColor: 'rgba(234, 88, 12, 0.2)',
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  </script>
+{% endblock %}
