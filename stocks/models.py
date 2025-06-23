@@ -375,13 +375,17 @@ class Equity(models.Model):
 
     EQUITY_TYPES = (('Equity', 'Equity/ETF'),
                     ('Cash', 'Bank Accounts'),
-                    ('Value', 'Value Account'))
+                    ('Value', 'Value Account'),
+                    ('Fund', 'Mutual Fund'),
+                    )
     REGIONS = (('Canada', 'Canada'),
-               ('US', 'US'))
+               ('US', 'US'),
+               )
 
     # API sources
     ypfinance = 1
     alphavantage = 2
+    morningstar = 3
     no_api = 99
 
     @classmethod
@@ -394,12 +398,13 @@ class Equity(models.Model):
     # Symbol is 'acct_id:<str>' for Cash and Value types
     symbol: str = models.CharField(max_length=32, verbose_name='Trading symbol')  # Symbol
     region: str = models.CharField(max_length=10, null=False, blank=False, default='Canada')
+    alternate_symbol: str = models.CharField(max_length=32, null=True, blank=True, verbose_name='Alternate API Symbol')  # Symbol
 
     name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
     equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES, default='Equity')
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
     last_updated: date = models.DateField(blank=True, null=True)
-    deactived_date: date = models.DateField(blank=True, null=True)
+    deactivated_date: date = models.DateField(blank=True, null=True)
     searchable: bool = models.BooleanField(default=False)  # Set to False, when this is data that was forced into being
     validated: bool = models.BooleanField(default=False)  # Set to True was validation is done
 
@@ -498,7 +503,7 @@ class Equity(models.Model):
             logger.error('Can not fill holes on %s - No records found' % self)
             return
         start_date = first_record.date
-        end_date = self.deactived_date if self.deactived_date else normalize_today()
+        end_date = self.deactivated_date if self.deactivated_date else normalize_today()
         break_date = model.objects.filter(equity=self).latest('date').date
 
         all_records: Dict[date, float] = dict(model.objects.filter(equity=self).values_list('date', data))

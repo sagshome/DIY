@@ -66,6 +66,7 @@ class AccountForm(AccountAddForm):
         self.fields['portfolio'].required = False
         append_styles(self.fields["portfolio"].widget, width='200px', height='28.5px')
 
+
 class AccountCloseForm(forms.ModelForm):
 
     accounts = forms.ModelChoiceField(queryset=Account.objects.none(), label='Account to transfer into')
@@ -282,10 +283,15 @@ class ManualUpdateEquityForm(forms.Form):
 
 class AddEquityForm(forms.Form):
 
+    EQUITY_TYPES = ((None, '---------'),
+                    ('Equity', 'Equity/ETF'),
+                    ('Fund', 'Mutual Fund'),
+                    )
+
     symbol = forms.CharField(required=True, max_length=36)
-    description = forms.CharField(required=False, max_length=128)
+    search_values = forms.CharField(required=False, max_length=128)
     region = forms.ChoiceField(choices=Equity.REGIONS)
-    equity_type = forms.ChoiceField(choices=Equity.EQUITY_TYPES)
+    equity_type = forms.ChoiceField(choices=EQUITY_TYPES)
 
     def clean(self):
         cleaned_data = super().clean()

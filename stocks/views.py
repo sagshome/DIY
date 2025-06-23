@@ -213,15 +213,18 @@ class ContainerDetailView(LoginRequiredMixin, DetailView):
         logger.debug('Going after equity_data for %s' % myobj)
         this_date = np.datetime64(normalize_today())
         df = myobj.e_pd
-        equity_data = df.loc[df['Date'] == this_date].groupby(['Date', 'Equity', 'Object_ID', 'Object_Type']).agg(
-            {'Shares': 'sum', 'Cost': 'sum', 'Price': 'max', 'Dividends': 'max',
-             'TotalDividends': 'sum', 'Value': 'sum', 'AvgCost': 'max',
-             'RelGain': 'sum', 'UnRelGain': 'sum', 'RelGainPct': 'mean', 'UnRelGainPct': 'mean'}).reset_index()
+        if not df.empty:
+            equity_data = df.loc[df['Date'] == this_date].groupby(['Date', 'Equity', 'Object_ID', 'Object_Type']).agg(
+                {'Shares': 'sum', 'Cost': 'sum', 'Price': 'max', 'Dividends': 'max',
+                 'TotalDividends': 'sum', 'Value': 'sum', 'AvgCost': 'max',
+                 'RelGain': 'sum', 'UnRelGain': 'sum', 'RelGainPct': 'mean', 'UnRelGainPct': 'mean'}).reset_index()
 
-        equity_data.replace(np.nan, 0, inplace=True)
-        equity_data.sort_values(by=['Value', 'Shares', 'Equity'], inplace=True, ascending=[False, False, True])
-        equity_data['Object_ID'] = equity_data['Object_ID'].astype('int')  # Ensure this is an integer
-        return equity_data
+            equity_data.replace(np.nan, 0, inplace=True)
+            equity_data.sort_values(by=['Value', 'Shares', 'Equity'], inplace=True, ascending=[False, False, True])
+            equity_data['Object_ID'] = equity_data['Object_ID'].astype('int')  # Ensure this is an integer
+
+            return equity_data
+        return df
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
