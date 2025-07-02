@@ -173,12 +173,19 @@ def get_cash_value(request):
 @login_required
 def search_equity(request):
     query = request.GET.get('q', '')
-    if query:
-        items = []
+    source = request.GET.get('t', '')
+    items = []
+    if not source:
+        source = 'Equity'
+    if query and source == 'Equity':
         for item in yf.search.Search(query, max_results=10, news_count=0, timeout=1, raise_errors=False).quotes:
             if item['exchDisp'] in ['NASDAQ', 'NYSE', 'Toronto']:
                 items.append({'symbol': item['symbol'], 'shortname': item['shortname']})
         return JsonResponse({'results': items}, safe=False)
+    if source == 'Fund' or not items:
+        pass
+
+
     return JsonResponse([], safe=False)
 
 

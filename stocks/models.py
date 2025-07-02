@@ -776,6 +776,7 @@ class EquityValue(models.Model):
     Track an equities value
     """
 
+
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE, limit_choices_to={'equity_type': 'Equity'})
     real_date: date = models.DateField(verbose_name='Recorded Date', null=True, validators=[MinValueValidator(datetime(1961, 1, 1).date()),
                                                                                             MaxValueValidator(datetime(2100, 1, 1).date())])

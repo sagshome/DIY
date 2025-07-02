@@ -20,7 +20,9 @@
         async function fetchOptions(query) {
             if (query.length < 2) return; // Avoid unnecessary API calls
 
-            const response = await fetch(`/stocks/api/search/?q=${query}`);
+            var account_value = $("#id_equity_type").val();
+            var url = `/stocks/api/search/?q=${query}` + "&t=" + account_value;
+            const response = await fetch(url);
             const data = await response.json();
 
             const container = document.getElementById("checkbox-container");
@@ -74,7 +76,12 @@
                 <td> {{ form.region.errors }}</td>
             </tr>
             <tr style="display: block;">
-                <td>{{ form.search_values.label_tag }}</td>
+                <td>{{ form.equity_type.label_tag }}</td>
+                <td> {{ form.equity_type }}</td>
+                <td> {{ form.equity_type.errors }}</td>
+            </tr>
+            <tr style="display: block;">
+                <td>Search Criteria</td>
                 <td> <input type="text" id="search" oninput="fetchOptions(this.value)" placeholder="Type to search..."></td>
                 <td></td>
             </tr>
