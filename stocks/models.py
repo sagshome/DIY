@@ -400,8 +400,8 @@ class Equity(models.Model):
     name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
     equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES, default='Equity')
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
-    last_updated: date = models.DateField(blank=True, null=True)
-    deactived_date: date = models.DateField(blank=True, null=True)
+    last_updated: date = models.DateTimeField(blank=True, null=True)
+    deactivated_date: date = models.DateField(blank=True, null=True)
     searchable: bool = models.BooleanField(default=False)  # Set to False, when this is data that was forced into being
     validated: bool = models.BooleanField(default=False)  # Set to True was validation is done
 
@@ -500,7 +500,7 @@ class Equity(models.Model):
             logger.error('Can not fill holes on %s - No records found' % self)
             return
         start_date = first_record.date
-        end_date = self.deactived_date if self.deactived_date else normalize_today()
+        end_date = self.deactivated_date if self.deactivated_date else normalize_today()
         break_date = model.objects.filter(equity=self).latest('date').date
 
         all_records: Dict[date, float] = dict(model.objects.filter(equity=self).values_list('date', data))
@@ -576,7 +576,7 @@ class Equity(models.Model):
         results = {}
         if key and self.equity_type == 'Equity' and self.searchable:
             now = datetime.now().date()
-            if now == self.last_updated and not force:
+            if now == self.last_updated.date() and not force:
                 logger.info('%s - Already updated %s' % (self, now))
                 return results
             else:
@@ -663,7 +663,7 @@ class Equity(models.Model):
                         EquityEvent.objects.create(date=result_key, equity=self, event_type='Dividend', api=results_api,
                                                    real_date=real_date, source=DataSource.API.value, value=results[result_key][1])
             if daily:
-                self.last_updated = datetime.now().date()
+                self.last_updated = datetime.now()
                 self.save()
 
     def update(self, force: bool = False, key: str = None, daily=True):

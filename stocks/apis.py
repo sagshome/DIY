@@ -51,7 +51,7 @@ def get_equity_list(request):
             this_date = datetime.strptime(request.GET.get("date"), '%Y-%m-%d')
         except ValueError:
             logger.error("Received a ill formed date %s" % request.GET.get("date"))
-    values = values.exclude(deactived_date__lt=this_date)
+    values = values.exclude(deactivated_date__lt=this_date)
 
     if request.GET.get("action"):
         try:
