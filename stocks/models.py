@@ -171,6 +171,7 @@ def currency_factor(exchange_date: date, input_currency: str, my_currency: str) 
                 raise Exception(f'Unexpected input_currency {input_currency}')
     return 1
 
+
 def clear_duplicates(equity_object, equity, event_object=False):
     equity_object_query = equity_object.objects.filter(equity=equity).values('date')
     if event_object:
@@ -184,6 +185,7 @@ def clear_duplicates(equity_object, equity, event_object=False):
                 best_record = record
             else:
                 record.delete()
+
 
 class ExchangeRate(models.Model):
     """
@@ -398,8 +400,8 @@ class Equity(models.Model):
     name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Equities Full Name')
     equity_type: str = models.CharField(max_length=10, blank=True, null=True, choices=EQUITY_TYPES, default='Equity')
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
-    last_updated: date = models.DateField(blank=True, null=True)
-    deactived_date: date = models.DateField(blank=True, null=True)
+    last_updated: date = models.DateTimeField(blank=True, null=True)
+    deactivated_date: date = models.DateField(blank=True, null=True)
     searchable: bool = models.BooleanField(default=False)  # Set to False, when this is data that was forced into being
     validated: bool = models.BooleanField(default=False)  # Set to True was validation is done
 
@@ -498,7 +500,7 @@ class Equity(models.Model):
             logger.error('Can not fill holes on %s - No records found' % self)
             return
         start_date = first_record.date
-        end_date = self.deactived_date if self.deactived_date else normalize_today()
+        end_date = self.deactivated_date if self.deactivated_date else normalize_today()
         break_date = model.objects.filter(equity=self).latest('date').date
 
         all_records: Dict[date, float] = dict(model.objects.filter(equity=self).values_list('date', data))
@@ -574,7 +576,7 @@ class Equity(models.Model):
         results = {}
         if key and self.equity_type == 'Equity' and self.searchable:
             now = datetime.now().date()
-            if now == self.last_updated and not force:
+            if now == self.last_updated.date() and not force:
                 logger.info('%s - Already updated %s' % (self, now))
                 return results
             else:
@@ -661,7 +663,7 @@ class Equity(models.Model):
                         EquityEvent.objects.create(date=result_key, equity=self, event_type='Dividend', api=results_api,
                                                    real_date=real_date, source=DataSource.API.value, value=results[result_key][1])
             if daily:
-                self.last_updated = datetime.now().date()
+                self.last_updated = datetime.now()
                 self.save()
 
     def update(self, force: bool = False, key: str = None, daily=True):
@@ -1114,24 +1116,26 @@ class BaseContainer(models.Model):
             UnRelGain
             UnRelGainPct
         """
-        df = self.e_pd
+        df = self.p_pd
         this_date = normalize_today()
 
         if not df.empty:
             summary = df.loc[df['Date'] == np.datetime64(this_date)].agg(
-                {'Cost': 'sum', 'TotalDividends': 'sum', 'Value': 'sum', 'RelGain': 'sum', 'UnRelGain': 'sum',
-                 'TBuy': 'sum', 'TSell': 'sum'}).to_dict()
+                {'Funds': 'sum', 'Redeemed': 'sum', 'TotalDividends': 'sum', 'Value': 'sum'}).to_dict()
 
-
+            summary['EffectiveCost'] = summary['Funds'] + summary['Redeemed']  # Redeemed will be negative
+            summary['Cost'] = summary['Funds']
+            summary['RelGain'] = abs(summary['Redeemed'])
+            summary['UnRelGain'] = summary['Value'] - summary['EffectiveCost']
             if summary['Value'] == 0:  # Closed Account
+                summary['RelGainPct'] = summary['RelGain'] * 100 / summary['Cost'] if summary['Cost'] else 0
                 summary['UnRelGainPct'] = 0
-                summary['RelGainPct'] = summary['RelGain'] * 100 / summary['TBuy'] if summary['TBuy'] else 0
             else:
                 summary['RelGainPct'] = (summary['RelGain']) * 100 / summary['Cost'] if summary['Cost'] else 0  # todo: what if cost is 0 since we made some much
-                summary['UnRelGainPct'] = summary['UnRelGain'] * 100 / summary['Cost'] if summary['Cost'] else 0
+                summary['UnRelGainPct'] = summary['UnRelGain'] * 100 / summary['EffectiveCost'] if summary['EffectiveCost'] else 0
         else:
             summary = {'Value': self.get_pattr('Value', query_date=this_date)}
-            summary['RelGain'] = summary['RelGainPct'] = summary['UnRelGain'] = summary['UnRelGainPct'] = summary['TotalDividends'] = 0
+            summary['RelGain'] = 0
             summary['Cost'] = summary['Value']
         summary['Holdings'] = self.equities.distinct().count()
         summary['Name'] = self.name
@@ -1979,7 +1983,6 @@ class InvestmentAccount(Account):
         if self.transactions:
             return self.transactions.latest('real_date').real_date
         return normalize_today()
-
 
     def equity_df(self) -> pd.DataFrame:
         now = datetime.now().date()

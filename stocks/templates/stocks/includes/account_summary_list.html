@@ -68,7 +68,7 @@
                     {% endif %}
 
                     <td class="w3-right-align w3-small">${{ item.Cost | floatformat:'0g'}}</td>
-                    <td class="w3-right-align w3-small w3-hide-small">-</td>
+                    <td class="w3-right-align w3-small w3-hide-small">${{ item.EffectiveCost | floatformat:'0g'}}</td>
                     {% if item.TotalDividends == 0 %}
                         <td class="w3-hide-small"></td>
                     {% else %}

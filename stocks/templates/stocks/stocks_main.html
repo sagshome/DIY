@@ -4,6 +4,9 @@
 
 {% block content %}
     <h2>Portfolio/Account List</h2>
+    <div class="23-row">
+        <p>Total Value: ${{total_value | floatformat:'0g'}}.  Equities/ETFs updated as of {{last_updated}}</p>
+    </div>
     <div class="w3-row">
         <canvas id="lineChart" height=300 style="border:1px solid">
             A line chart showing Cost vs Value over time in months.
