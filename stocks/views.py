@@ -95,16 +95,26 @@ class StocksMain(LoginRequiredMixin, ListView):
         ['Date', 'EffectiveCost', 'Value', 'TotalDividends', 'InflatedCost']
         """
         context = super().get_context_data(**kwargs)
-
+        total_value = 0
         account_list_data = []
         for portfolio in Portfolio.objects.filter(user=self.request.user):
             account_list_data.append(portfolio.summary)
+            total_value += portfolio.summary['Value']
+            logger.debug('Total Value:%s added %s (%s)' % (total_value, portfolio, portfolio.summary['Value']))
         for account in Account.objects.filter(user=self.request.user, portfolio__isnull=True):
             account_list_data.append(account.summary)
+            total_value += account.summary['Value']
+            logger.debug('Total Value:%s added %s (%s)' % (total_value, account, account.summary['Value']))
+
 
         account_list_data = sorted(account_list_data, key=lambda x: x['Value'], reverse=True)
         context['account_list_data'] = account_list_data
         context['help_file'] = 'stocks/help/stocks_main.html'
+        context['total_value'] = total_value
+        context['last_updated'] = Equity.objects.filter(id__in=[Transaction.objects.filter(
+            user=self.request.user, equity__isnull=False).values_list('equity_id', flat=True).distinct()
+                                                                ]).latest('last_updated').last_updated
+
         return context
 
 
