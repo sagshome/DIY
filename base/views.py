@@ -79,6 +79,7 @@ def diy_main_mobile(request):
     table_data = [{'date': labels[i], 'value': chart1_values[i]} for i in range(7)]
 
     return render(request, 'base/mobile/mobile_main.html', {
+        'user': request.user,
         'chart1_labels': labels,
         'chart1_values': chart1_values,
         'chart2_labels': labels,

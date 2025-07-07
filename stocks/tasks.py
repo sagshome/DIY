@@ -65,8 +65,10 @@ def hourly_update():
 
 @shared_task
 def add_to_cache(user_id):
+    """
+    Update the redis cache if the values are not already cached
+    """
     if not settings.NO_CACHE:
-        logger.debug("Processing accounts for %s" % user_id)
         for account in Account.objects.filter(user_id=user_id):
             _ = account.p_pd  # Just to the math which will cache the results
             _ = account.e_pd

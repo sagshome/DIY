@@ -1,0 +1,76 @@
+{% load i18n static %}
+{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}
+<html lang="{{ LANGUAGE_CODE|default:'en-us' }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
+<head>
+    <title>{% block title %}{{ ACRONYM }}{% endblock %}</title>
+    <!DOCTYPE html>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="stylesheet" href="{% static 'w3-css/w3.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="{% static 'diy.css' %}">
+
+    <style>
+        body {
+            font-family: "Lato", sans-serif
+        }
+    </style>
+    <script src="{% static 'chart.js/dist/chart.js' %}"></script>
+    <script src="{% static 'jquery/dist/jquery.js' %}"></script>
+    <script src="{% static 'diy.js' %}"></script>
+
+</head>
+<body>
+
+<div class="w3-content">
+    <div class="w3-container">
+        <div id="DIYHelpContent" style="display:none">
+            <div>
+                {% block help_content %}
+                    <div class="w3-margin-left w3-small">
+                        {% if help_file %}
+                            {% include help_file %}
+                        {% else %}
+                            {% include 'base/blahblah.html' %}
+                            <p class="w3-margin-left"> No "Help" is provided for this page. If you have any questions please contact me at
+                                <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">ItsOnlyOurMoney@gmail.com</a>.
+                            </p>
+                        {% endif %}
+                    </div>
+                {% endblock %}
+            </div>
+            <div>
+                <button onclick=toggle_help()
+                        class="w3-margin-left w3-margin-top w3-button-small w3-round-large diy-button" title="Close">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="w3-container">
+        {% block content %}
+        {% endblock content %}
+    </div>
+</div>
+</div>
+{% block footer %}
+    <div class="w3-margin-top w3-grey w3-row">
+        <div class="w3-container w3-third w3-small w3-margin-top">{% include 'base/blahblah.html' %}</div>
+        <div class="w3-container w3-third w3-center"><p>© 2025 <a href="mailto:itsonlyourmoney@gmail.com"
+                                                                  target="_blank">Scott Sargent</a><br>Rainy Day
+            Development</p></div>
+        <div class="w3-container w3-third w3-small">
+            <h5>Useful Links</h5>
+            <ul>
+                <li><a href="https://finance.yahoo.com/">Yahoo Finance</a></li>
+                <li><a href="https://www.alphavantage.co/">Alpha Vantage</a></li>
+                <li><a href="https://www.morningstar.ca/ca/">Morning Star</a></li>
+                <li><a href="https://www.bankofcanada.ca/rates/related/inflation-calculator/">Inflation Calculator</a>
+                </li>
+            </ul>
+        </div>
+
+    </div>
+{% endblock footer %}
+</body>

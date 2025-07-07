@@ -66,6 +66,11 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
+    @property
+    def wealth(self):
+        total = 0
+
+
 
 class API(models.Model):
     """

@@ -18,11 +18,11 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, re_path, path
 from base.views import diy_main, diy_main_mobile, diy_check, NewAccountConfirmView, NewAccountDoneView
-
+from stocks.views import mobile_main
 
 urlpatterns = [
     path("", diy_main, name='home_page'),
-    path("mobile/", diy_main_mobile, name='home_page'),
+    path("mobile/", mobile_main.as_view(), name='mobile_home_page'),
     path("health_check/", diy_check),
     path("accounts/login/", auth_views.LoginView.as_view(), name='login_view'),
     path("accounts/logout/", auth_views.LogoutView.as_view()),
