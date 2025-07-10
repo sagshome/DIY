@@ -57,7 +57,7 @@ def append_styles(widget, **styles):
     widget.attrs['style'] = new_style
 
 
-class DIYImportException(Exception):
+class DIYException(Exception):
     pass
 
 

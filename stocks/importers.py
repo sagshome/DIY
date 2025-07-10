@@ -9,7 +9,7 @@ from typing import List, Dict
 from django.contrib.auth.models import User
 
 from .models import Equity, EquityAlias, Account, EquityValue, EquityEvent, Transaction, DataSource, AV_API_KEY
-from base.utils import normalize_date, DIYImportException
+from base.utils import normalize_date, DIYException
 
 
 FUND = Transaction.FUND
@@ -174,7 +174,7 @@ class StockImporter:
                                                            quantity=quantity, price=price).save(source=DataSource.UPLOAD.value)
                                 Transaction(real_date=this_date, account=account, user=self.user, value=amount, xa_action=FUND).save(source=DataSource.UPLOAD.value)
                         else:
-                            raise DIYImportException(f'Unexpected Activity type {xa_action}')
+                            raise DIYException(f'Unexpected Activity type {xa_action}')
 
         # Finally update everything possible
         for account in self.accounts:
@@ -193,7 +193,7 @@ class StockImporter:
     def get_headers(self, csv_reader):
         if set(self._columns) - set(self.headers.keys()):
             missing = str(set(self._columns) - set(self.headers.keys()))
-            raise DIYImportException('CSV, required column(s) are missing (%s)' % missing)
+            raise DIYException('CSV, required column(s) are missing (%s)' % missing)
 
         header = next(csv_reader)
         fixed_header = []
@@ -342,7 +342,7 @@ class StockImporter:
                 except EquityAlias.DoesNotExist:
                     equity = EquityAlias.find_equity(name, region)
                     if not equity:
-                        raise DIYImportException(f'Failed to lookup {symbol} - {name} @ {region}')
+                        raise DIYException(f'Failed to lookup {symbol} - {name} @ {region}')
             self.equities[equity] = equity
         return self.equities[equity]
 
@@ -358,7 +358,7 @@ class StockImporter:
 
         try:
             equity = self.equity_lookup(symbol, name, region)
-        except DIYImportException:
+        except DIYException:
             equity = Equity.objects.create(symbol=symbol, name=name, region=region, currency=currency)
             if not equity.equity_type:
                 if equity.name.find(' ETF') != -1:
@@ -372,7 +372,7 @@ class StockImporter:
             equity.save()
 
         if not equity:  # pragma: no cover
-            raise DIYImportException(f'Could not create/lookup equity {symbol} - {name}')
+            raise DIYException(f'Could not create/lookup equity {symbol} - {name}')
 
         lookup = symbol + '.' + region
         if not EquityAlias.objects.filter(symbol=lookup, name=name, region=region).exists():

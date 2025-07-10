@@ -56,7 +56,7 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from enum import Enum
 from functools import cached_property
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from datetime import datetime, date
 from time import sleep
 from pandas import DataFrame
@@ -65,13 +65,14 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import QuerySet, Sum, Avg, Q, Count
-from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
+from django.db.models import QuerySet, Sum, Avg, Q, Count, Max
+from django.db.models.functions import TruncMonth, TruncQuarter, TruncWeek, TruncDay, TruncDate
 
 from django.urls import reverse
+from django.utils import timezone
 
 from base.models import API, DIY_EPOCH
-from base.utils import BoolReason,  normalize_date, normalize_today, next_date, cache_dataframe, clear_cached_dataframe,  get_cached_dataframe, clear_simple_cache, get_simple_cache, set_simple_cache
+from base.utils import BoolReason,  normalize_date, normalize_today, next_date, cache_dataframe, clear_cached_dataframe,  get_cached_dataframe, clear_simple_cache, get_simple_cache, set_simple_cache, DIYException
 
 logger = logging.getLogger(__name__)
 
@@ -432,23 +433,18 @@ class Equity(models.Model):
         return f'{self.symbol} ({self.region}) - {self.name}'
 
     def save(self, *args, **kwargs):
-        if 'update' in kwargs:
-            do_update = kwargs.pop('update')
-        else:
-            do_update = False
+        """
+        Preprocess some attributes before save.
+        - Force uppercase on equities
+        - Trim to first 31 characters
+        """
 
         if self.equity_type == 'Equity':
             if not self.symbol.isupper():
                 self.symbol = self.symbol.upper()
 
-            if not self.validated and do_update:
-                self.set_equity_data()
-        else:
-            self.symbol = self.symbol[:31]
-
+        self.symbol = self.symbol[:31]
         super(Equity, self).save(*args, **kwargs)
-        if self.searchable and do_update:
-            self.update_external_equity_data()
 
     def av_set_data(self):
         request = API.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
@@ -539,27 +535,34 @@ class Equity(models.Model):
                     return {normalize_date(dt.date()): dt.date() for dt in series.to_dict().keys()}
         return {}
 
-    def yp_update(self, period='1y') -> Dict[date, List]:
+    def yp_update(self, rate='1mo', period='20y') -> Dict[date, List]:
         """
-        Build a dictionary key on Date with two values [close price,  dividends per share]
+        Build a dictionary key on DateTime with two values [close price,  dividends per share]
         kwargs
-            period: str default = "1y",   How many months of data to retrieve
+            rate: str default = '1mo',  how often to sample
+            period: str default = "20y",   How many months of data to retrieve
+
+            valid combos:
+            rate = 15m, period=7d
+            rate = 1d, period='1y'
+            rate = 1m, period='20y'
+
         """
         result ={}
         if API.status('ypfinance'):  # Currently set manually in admin tool
             if self.equity_type == 'Equity':
                 try:
-                    df = yf.Ticker(self.key).history(interval='1mo', period=period, auto_adjust=False)
+                    df = yf.Ticker(self.key).history(interval=rate, period=period, auto_adjust=False)
                 except yf.exceptions.YFRateLimitError:
                     logger.error('YF rate limit error')
-                    API.pause('ypfinance', 'Rate Limit Exceeded')
+                    API.pause('ypfinance', interval=15*60, reason='Rate Limit Exceeded')
                     return result
                 if isinstance(df, pd.DataFrame) and not df.empty:
                     data = df[['Close', 'Dividends']].to_records()
                     if len(data):
                         for record in data:
                             if len(record) == 3:
-                                result[record[0].date()] = (float(record[1]), float(record[2]))
+                                result[record[0]] = (float(record[1]), float(record[2]))
         else:
             logger.info('ypfinance API is down:%s' % API.status('ypfinance'))
         return result
@@ -605,7 +608,7 @@ class Equity(models.Model):
                         logger.warning('Invalid Response: %s' % data)
         return results
 
-    def update_external_equity_data(self, force: bool = False, key: str = None, daily: bool = False):
+    def update_external_equity_data(self, interval, key: str = None):
         """
         Go to either Yahoo Finance or www.alphavantage to update equity and dividend data.
 
@@ -621,22 +624,27 @@ class Equity(models.Model):
         safety check:
             if not an equity,  or not searchable nothing is done
         """
+        if interval == 'day':
+            rate = '15m'
+            period = '1d'
+        elif interval == 'week':
+            rate = '1d'
+            period = '1y'
+        elif interval == 'month':
+            rate = '1m'
+            period = '20y'
+        else:
+            raise DIYException('Invalid update interval %s' % interval)
 
         if self.equity_type != 'Equity' or not self.searchable:
             logger.debug('Safety Valve: Can not update non "Equity" equities or not searchable values')
             return
 
-
-        if force:
-            period = '20y'
-        else:
-            period = '1y'
-
         results_api = self.ypfinance
-        results = self.yp_update(period=period)
-        if not results and key:
+        results = self.yp_update(rate=rate, period=period)
+        if not results and key and interval == 'month':
             results_api = self.alphavantage
-            results = self.av_update(key, force=force)
+            results = self.av_update(key)
 
         if results:
             existing_price = {e['date']: e for e in EquityValue.objects.filter(equity=self).values('date', 'price', 'api', 'split_fixed')}
@@ -666,14 +674,11 @@ class Equity(models.Model):
                 self.last_updated = datetime.now()
                 self.save()
 
-    def update(self, force: bool = False, key: str = None, daily=True):
+    def update(self, key: str = None, interval='month'):
         """
         Update the stocks closing price for the last day of the month (current day of current month)
         Update the dividend paid per share
         kwargs:
-           force: boolean Default False - Add the force attribute.
-                Force with alphavantage will try the update even if it is the same date as today
-                Force with yfinance will try and take 20 years of data instead of 1 year.
            key: string Default None - the alphavantage API key
            daily: boolean Default True - Update the last update value on the equity
 
@@ -690,7 +695,7 @@ class Equity(models.Model):
             if self.searchable:
                 clear_duplicates(EquityEvent, self, event_object=True)
                 clear_duplicates(EquityValue, self)
-                self.update_external_equity_data(force=force, key=key, daily=daily)
+                self.update_external_equity_data(key=key, interval=interval)
         else:  # Cash and Value
             clear_duplicates(FundValue, self)
             if not FundValue.objects.filter(equity=self).exclude(source=DataSource.ESTIMATE.value).exists():
@@ -771,12 +776,16 @@ class EquityAlias(models.Model):
 class EquityValue(models.Model):
     """
     Track an equities value
+
     """
 
     equity = models.ForeignKey(Equity, on_delete=models.CASCADE, limit_choices_to={'equity_type': 'Equity'})
     real_date: date = models.DateField(verbose_name='Recorded Date', null=True, validators=[MinValueValidator(datetime(1961, 1, 1).date()),
                                                                                             MaxValueValidator(datetime(2100, 1, 1).date())])
     date: date = models.DateField(verbose_name='Normalized Date')
+    value_date: datetime = models.DateTimeField(verbose_name='Recorded Date', default=timezone.now, null=True,
+                                                 validators=[MinValueValidator(datetime(1961, 1, 1).date()),
+                                                             MaxValueValidator(datetime(2100, 1, 1).date())])
 
     price: float = models.FloatField()
     source: int = models.IntegerField(choices=DataSource.choices(), default=DataSource.ESTIMATE.value)
@@ -788,7 +797,7 @@ class EquityValue(models.Model):
         return output
 
     class Meta:
-        unique_together = ('equity', 'date')
+        unique_together = ('equity', 'value_date')
 
     @classmethod
     def get_or_create(cls, **kwargs):
@@ -799,17 +808,11 @@ class EquityValue(models.Model):
         """
         created = False
 
-        if 'real_date' in kwargs:
-            norm_date = normalize_date(kwargs['real_date'])
-            real_date = kwargs['real_date']
-        else:
-            if 'date' in kwargs:
-                norm_date = normalize_date(kwargs['date'])
-            else:
-                norm_date = normalize_today()
-            real_date = norm_date
+        if 'value_date' not in kwargs:
+            kwargs['value_date'] = timezone.make_aware(datetime.now().replace(hour=0, minute=0, second=0), timezone.get_current_timezone())
+        if 'source' not in kwargs:
+            kwargs['source'] = DataSource.ESTIMATE.value
 
-        source = kwargs['source'] if 'source' in kwargs else DataSource.ESTIMATE.value
         if 'price' not in kwargs and 'amount' in kwargs:
             kwargs['price'] = kwargs['amount']
         elif 'price' not in kwargs and 'amount' not in kwargs:
@@ -818,17 +821,13 @@ class EquityValue(models.Model):
 
         kwargs.pop('amount')
         try:
-            obj = cls.objects.get(equity=kwargs['equity'], date=norm_date)
-            if obj.source > source:
-                obj.source = source
+            obj = cls.objects.get(equity=kwargs['equity'], value_date=kwargs['value_date'])
+            if obj.source > kwargs['source']:
+                obj.source = kwargs['source']
                 obj.price = kwargs['price']
                 logger.debug('Better source - Updated %s' % obj)
                 obj.save()
-            elif obj.source == source and (not obj.real_date or obj.real_date < real_date):
-                obj.price = kwargs['price']
-                logger.debug('More recent date - Updated %s' % obj)
-                obj.save()
-            elif obj.source == source and obj.real_date == real_date:
+            elif obj.source == kwargs['source']:
                 if obj.price != kwargs['price']:
                     logger.debug('Same Date price change- Updated %s' % obj)
                     obj.price = kwargs['price']
@@ -836,7 +835,6 @@ class EquityValue(models.Model):
             else:
                 logger.debug('Update is not worthy of a change')
         except EquityValue.DoesNotExist:
-            kwargs['date'] = norm_date
             obj = cls.objects.create(**kwargs)
             created = True
             logger.debug('Created %s' % obj)
@@ -844,24 +842,24 @@ class EquityValue(models.Model):
 
     @classmethod
     def lookup_price(cls, equity: Equity, this_date) -> float:
+        """
+        We must have at least 1 record in the month,  else pick the closest to the date without going UNDER
+        """
+        base = EquityValue.objects.filter(equity=equity, value_date__year=this_date.year, value_date__month=this_date.month)
+
+        days = (EquityValue.objects.filter(equity=equity, value_date__in=[base.annotate(tx_day=TruncDay('value_date')).values('tx_day').
+                                           annotate(last_entry=Max('value_date')).values_list('last_entry', flat=True)]))
+
+        query_date = timezone.make_aware(datetime(this_date.year, this_date.month, this_date.day, 0, 0, 0), timezone.get_current_timezone())
+
         try:
-            value = cls.objects.get(equity=equity, date=this_date).price
-
+            record = days.filter(value_date__gte=query_date).earliest('value_date')
         except EquityValue.DoesNotExist:
-            value = 0
-        return value
-
-    def save(self, *args, **kwargs):
-        if self.real_date:
-            self.date = normalize_date(self.real_date)
-        elif self.date:
-            self.real_date = self.date
-            self.date = normalize_date(self.date)
-        else:
-            self.real_date = datetime.now().date()
-            self.date = normalize_date(self.real_date)
-
-        super(EquityValue, self).save(*args, **kwargs)
+            try:
+                record = days.latest('value_date')
+            except EquityValue.DoesNotExist:
+                return 0
+        return record.price
 
 
 class FundValue(models.Model):
@@ -1799,6 +1797,42 @@ class Account(BaseContainer):
     @property
     def value(self) -> int:
         return self._value
+
+
+class AccountSummary(models.Model):
+    """
+    These records are updated whenever equity values are updated.   They are used for producing summary graphs.   The creation and management is
+    tedious but the end result is better responsiveness.    Details charts/tables still use cached dataframes.
+
+    Records are created on each equity update to each of the object_types.
+    Retention rules are:
+        Keep the last for the month - forever - 240 (20 years)
+        keep the last for the week - three years  156
+        keep the last for the day - 1 year - 365
+        keep all records for the past 36 hours  - 60 records
+
+        equity N/A Calculate based on account.e_pd
+    """
+    user = models.ForeignKey(User, blank=False, null=False, on_delete=models.CASCADE)
+    account = models.ForeignKey(Account, blank=False, null=False, on_delete=models.CASCADE)
+    when = models.DateTimeField(blank=False, null=False)
+    value = models.DecimalField(blank=False, null=False, decimal_places=2, max_digits=9)
+
+    def get_dataframe(self, scope: str = 'year', period: int = 1) -> DataFrame:
+        """
+        Build up a pandas dataframe with three columns:   Date, Value and start value.   The Date will be datetime for minute based dataframes,  date for
+        daily and monthly based dataframes.  Monthly based will be the last entry for the month:
+        scope values
+           day:  15 minute values for period days
+           month:  daily closing for period months
+           ytd: daily closings from Jan 1st this year to today
+           year:  monthly closing for the past n years
+           all: monthly closing since this account started
+
+        """
+
+        if scope not in ['day', 'month', 'ytd', 'year', 'all']:
+            logger.error('Invalid scope %s provided' % scope)
 
 
 class InvestmentAccount(Account):

@@ -22,7 +22,7 @@ from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, UpdateView
 from django.views.generic.dates import DateMixin
 
-from base.utils import DIYImportException, normalize_today, normalize_date
+from base.utils import DIYException, normalize_today, normalize_date
 from base.models import Profile
 from base.views import BaseDeleteView
 
@@ -455,7 +455,7 @@ def upload_file(request):
                     if len(importer.warnings) != 0:
                         return render(request, "stocks/uploadfile.html",
                                       {"form": form, 'custom_warnings': importer.warnings})
-                except DIYImportException as e:
+                except DIYException as e:
                     return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': str(e)})
             except UnicodeDecodeError:
                 return render(request, "stocks/uploadfile.html", {"form": form, 'custom_error': 'File is invalid.'})

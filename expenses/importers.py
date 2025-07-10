@@ -6,7 +6,7 @@ from typing import Dict, List
 
 import pandas as pd
 from django.contrib.auth.models import User
-from base.utils import DIYImportException
+from base.utils import DIYException
 from .models import Item, Category, SubCategory
 
 logger = logging.getLogger(__name__)

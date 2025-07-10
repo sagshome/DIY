@@ -111,13 +111,13 @@ class API(models.Model):
         return DIY_EPOCH if not self._last_fail else self._last_fail
 
     @classmethod
-    def pause(cls, name, reason='Undefined'):
+    def pause(cls, name, interval=DEFAULT_FAIL_LENGTH, reason='Undefined'):
         try:
             url = cls.objects.get(name=name)
             if url._active:
                 url._active = False
                 url._last_fail = datetime.now()
-                url.fail_length = cls.DEFAULT_FAIL_LENGTH
+                url.fail_length = interval
                 url.fail_reason = reason
                 url.save()
         except cls.DoesNotExist:

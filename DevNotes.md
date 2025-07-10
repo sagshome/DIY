@@ -1,6 +1,26 @@
 coverage run --source=expenses manage.py test expenses
 coverage report -m
 
+
+# Do I need date, and real_date ?
+What would this do with two entries with the same real_date?
+
+  from django.db.models.functions import TruncMonth
+
+  equity = Equity.objects.get(symbol='BCE.TO')
+
+  date_set=EquityValue.objects.filter(equity=equity).annotate(tx_month=TruncMonth('real_date')).values('tx_month').annotate(last_entry=Max('real_date')).values_list('id', flat=True)
+ 
+  EquityValue.objects.filter(equity=equity, real_date__in=date_set).order_by('real_date')
+   
+  for x in EquityValue.objects.filter(equity=equity, real_date__in=date_set).order_by('real_date'):
+  print(x.real_date, x)
+
+  # Last Value of the day
+  EquityValue.objects.filter(equity_id=35, date=datetime(2016,6,1).date()).annotate(v_day=TruncDay('value_date')).latest('value_date').value_date
+# Dumping
+ python manage.py dumpdata --indent 2 --exclude auth.permission --exclude contenttypes --exclude admin.logentry > `date "+%Y-%m-%d"`.jso
+
 # Tracking Wealth #
 * Contributions are used to calculate Growth
 * Contributions + TransIn (Funding) is used to calculate rates of returns
