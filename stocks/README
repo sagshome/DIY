@@ -1,4 +1,4 @@
-How to deal with stock splits.
+ --source How to deal with stock splits.
 
 I noticed that my CIBC stocks split about a year ago.   The way the API records this is via "adjusted dividends".   This
 means that the historic dividends are report as a fraction 1/2 on on a 2x1 split.    Since this is in the past I can,

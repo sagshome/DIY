@@ -964,7 +964,7 @@ def reconciliation(request, a_pk, date_str):
                                 ev = EquityValue.objects.get(date=view_date, equity=equity)
                             except EquityValue.DoesNotExist:
                                 ev = EquityValue(date=view_date, source=DataSource.ESTIMATE.value)
-                            if ev.source > DataSource.RECONCILED.value:
+                            if ev.source >= DataSource.RECONCILED.value:  # todo:  How to deal with malicious edits
                                 ev.source = DataSource.RECONCILED.value
                                 ev.price = form.cleaned_data['Price']
                                 ev.save()
