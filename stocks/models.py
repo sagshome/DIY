@@ -56,7 +56,7 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from enum import Enum
 from functools import cached_property
-from typing import List, Dict
+from typing import List, Dict, Union
 from datetime import datetime, date
 from time import sleep
 from pandas import DataFrame
@@ -74,6 +74,8 @@ from base.models import API, DIY_EPOCH
 from base.utils import BoolReason,  normalize_date, normalize_today, next_date, cache_dataframe, clear_cached_dataframe,  get_cached_dataframe, clear_simple_cache, get_simple_cache, set_simple_cache
 
 logger = logging.getLogger(__name__)
+logging.getLogger('yfinance').setLevel(logging.CRITICAL)  # Quiet damn you.
+logging.getLogger('peewee').setLevel(logging.ERROR)
 
 AV_API_KEY = settings.ALPHAVANTAGEAPI_KEY
 
@@ -450,6 +452,31 @@ class Equity(models.Model):
         if self.searchable and do_update:
             self.update_external_equity_data()
 
+    @staticmethod
+    def lookup(symbol: str, region: str) -> str:
+        """
+        Using yfinance to validate a symbol based on region and some awful hard-coding
+        """
+        can_regions = ['TOR', 'NEO']
+
+        best = symbol = symbol.upper()
+        symbol_parts = symbol.split('.')
+        results = yf.search.Search(symbol, max_results=100, news_count=0, raise_errors=False).quotes
+
+        for result in results:
+            result_parts = result['symbol'].split('.')
+            exchange = result['exchange']
+            if len(result_parts) >= len(symbol_parts):
+                matched_parts = True
+                for i in range(len(symbol_parts)):
+                    if not result_parts[i] == symbol_parts[i]:
+                        matched_parts = False
+
+                if matched_parts and ((exchange in can_regions and region == 'Canada') or (region != 'Canada' and exchange not in can_regions)):
+                    if len(result_parts) >= len(best.split('.')):
+                        best = '.'.join(result_parts)
+        return best
+
     def av_set_data(self):
         request = API.get('AVURL', f'SYMBOL_SEARCH&keywords={self.key}&apikey={AV_API_KEY}')
         if request.status_code == 200:
@@ -625,7 +652,6 @@ class Equity(models.Model):
         if self.equity_type != 'Equity' or not self.searchable:
             logger.debug('Safety Valve: Can not update non "Equity" equities or not searchable values')
             return
-
 
         if force:
             period = '20y'
@@ -852,16 +878,17 @@ class EquityValue(models.Model):
         return value
 
     def save(self, *args, **kwargs):
-        if self.real_date:
-            self.date = normalize_date(self.real_date)
-        elif self.date:
-            self.real_date = self.date
-            self.date = normalize_date(self.date)
-        else:
-            self.real_date = datetime.now().date()
-            self.date = normalize_date(self.real_date)
+        if not np.isnan(self.price):
+            if self.real_date:
+                self.date = normalize_date(self.real_date)
+            elif self.date:
+                self.real_date = self.date
+                self.date = normalize_date(self.date)
+            else:
+                self.real_date = datetime.now().date()
+                self.date = normalize_date(self.real_date)
 
-        super(EquityValue, self).save(*args, **kwargs)
+            super(EquityValue, self).save(*args, **kwargs)
 
 
 class FundValue(models.Model):

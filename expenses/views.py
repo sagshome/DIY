@@ -366,8 +366,8 @@ def upload_expenses(request):
                         return HttpResponseRedirect(reverse('upload_process', kwargs={'uuid': random_filename}))
 
                 return HttpResponseRedirect(reverse('upload_confirm', kwargs={'uuid': random_filename, 'headings': form.cleaned_data['has_headings']}))
-
-    form = UploadFileForm()
+    else:
+        form = UploadFileForm()
     return render(request, "expenses/uploadfile.html", {"form": form})
 
 

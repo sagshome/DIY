@@ -359,7 +359,8 @@ class StockImporter:
         try:
             equity = self.equity_lookup(symbol, name, region)
         except DIYImportException:
-            equity = Equity.objects.create(symbol=symbol, name=name, region=region, currency=currency)
+            l_symbol = Equity.lookup(symbol, region)
+            equity = Equity.objects.create(symbol=l_symbol, name=name, region=region, currency=currency)
             if not equity.equity_type:
                 if equity.name.find(' ETF') != -1:
                     equity.equity_type = 'Equity'
@@ -488,6 +489,7 @@ class ManulifeWealth(StockImporter):
         'Price': 'Price (Trade Currency)',
         'Amount': 'Total Value (Account Currency)',
         'Date': 'Date',
+        'Market': 'Market',
     }
 
     def __init__(self, currency: str, file_name: csv.reader, user: User):

@@ -34,6 +34,10 @@ from .importers import QuestTrade, Manulife, ManulifeWealth, StockImporter, HEAD
 
 logger = logging.getLogger(__name__)
 
+def debugview(request):
+    from stocks.importers import BaseImporter
+    from django.contrib.auth.models import User
+    BaseImporter('/home/scott/Downloads/NewML.FullFromApr2023.csv', User.objects.get(username='sparky')).process()
 
 class AccountDeleteView(BaseDeleteView):
     model = Account

@@ -232,5 +232,5 @@ def test_site_up():
             data.append(f"Site {site} Exception caught: {e}")
 
     if data:
-        send_basic_mail('Health Check', to='scott.sargent61@gmail.com', context={'data':data})
+        send_basic_mail('Health Check', to='sagshome.sargent61@gmail.com', context={'data':data})
 

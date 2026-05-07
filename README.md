@@ -1,32 +1,12 @@
-# Steps for initial letsencrypt certificates
-This only needs to be done if you destroy certificates or I need to start again
-## Stop some service
-docker compose stop nginx
-docker compose stop certbot
-## Edit some config
-Change docker-compose.yml
-  - Edit out entrypoint on service certbot
+# Steps for letsencrypt certificates
+This only needs to be done if you destroy certificates or I need to start 
 
-Change nginx-Dockerfile
-  - COPY build/nginx.conf /etc/nginx/conf.d/default.conf
+   docker compose run --rm --command certbot certonly   --webroot -w /var/www/certbot   -d itsonlyourmoney.com -d www.itsonlyourmoney.com -v
+   docker compose restart
 
-to
-  - COPY build/initial-nginx.conf /etc/nginx/conf.d/default.conf
-## Rebuid nginx
-docker compose build nginx
-docker compose up nginx
-## Request Tokens
-   docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email auth_email --agree-tos --non-interactive  --domains itsonlyourmoney.com
-   
-   docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email auth_email --agree-tos --non-interactive  --domains www.itsonlyourmoney.com
+This should be in a cron
+   0 3 * * * cd /home/scott/Projects/DIY && docker compose run --rm certbot renew --quiet && docker compose exec nginx nginx -s reload
 
-   note,  may test above by adding --dry-run
-## Final Changes
-docker compose stop nginx
-
-undo edits above
-docker compose build nginx
-docker compose up -d 
 
 Needed for Launch
 1) ~~Support Income~~
@@ -34,15 +14,16 @@ Needed for Launch
    3) 
 2) Have domain mail
 3) Rebrand
-4) HTTPS
+~~4) HTTPS~~
 5) Main Page - revamp
 6) Bulk Edit
-7) export Investments
-8) import Investments / Stocks
-8) Fix CRON
+~~7) export Investments~~
+~~8) import Investments / Stocks~~
+~~8) Fix CRON~~
 9) Understand Stock Types
    a) Stocks/ETFs  <- I can look these up
    b) Mutual Funds  <- I can input and or import transactions/values
+   c) GICs
    10)   How do these differ from presentation - imports/exports 
       c) Values  <- I have no idea what I own,  I just know the value each month
 
