@@ -6,7 +6,7 @@ from django.forms import formset_factory
 from django.db.models import Q
 from django.db.utils import ProgrammingError, OperationalError
 
-from expenses.models import Item, SubCategory, Template, Category, DEFAULT_CATEGORIES
+from expenses.models import Item, SubCategory, ItemTag, Template, Category, DEFAULT_CATEGORIES
 from expenses.importers import DEFAULT, EXTRA
 
 
@@ -55,6 +55,27 @@ class SubCategoryForm(forms.ModelForm):
         if SubCategory.objects.filter(category=category, name=name).filter(Q(user__isnull=True) | Q(user_id=self.initial['user'])).exists():
             raise forms.ValidationError('This subcategory already exists')
         return name
+
+
+class TagForm(forms.ModelForm):
+    class Meta:
+        model = ItemTag
+        fields = ("value", "user")
+        widgets = {
+            'user': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, **kwargs):  # pragma: no cover
+        super().__init__(*args, **kwargs)
+
+        # Adjusted to make W3C.CSS look nicer
+        self.fields["value"].widget.attrs['style'] = 'height:28.5px;'
+
+    def clean_value(self):
+        value = self.cleaned_data['value']
+        if ItemTag.objects.filter(value=value, user=self.initial['user']).exists():
+            raise forms.ValidationError('This Tag already exists')
+        return value
 
 
 class SearchForm(forms.Form):
@@ -192,7 +213,7 @@ class BaseItemForm(forms.ModelForm):
         self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
         self.fields["date"].widget.attrs['readonly'] = True
 
-        self.fields["description"].widget.attrs['style'] = 'width:500px;background-color:LightBlue'
+        self.fields["description"].widget.attrs['style'] = 'width:600px;background-color:Wheat'
         self.fields["description"].widget.attrs['readonly'] = True
 
         self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
@@ -209,6 +230,7 @@ class BaseItemForm(forms.ModelForm):
 class ItemListEditForm(BaseItemForm):
     is_split = forms.BooleanField(required=False, label='Split')
     is_amortized = forms.BooleanField(required=False, label='Leveled')
+
     # amortized_expense = forms.BooleanField()
 
     class Meta:  # pragma: no cover

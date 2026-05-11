@@ -2,37 +2,24 @@
 {% block content %}
     {% if search_form %}
         {% if search_form.errors %}
-            <div class="w3-panel w3-red">
-                {{ search_form.errors }}
+            <div class="container-fluid alert alert-warning" role="alert">
+                {% for error in search_form.errors %}
+                    {{ error }}
+                {% endfor %}
             </div>
         {% endif %}
-        <div class="w3-bar">
-            <div class="w3-bar-item w3-input w3-hide-small">
-                Hidden:<br>{{ search_form.search_ignore }}
-            </div>
-            <div class="w3-bar-item w3-input">
-                Category:<br>{{ search_form.search_category }}
-            </div>
-            <div class="w3-bar-item w3-input">
-                Subcategory:<br>{{ search_form.search_subcategory }}
-            </div>
-
-            <div class="w3-bar-item w3-input w3-hide-small">
-                Search From:<br>{{ search_form.search_start_date }}
-            </div>
-            <div class="w3-bar-item w3-input w3-hide-small">
-                Search Until:<br>{{ search_form.search_end_date }}
-            </div>
-            <div class="w3-bar-item w3-input w3-hide-small">
-                Amount:<br>{{ search_form.search_amount_qualifier }}{{ search_form.search_amount }}
-            </div>
-            <div class="w3-bar-item w3-input">
-                Description:<br>{{ search_form.search_description }}
-            </div>
-            <button type="Save" class="w3-bar-item w3-button w3-round-xlarge w3-margin-top w3-light-blue">Reapply
-                Filter
-            </button>
-        </div>
+            <ul class="list-group list-group-horizontal list-group-flush">
+                <li class="list-group-item">Hidden:<br>{{ search_form.search_ignore }}</li>
+                <li class="list-group-item">Category:<br>{{ search_form.search_category }}</li>
+                <li class="list-group-item">Subcategory:<br>{{ search_form.search_subcategory }}</li>
+                <li class="list-group-item">Search From:<br>{{ search_form.search_start_date }}</li>
+                <li class="list-group-item">Search Until:<br>{{ search_form.search_end_date }}</li>
+                <li class="list-group-item">Amount:<br>{{ search_form.search_amount_qualifier }}{{ search_form.search_amount }}</li>
+                <li class="list-group-item">Text and Tags:<br>{{ search_form.search_description }}</li>
+                <li class="list-group-time"><div class="d-flex justify-content-center align-items-center" style="height: 100%;">
+                    <button type="Save" class="btn btn-sm btn-success">Reapply<br>Filter</button>
+                </div></li>
+            </ul>
     {% endif %}
     <script>
         $(document).ready(function () {

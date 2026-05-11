@@ -1,0 +1,30 @@
+{% extends "base_bs.html" %}
+{% block title %}Expense Tags{% endblock %}
+{% block content %}
+
+<div class="row">
+         <h2>Tag List</h2>
+</div>
+
+<!--   <table class="sortable table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">-->
+<table class="table table-striped">
+    <tr class="bp-2">
+        <th></th>
+        <th>Used</th>
+        <th>Value</th>
+    </tr>
+    {% for tag in itemtag_list %}
+        <tr>
+            <td><a href="{% url 'tag_delete' tag.id %}"><button class="w3-button-small w3-round-large w3-red">Delete</button></a></td>
+            <td>{{ tag.item_set.count }}</td>
+            <td>{{tag.value}}</td>
+        </tr>
+   {% endfor %}
+</table>
+    <div class="row">
+        <a href="{% url 'tag_add' %}">
+                <button class="diy-button-auto diy-blue" type="button">New Tag</button>
+            </a>
+
+    </div>
+{% endblock %}

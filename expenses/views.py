@@ -1,5 +1,6 @@
 import copy
 import csv
+import json
 import logging
 import numpy as np
 import os
@@ -27,8 +28,11 @@ from base.models import COLORS, PALETTE
 from base.utils import DateUtil, label_to_values, date_to_label, set_simple_cache, load_dataframe
 from base.views import BaseDeleteView
 from expenses.importers import import_dataframe, find_headers_errors
-from expenses.forms import SubCategoryForm, ItemForm, ItemAddForm, ItemEditForm, TemplateForm, ItemListEditForm, SearchForm, UploadFileForm, UploadColumnForm
-from expenses.models import Item, Category, SubCategory, Template, DEFAULT_CATEGORIES
+from expenses.forms import SubCategoryForm, ItemForm, ItemAddForm, ItemEditForm, TemplateForm, ItemListEditForm, SearchForm, UploadFileForm, UploadColumnForm, TagForm
+from expenses.models import Item, Category, SubCategory, ItemTag, Template, DEFAULT_CATEGORIES
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +84,77 @@ class SubCategoryList(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return SubCategory.objects.filter(user=self.request.user).order_by('category__name', 'name')
+
+
+class TagAdd(LoginRequiredMixin, CreateView):
+    model = ItemTag
+    form_class = TagForm
+    template_name = 'expenses/tag.html'
+
+    def get_success_url(self):
+        try:
+            url = self.request.POST["success_url"]
+        except KeyError:
+            url = reverse('expense_main')
+        return url
+
+    def get_initial(self):
+        super().get_initial()
+        self.initial['user'] = self.request.user.id
+        return self.initial
+
+    def form_valid(self, form):
+        self.object = form.save(commit=False)
+        self.object.user = self.request.user
+        self.object.save()
+        return HttpResponseRedirect(self.get_success_url())
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        return context
+
+
+class TagDelete(BaseDeleteView):
+    model = ItemTag
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=ItemTag.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['object_type'] = 'Tag'
+        context['extra_text'] = 'Deleting a Tag is permanent - All assignments will be removed.'
+        return context
+
+
+class TagList(LoginRequiredMixin, ListView):
+    model = ItemTag
+
+    def get_queryset(self):
+        return ItemTag.objects.filter(user=self.request.user).order_by('value')
+
+
+@login_required
+@require_POST
+def expense_tags_api(request, pk):
+
+    expense = Item.objects.get(pk=pk, user=request.user)
+    data = json.loads(request.body)
+    tag_ids = data.get('tags', [])
+    tags = ItemTag.objects.filter(id__in=tag_ids)
+    expense.tags.set(tags)
+
+    return JsonResponse({
+        'success': True,
+        'tags': [
+            {
+                'id': tag.id,
+                'value': tag.value,
+            }
+            for tag in tags
+        ]
+    })
 
 
 class ItemAdd(LoginRequiredMixin, CreateView):
@@ -258,7 +333,8 @@ def expense_main(request):
         if search_form.is_valid() and formset.is_valid():
             search_dict = search_form.cleaned_data
             search_dict['income'] = 'true' if search_dict['search_category'] == 'Income' else 'false'
-            super_set = Item.filter_search(Item.objects.filter(user=request.user), search_form.cleaned_data).order_by('-date')
+            super_set = Item.filter_search(Item.objects.filter(user_id=request.user.id), search_form.cleaned_data).order_by('-date').prefetch_related('tags')
+
             total = super_set.aggregate(Sum('amount'))['amount__sum']
             formset.save()
             formset = ItemFormSet(queryset=Item.objects.filter(
@@ -269,7 +345,7 @@ def expense_main(request):
     else:
 
         super_set = Item.objects.filter(
-            ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date')
+            ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date').prefetch_related('tags')
         if search_for:
             super_set = super_set.filter(category=search_for)
             total = super_set.aggregate(Sum('amount'))['amount__sum']
@@ -289,6 +365,7 @@ def expense_main(request):
         'formset': formset,
         'search_form': search_form,
         'total': total,
+        'tags': ItemTag.objects.all().order_by('value'),
         'help_file': 'expenses/help/main.html'
     })
 

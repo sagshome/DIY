@@ -1,45 +1,38 @@
-{% extends "base.html" %}
+{% extends "base_bs.html" %}
 {% block title %}Expense Assignment{% endblock %}
 {% load expenses_tags %}
 {% load static %}
 
 {% block content %}
-    <div class="w3-container">
-    {% if warnings %}
-    <div class="w3-row w3-yellow">
-        <p>{{warnings}} - <a href="{% url 'expenses_assign' %}">Assign Expense Categories</a> </p>
+    <div class="container-fluid">
+        {% if warnings %}
+            <div class="container-fluid bg-warning">
+                <p>{{warnings}} - <a href="{% url 'expenses_assign' %}">Assign Expense Categories</a> </p>
+            </div>
+        {% endif %}
     </div>
-    {% endif %}
-
     <form method="post" id="itemForm"
           data-subcategories-url="{% url 'ajax-load-subcategories' %}"
           novalidate>
         {% csrf_token %}
-        <div class="w3-row">
+        <div class="container-fluid row">
             {% include 'expenses/includes/expenses_search_bar.html' %}
         </div>
-        <div class="w3-cell-row w3-margin">
-            <div class="w3-cell">
-                <div style="height:310px;" >
+        <div class="container-fluid row">
+                <div class="p-2 col-auto" style="height:310px;" >
                     <canvas id="pieChart"></canvas>
                     <p>Total: ${{total | floatformat:'0g'}}</p>
                 </div>
-
-            </div>
-            <div class="w3-cell">
-                <div style="height:310px;">
+                <div class="p-2 col" style="height:310px;">
                     <canvas id="barChart"></canvas>
-                    <p></p>
                 </div>
-            </div>
         </div>
-        <div class="w3-row">
+        <div class="p-4 container-fluid row">
             <div id="expense_list">
                 {% include 'expenses/includes/expenses_list.html' %}
             </div>
         </div>
     </form>
-</div>
 
     <script src="{% static 'expenses.js' %}"></script>
     <script src="{% static 'expense_charts.js' %}"></script>

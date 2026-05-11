@@ -120,6 +120,8 @@ class SubCategory(models.Model):
         return qfilter.filter(subcategory=self).count()
 
 
+
+
 class Template(models.Model):
     """
 for t in Template.objects.all():
@@ -212,7 +214,7 @@ class Item(models.Model):
     income = models.BooleanField(default=False)
     amortized = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='parent')
     split = models.ForeignKey('Item', blank=True, null=True, on_delete=models.CASCADE, related_name='split_from')
-
+    tags = models.ManyToManyField('ItemTag', blank=True)
     user = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
     notes = models.TextField(blank=True, null=True)
 
@@ -425,8 +427,17 @@ class Item(models.Model):
         '''
 
         if 'search_description' in search_dict and search_dict['search_description']:
-            item_filter = item_filter.filter(Q(description__icontains=search_dict['search_description']) |
-                                             Q(notes__icontains=search_dict['search_description']))
+            search_str = search_dict['search_description'].lower()
+            if search_str.startswith('desc:'):
+                item_filter = item_filter.filter(description__icontains=search_str[5:])
+            elif search_str.startswith('notes:'):
+                item_filter = item_filter.filter(notes__icontains=search_str[6:])
+            elif search_str.startswith('tags:'):
+                item_filter = item_filter.filter(tags__value_iexact=search_str[5:])
+            else:
+                item_filter = item_filter.filter(Q(description__icontains=search_str) |
+                                                 Q(notes__icontains=search_str) |
+                                                 Q(tags__value__icontains=search_str))
         if 'search_category' in search_dict:
             if search_dict['search_category'] == 'Income':
                 item_filter = item_filter.filter(category__name='Income')
@@ -471,3 +482,16 @@ class Item(models.Model):
         item_filter = item_filter.order_by('-date')
         return item_filter
 
+
+class ItemTag(models.Model):
+    """
+    simple meta data tag
+    """
+    user: User = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)
+    value: str = models.CharField(blank=False, null=False, max_length=18)
+
+    class Meta:
+        unique_together = ("value", "user")
+
+    def __str__(self):
+        return self.value

@@ -21,8 +21,14 @@ urlpatterns = [
     path(r'subcategory/<pk>/delete/', views.SubCategoryDelete.as_view(), name='subcategory_delete'),
     path('subcategory/list/', views.SubCategoryList.as_view(), name='subcategory_list'),
 
+    path('tag/add/', views.TagAdd.as_view(), name='tag_add'),
+    path(r'tag/<pk>/delete/', views.TagDelete.as_view(), name='tag_delete'),
+    path('tag/list/', views.TagList.as_view(), name='tag_list'),
+
     path(r'expense/<int:pk>/edit/', views.ItemEdit.as_view(), name='expense_edit'),
     path(r'expense/<int:pk>/delete/', views.ItemDelete.as_view(), name='expense_delete'),
+
+    path(r'expense/<int:pk>/tags/', views.TagAdd.as_view(), name='item_tags'),
 
     path(r'template/', views.ListTemplates.as_view(), name='expenses_templates'),
     path(r'template/<int:item_pk>/add/', views.AddTemplateView.as_view(), name='add_template'),
@@ -35,6 +41,8 @@ urlpatterns = [
 
     path('ajax/expense-pie', views.expense_pie, name='ajax-expense-pie'),
     path('ajax/expense-bar', views.expense_bar, name='ajax-expense-bar'),
-    path('api/cash_flow', views.cash_flow_chart_v2, name='cash_flow_data')
+    path('api/cash_flow', views.cash_flow_chart_v2, name='cash_flow_data'),
+    path('api/expense/<int:pk>/tags/', views.expense_tags_api, name='set_tags'),
+
 ]
 
