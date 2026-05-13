@@ -507,6 +507,7 @@ def upload_confirm(request, uuid: uuid, headings):
     errors = None
     file_path = os.path.join(default_storage.location, "uploads", uuid)
     df = load_dataframe(file_path, headings)
+    df = df.fillna('')
     if not df.empty:
         if request.method == "POST":
             formset = ColumnConfirmFormset(request.POST)
@@ -524,6 +525,8 @@ def upload_confirm(request, uuid: uuid, headings):
                 df.fillna(0, inplace=True)
                 df = df[headings]
                 if 'Amount' not in headings:
+                    df['Debit'] = df['Debit'].replace("", 0).astype('float64')
+                    df['Credit'] = df['Credit'].replace("", 0).astype('float64')
                     df['Amount'] = df['Debit'] - df['Credit']
 
                 # Save a file in csv format.
@@ -533,7 +536,7 @@ def upload_confirm(request, uuid: uuid, headings):
                 df.to_csv(file_path, index=False)
                 return HttpResponseRedirect(reverse('upload_process', kwargs={'uuid': uuid}))
             errors = f'{uuid} no data available'
-    max_examples = 5 if len(df) > 5 else len(df)
+    max_examples = 11 if len(df) > 11 else len(df)
     columns = df.columns.tolist()
     initial = []
     for index in range(len(df.dtypes)):
@@ -551,16 +554,27 @@ def upload_confirm(request, uuid: uuid, headings):
 def upload_process(request, uuid: uuid):
     file_path = default_storage.base_location.joinpath('uploads', uuid)
     df = load_dataframe(file_path, True)
+
     if not df.empty:
-        existing = pd.DataFrame.from_records(Item.objects.filter(user=request.user).values_list('date', 'description', 'amount'))
-        existing.columns = ['Date', 'Description', 'Amount']
-        # existing['Date'] = pd.to_datetime(existing['Date'])
-        existing['Amount'] = pd.to_numeric(existing['Amount'])  # Decimal to Float
+        df['Date'] = pd.to_datetime(df['Date'])
+        df['abs_amount'] = df['Amount'].astype(float).abs()
         df = df.round(2)  # Fix up any crazy rounding issues.
 
-        # todo: I won't pretend to understand this, but it works and it's darn fast.
-        to_process = df.drop_duplicates().merge(existing.drop_duplicates(), on=['Date', 'Description', 'Amount'], how='left', indicator=True)
-        to_process = to_process.loc[to_process._merge == 'left_only', to_process.columns != '_merge']
+        existing = pd.DataFrame.from_records(Item.objects.filter(user=request.user).values_list('date', 'description', 'amount'))
+        if not existing.empty:
+            existing.columns = ['Date', 'Description', 'Amount']
+            existing['Date'] = pd.to_datetime(existing['Date'])
+            existing['Amount'] = pd.to_numeric(existing['Amount'])  # Decimal to Float
+
+            existing['abs_amount'] = existing['Amount'].astype(float).abs()
+            existing = existing.round(2)
+
+            # todo: I won't pretend to understand this, but it works and it's darn fast.
+            to_process = df.drop_duplicates().merge(existing.drop_duplicates(), on=['Date', 'Description', 'abs_amount'], how='left', indicator=True)
+            to_process = to_process.loc[to_process._merge == 'left_only', to_process.columns != '_merge']
+        else:
+            to_process = df
+
         if len(to_process) > 0:
             errors = import_dataframe(to_process, request.user)
     return HttpResponseRedirect(reverse('expense_main'))

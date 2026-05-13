@@ -174,21 +174,30 @@ class UploadColumnForm(forms.Form):
     example2 = forms.CharField(required=False, max_length=128)
     example3 = forms.CharField(required=False, max_length=128)
     example4 = forms.CharField(required=False, max_length=128)
+    example5 = forms.CharField(required=False, max_length=128)
+    example6 = forms.CharField(required=False, max_length=128)
+    example7 = forms.CharField(required=False, max_length=128)
+    example8 = forms.CharField(required=False, max_length=128)
+    example9 = forms.CharField(required=False, max_length=128)
 
     def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
-        self.fields["heading"].widget.attrs['style'] = 'width:200px;height:27px'
 
-        self.fields["example0"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
-        self.fields["example0"].widget.attrs['readonly'] = True
-        self.fields["example1"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
-        self.fields["example1"].widget.attrs['readonly'] = True
-        self.fields["example2"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
-        self.fields["example2"].widget.attrs['readonly'] = True
-        self.fields["example3"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
-        self.fields["example3"].widget.attrs['readonly'] = True
-        self.fields["example4"].widget.attrs['style'] = 'width:200px;background-color:Wheat'
-        self.fields["example4"].widget.attrs['readonly'] = True
+        ch_size = 22
+        try:
+            longest_value = max(self.initial.values(), key=len)
+            if isinstance(longest_value, str):
+                longest_value = len(longest_value)
+                ch_size = longest_value if longest_value > 22 else 22
+        except TypeError:
+            pass  # Non string,  use defautl of ch_size
+        except ValueError:
+            pass
+
+        self.fields["heading"].widget.attrs['style'] = f'width:{ch_size}ch'  # To fit -> Debit (Out of account)
+        for index in range(10):
+            self.fields[f"example{index}"].widget.attrs['style'] = f'width:{ch_size}ch;background-color:Wheat'
+            self.fields[f"example{index}"].widget.attrs['readonly'] = True
 
 
 class UploadFileForm(forms.Form):

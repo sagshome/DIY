@@ -17,8 +17,8 @@ DEFAULT = {
     'Amount': 'Amount',
 }
 EXTRA = {
-    'Debit': 'Debit',
-    'Credit': 'Credit',
+    'Debit': 'Debit (Out of account)',
+    'Credit': 'Credit (Into account)',
     'Category': 'Category',
     'Subcategory': 'Subcategory',
     'Hidden': 'Hidden',

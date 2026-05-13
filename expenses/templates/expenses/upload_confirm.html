@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base_bs.html" %}
 {% load static %}
 {% block title %}Expense Upload{% endblock %}
 {% block content %}
@@ -16,24 +16,24 @@
                 {{ error }}
             {% endfor %}
         {% endfor %}
-        <div class="w3-cell-row">
-                {% for form in formset.forms %}
-                <div class="w3-cell">
-                    {{ form.heading }}<br>
-                    {{ form.heading.errors }}
-                    {{ form.example0 }}<br>
-                    {{ form.example1 }}<br>
-                    {{ form.example2}}<br>
-                {{ form.example3 }}<br>
-                {{ form.example4 }}
-                </div>
-                {% endfor %}
-            </tr>
+        <div class="table-responsive">
+            <table class="table w-auto table-borderless">
+                <tr>{% for form in formset.forms %}<th>{{form.heading}}<br>{{form.heading.errors}}</th>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example0}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example1}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example2}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example3}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example4}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example5}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example6}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example7}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example8}}</td>{% endfor %}</tr>
+                <tr>{% for form in formset.forms %}<td>{{form.example9}}</td>{% endfor %}</tr>
+            </table>
         </div>
         <button class="w3-margin-left w3-margin-top w3-button w3-round-xlarge w3-margin-top w3-green" name="submit-type"
                 value="Save" type="submit">Submit
         </button>
-
     </form>
 {% endblock %}
 
