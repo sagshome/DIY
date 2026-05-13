@@ -120,8 +120,6 @@ class SubCategory(models.Model):
         return qfilter.filter(subcategory=self).count()
 
 
-
-
 class Template(models.Model):
     """
 for t in Template.objects.all():
@@ -433,21 +431,22 @@ class Item(models.Model):
             elif search_str.startswith('notes:'):
                 item_filter = item_filter.filter(notes__icontains=search_str[6:])
             elif search_str.startswith('tags:'):
-                item_filter = item_filter.filter(tags__value_iexact=search_str[5:])
+                item_filter = item_filter.filter(tags__value=search_str[5:])
             else:
                 item_filter = item_filter.filter(Q(description__icontains=search_str) |
                                                  Q(notes__icontains=search_str) |
                                                  Q(tags__value__icontains=search_str))
         if 'search_category' in search_dict:
-            if search_dict['search_category'] == 'Income':
-                item_filter = item_filter.filter(category__name='Income')
-            else:
-                item_filter = item_filter.exclude(category__name='Income')
-                category = search_dict['search_category']
-                if category == '- NONE -':
-                    item_filter = item_filter.filter(category__isnull=True)
-                elif category != '- ALL -':
-                    item_filter = item_filter.filter(category__name=category)
+            if search_dict['search_category'] != '- ANY -':
+                if search_dict['search_category'] == 'Income':
+                    item_filter = item_filter.filter(category__name='Income')
+                else:
+                    item_filter = item_filter.exclude(category__name='Income')
+                    category = search_dict['search_category']
+                    if category == '- NONE -':
+                        item_filter = item_filter.filter(category__isnull=True)
+                    elif category != '- ALL -':
+                        item_filter = item_filter.filter(category__name=category)
 
         if 'search_subcategory' in search_dict:
             if search_dict['search_subcategory'] == '- NONE -':

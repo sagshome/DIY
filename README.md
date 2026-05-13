@@ -7,6 +7,13 @@ This only needs to be done if you destroy certificates or I need to start
 This should be in a cron
    0 3 * * * cd /home/scott/Projects/DIY && docker compose run --rm certbot renew --quiet && docker compose exec nginx nginx -s reload
 
+Get rid of duplicates
+   df = pd.DataFrame(Item.objects.exclude(description='Random Data').values().order_by('id'))
+   ndf = df[df.duplicated(subset=['description', 'date', 'amount', 'category_id', 'subcategory_id', 'ignore', 'split_id', 'amortized_id'], keep='last')]
+   odf = df[df.duplicated(subset=['description', 'date', 'amount'], keep='first')]
+   odf = odf.loc[odf['category_id'].isna()]
+   Item.objects.filter(id__in=ndf['id']).delete()
+   Item.objects.filter(id__in=odf['id']).delete()
 
 Needed for Launch
 1) ~~Support Income~~

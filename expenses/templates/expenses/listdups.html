@@ -1,0 +1,106 @@
+{% extends "base_bs.html" %}
+{% block title %}Duplicates{% endblock %}
+{% load expenses_tags %}
+{% load static %}
+
+{% block content %}
+    <table id="dup-list" class="table table-striped w-auto">
+        {% for item in item_list %}
+            {% if forloop.first %}
+               <thead style="background:#eee;">
+                <tr>
+                    <th></th>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Category</th>
+                    <th>SubCategory</th>
+                    <th>Hidden</th>
+                    <th>Split</th>
+                    <th>Leveled</th>
+                    <th>Notes</th>
+                    <th>Tags</th>
+                </tr>
+                </thead>
+            {% endif %}
+            <tr id="{{item.id}}" data-id="{{item.id}}">
+                <td><i class="bi bi-trash ioom-delete-action"></i></td>
+                <td>{{item.date}}</td>
+                <td>{{item.description}}</td>
+                <td>{{item.amount}}</td>
+                <td>{{item.category}}</td>
+                <td>{{item.subcategory}}</td>
+                <td>{{item.ignore}}</td>
+                <td>{{item.split}}</td>
+                <td>{{item.amortized}}</td>
+                <td>{{item.notes}}</td>
+                <td>{{item.date}}</td>
+                {% for tag in item.tags.all %}
+                    <span class="badge bg-info text-dark me-1">{{ tag.value }}</span>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+    </table>
+
+    <script>
+
+        $(document).ready(function() {
+            var tx_table = $('#dup-list').DataTable({
+                "pageLength": 50,  // Show 25 rows per page
+                "ordering": false,
+                "searching": true,
+                "dom": "lrtip"
+            });
+        });
+
+        function getCSRFToken() {
+            const name = "csrftoken=";
+            return document.cookie
+                .split(";")
+                .map(c => c.trim())
+                .find(c => c.startsWith(name))
+                ?.substring(name.length) || null;
+        }
+
+        document.querySelectorAll(".ioom-delete-action").forEach(icon => {
+            icon.addEventListener("click", async function (e) {
+                e.preventDefault();
+                // access row if needed
+                const row = this.closest("tr");
+
+                if (row) {
+                    const elem = document.getElementById(row.id)
+                    console.log("trash clicked", elem.dataset.id);
+                    row.classList.add("deleting-row");
+                    try {
+                        const response = await fetch(
+                            `/expenses/api/quick_delete/?action_id=${elem.dataset.id}`,
+                            {
+                                method: "POST",
+                                headers: {
+                                    "X-CSRFToken": getCSRFToken(),
+                                    "Content-Type": "application/json"
+                                }
+                            }
+                        );
+
+                        if (!response.ok) {
+                            console.error("Delete failed", response.status);
+                            return;
+                        }
+
+                        // success → strike through row
+                        row.classList.add("deleted-row");
+
+                        // optional: hide trash icon
+                        this.style.display = "none";
+
+                    } catch (err) {
+                        console.error("Request error", err);
+                    }
+
+                    }
+            });
+        });
+    </script>
+{% endblock %}

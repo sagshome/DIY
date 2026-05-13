@@ -16,6 +16,7 @@ urlpatterns = [
     path(r'assign/', views.assign_expenses, name='expenses_assign'),
 
     path(r'expense/add/', views.ItemAdd.as_view(), name='expense_add'),
+    path(r'expense/listdup/', views.ItemDups.as_view(), name='expense_dups'),
     path(r'expense/help', views.cash_help, name='cash_help'),
     path('subcategory/add/', views.SubCategoryAdd.as_view(), name='subcategory_add'),
     path(r'subcategory/<pk>/delete/', views.SubCategoryDelete.as_view(), name='subcategory_delete'),
@@ -43,6 +44,7 @@ urlpatterns = [
     path('ajax/expense-bar', views.expense_bar, name='ajax-expense-bar'),
     path('api/cash_flow', views.cash_flow_chart_v2, name='cash_flow_data'),
     path('api/expense/<int:pk>/tags/', views.expense_tags_api, name='set_tags'),
+    path('api/quick_delete/', views.delete_action, name='quick_delete'),
 
 ]
 

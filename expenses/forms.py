@@ -19,6 +19,7 @@ def get_categories():
         pass  #  Init with mysql
     except OperationalError:
         pass  # Init with mysql-lite
+    default.append(('- ANY -', '- ANY -'))
     return default
 
 

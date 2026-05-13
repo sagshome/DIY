@@ -222,6 +222,15 @@ class ListTemplates(LoginRequiredMixin, ListView):
         return context
 
 
+class ItemDups(LoginRequiredMixin, ListView):
+    model = Item
+    template_name = 'expenses/listdups.html'
+
+    def get_queryset(self):
+        df = pd.DataFrame(Item.objects.filter(user=self.request.user).values().order_by('id'))
+        df = df[df.duplicated(subset=['description', 'date', 'amount'], keep=False)].sort_values(['date', 'description'])
+        return Item.objects.filter(id__in=df['id']).order_by('date', 'description')
+
 class AddTemplateView(LoginRequiredMixin, CreateView):
     model = Template
     form_class = TemplateForm
@@ -290,6 +299,18 @@ def edit_template(request, pk: int):
 def cash_help(request):
     return render(request, 'expenses/includes/help.html', {'success_url': request.META.get('HTTP_REFERER', '/')})
 
+@login_required
+def delete_action(request):
+    """
+    Just a quick delete
+    """
+    action_id = request.GET.get("action_id", None)
+    action = Item.objects.filter(id=action_id, user=request.user)
+    if action.count() == 1:
+        action.delete()
+        return HttpResponse(status=200)
+    return HttpResponse(status=404)
+
 
 @login_required
 def expense_main(request):
@@ -300,6 +321,11 @@ def expense_main(request):
     search_for = False
     default_end = datetime.now().date()
     default_start = datetime.now().replace(year=datetime.now().year - 7).date().replace(day=1)
+
+    try:
+        page_size = int(request.GET.get('pagesize', 50))
+    except ValueError:
+        page_size = 50
 
     if request.GET:
         if 'span' in request.GET:
@@ -323,7 +349,6 @@ def expense_main(request):
         initial['search_category'] = search_for.name
 
     warnings = {}
-    max_size = 50
     search_form = SearchForm(initial=initial)
 
     total = 0
@@ -338,7 +363,7 @@ def expense_main(request):
             total = super_set.aggregate(Sum('amount'))['amount__sum']
             formset.save()
             formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
         else:
             pass
 
@@ -350,11 +375,11 @@ def expense_main(request):
             super_set = super_set.filter(category=search_for)
             total = super_set.aggregate(Sum('amount'))['amount__sum']
             formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
         else:
             total = super_set.aggregate(Sum('amount'))['amount__sum']
             formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date'))
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
 
     unassigned = Item.unassigned(user=request.user)
     if unassigned.count() != 0:

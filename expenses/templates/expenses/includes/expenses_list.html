@@ -10,6 +10,37 @@
     {% endif %}
 
     <table id="exp-list" class="table w-auto">
+        <tr id="bulk-row" class="table-secondary">
+            <td><input type="checkbox" id="apply-all"> All</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td><select name="bulk-category" class="diy-category" id="bulk-category">
+                <option value="" selected="">---------</option>
+                <option value="1">Food</option>
+                <option value="2">Utilities</option>
+                <option value="3">Housing</option>
+                <option value="4">Healthcare</option>
+                <option value="5">Recreation</option>
+                <option value="6">Transportation</option>
+                <option value="7">Personal Care</option>
+                <option value="9">Other</option>
+                <option value="10">Income</option>
+            </select></td>
+            <td><select id="bulk-subcategory" name="bulk-subcategory" class="diy-subcategory">
+                <div id="bulk-subcat-list"> <option value="" selected="">---------</option></div>
+            </select></td>
+            <td><input type="checkbox" name="bulk-ignore" id="bulk-ignore"></td>
+            <td></td>
+            <td></td>
+            <td>
+                <textarea name="bulk-notes" cols="15" rows="1" id="bulk-notes"></textarea>
+            </td>
+            <td>
+                <button type="button" class="btn btn-sm border-0 edit-tags bg-body"><i class="fa fa-tags"></i></button>
+            </td>
+
+            <td><button type="button" class="btn btn-sm btn-primary" id="apply-bulk">Apply Bulk Changes</button></td></tr>
         {% for form in formset.forms %}
             {% if forloop.first %}
                <thead style="background:#eee;">
@@ -22,20 +53,18 @@
                 </tr>
                 </thead>
 
+
             {% endif %}
             <tr>
                 {% for field in form.visible_fields %}
                     {% if forloop.first %}
                         <td>
+                            <input type="checkbox" class="row-select">
                             <a href="{% url 'expense_edit' form.instance.id %}"><i class="fa fa-pencil"></i></a>
                             <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
                         </td>
                     {% endif %}
-                    <td
-                        {% if field.name == 'ignore' or field.name == 'is_split' or field.name == 'is_amortized' %}
-                            class="w3-center"
-                        {% endif %}
-                    >
+                    <td {% if field.name == 'ignore' or field.name == 'is_split' or field.name == 'is_amortized' %} class="w3-center" {% endif %}>
 
                 {{ field.errors.as_ul }}
                 {{ field }}
@@ -102,10 +131,9 @@
             set_change_callback()
         });
 
+
         document.addEventListener('click', async function(e) {
-
             const editBtn = e.target.closest('.edit-tags');
-
             if (editBtn) {
                 const cell = editBtn.closest('.tag-cell');
                 cell.querySelector('.tag-editor')
@@ -140,12 +168,10 @@
                     `/expenses/api/expense/${expenseId}/tags/`,
                     {
                         method: 'POST',
-
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': getCSRFToken(),
                         },
-
                         body: JSON.stringify({
                             tags: tagIds
                         })
@@ -154,7 +180,6 @@
 
                 const data = await response.json();
                 // update badges
-
                 const display =
                     cell.querySelector('.tag-display');
 
@@ -180,6 +205,46 @@
                     .classList.remove('d-none');
             }
 
+        });
+
+        document.getElementById('apply-all').addEventListener('click', function () {
+            const applyval = document.getElementById('apply-all').checked;
+            document.querySelectorAll('.row-select').forEach(cb => {
+                cb.checked = applyval
+            })
+        });
+
+        document.getElementById('bulk-category').addEventListener('click', function () {
+            const category = document.getElementById('bulk-category').value;
+            $.ajax({
+                url: '/expenses/ajax/load-subcategories/',
+                data: {category: category},
+                success: function (data) {
+                    $('#bulk-subcat-list').html(data);
+                },
+                error: function (ts) {
+                    console.log(ts.responseText)
+                }
+            })  // ajax
+        })  // add Event
+
+
+
+        document.getElementById('apply-bulk').addEventListener('click', function () {
+            const cat = document.getElementById('bulk-category').value;
+            const subcat = document.getElementById('bulk-subcategory').value;
+            const ignore = document.getElementById('bulk-ignore').checked;
+            const notes = document.getElementById('bulk-notes').value;
+
+            document.querySelectorAll('.row-select:checked').forEach(cb => {
+                const row = cb.closest('tr');
+                row.querySelector('[id$="-category"]').value = cat
+                row.querySelector('[id$="-subcategory"]').value = subcat
+                row.querySelector('[id$="-ignore"]').checked=ignore
+                row.querySelector('[id$="-notes"]').value=notes
+
+                row.classList.add('table-warning'); // mark dirty
+            });
         });
     </script>
 {% endblock %}
