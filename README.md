@@ -10,9 +10,10 @@ This should be in a cron
 Get rid of duplicates
    df = pd.DataFrame(Item.objects.exclude(description='Random Data').values().order_by('id'))
    ndf = df[df.duplicated(subset=['description', 'date', 'amount', 'category_id', 'subcategory_id', 'ignore', 'split_id', 'amortized_id'], keep='last')]
+   Item.objects.filter(id__in=ndf['id']).delete()
+   df = pd.DataFrame(Item.objects.exclude(description='Random Data').values().order_by('id'))
    odf = df[df.duplicated(subset=['description', 'date', 'amount'], keep='first')]
    odf = odf.loc[odf['category_id'].isna()]
-   Item.objects.filter(id__in=ndf['id']).delete()
    Item.objects.filter(id__in=odf['id']).delete()
 
 Needed for Launch
