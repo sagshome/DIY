@@ -2206,9 +2206,9 @@ class Transaction(models.Model):
             choices.append((choice.id, name))
         return sorted(choices)
 
-    TRANSACTION_TYPE = ((FUND, 'Deposit'),                  # Value only and always positive
-                        (BUY, 'Buy'),                       # Price and Quantity
-                        (REDIV, 'Reinvested Dividend'),     # Price and Quantity but Price is set to 0
+    TRANSACTION_TYPE = ((FUND, 'Deposit'),
+                        (BUY, 'Buy'),
+                        (REDIV, 'Reinvested Dividend'),
                         (SELL, 'Sell'),
                         (INTEREST, 'Dividends/Interest'),
                         (REDEEM, 'Withdraw'),
@@ -2216,7 +2216,7 @@ class Transaction(models.Model):
                         (TRANS_IN, 'Transfer In'),
                         (TRANS_OUT, 'Transfer Out'),
                         (VALUE, 'Value'),
-                        (BALANCE, 'Balance')
+                        (BALANCE, 'Balance'),
                         )
 
     TRANSACTION_MAP = dict(TRANSACTION_TYPE)

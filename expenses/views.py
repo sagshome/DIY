@@ -525,9 +525,12 @@ def upload_confirm(request, uuid: uuid, headings):
                 df.fillna(0, inplace=True)
                 df = df[headings]
                 if 'Amount' not in headings:
-                    df['Debit'] = df['Debit'].replace("", 0).astype('float64')
-                    df['Credit'] = df['Credit'].replace("", 0).astype('float64')
-                    df['Amount'] = df['Debit'] - df['Credit']
+                    try:
+                        df['Debit'] = df['Debit'].replace("", 0).astype('float64')
+                        df['Credit'] = df['Credit'].replace("", 0).astype('float64')
+                        df['Amount'] = df['Debit'] - df['Credit']
+                    except:
+                        pass
 
                 # Save a file in csv format.
                 file_name = os.path.splitext(uuid)[0] + '.csv'
@@ -566,11 +569,11 @@ def upload_process(request, uuid: uuid):
             existing['Date'] = pd.to_datetime(existing['Date'])
             existing['Amount'] = pd.to_numeric(existing['Amount'])  # Decimal to Float
 
-            existing['abs_amount'] = existing['Amount'].astype(float).abs()
+            # existing['abs_amount'] = existing['Amount'].astype(float).abs()
             existing = existing.round(2)
 
             # todo: I won't pretend to understand this, but it works and it's darn fast.
-            to_process = df.drop_duplicates().merge(existing.drop_duplicates(), on=['Date', 'Description', 'abs_amount'], how='left', indicator=True)
+            to_process = df.drop_duplicates().merge(existing.drop_duplicates(), on=['Date', 'Description', 'Amount'], how='left', indicator=True)
             to_process = to_process.loc[to_process._merge == 'left_only', to_process.columns != '_merge']
         else:
             to_process = df

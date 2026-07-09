@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 accounts = {account.id: account for account in Account.objects.all()}
 
+
 class Command(BaseCommand):
     help = 'Dump all Transactions in a format useful to re-import'
 
