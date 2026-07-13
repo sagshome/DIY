@@ -1,0 +1,44 @@
+<!--  This data from this is from the wealth.views.WealthSummaryMixin -->
+{% load static %}
+{% load tz %}
+    <div class="container">
+        <div class="row">
+            <p>
+            <b>Details</b>
+            {% if container %}
+                {{ container.container_type }}:&nbsp;<b>{{ container.name }}</b>
+            {% else %}User:&nbsp;<b>
+                {{ request.user }}</b>
+            {% endif %}
+            &nbsp;-&nbsp;
+            Equities/ETFs updated as of {{last_updated | localtime}}
+            </p>
+        </div>
+    </div>
+    <table class="table">
+        {% if full_summary %}
+            <tr>
+                <td>User:&nbsp;<b>{{request.user}}</b></td>
+                <td>Value: {{full_summary.run_date | date:"M-d-Y"}} <b>${{ full_summary.value|floatformat:"0g" }}</b></td>
+                <td>Today's Change: <b>{{ full_summary.change|floatformat:"2g" }}</b> ({{ full_summary.percent|floatformat:"2g" }}%)</td>
+                <td>Cash on hand: <b>${{ full_summary.cash|floatformat:"0g" }}</b></td>
+                <td>Funding: <b>${{ full_summary.funding|floatformat:"0g" }}</b></td>
+                <td>Range: {{range_string}}</td>
+                <td>Starting Value: <b>${{full_summary.range_start | floatformat:'0g'}}</b></td>
+                <td>Range Change: <b>${{ full_summary.range_change|floatformat:"2g" }}</b> ({{full_summary.range_percent | floatformat:'2g'}}%)</td>
+            </tr>
+        {% endif %}
+
+        {% if filter_summary %}
+        <tr>
+            <td><b>{{container.container_type}}</b></td>
+            <td>Today's Value: <b>${{ filter_summary.value|floatformat:"0g" }}</b></td>
+            <td>Today's Change: <b>{{ filter_summary.change|floatformat:"2g" }}</b> ({{ filter_summary.percent|floatformat:"2g" }}%)</td>
+            <td>Cash on hand: <b>${{ filter_summary.cash|floatformat:"0g" }}</b></td>
+            <td>Funding: <b>${{ filter_summary.funding|floatformat:"0g" }}</b></td>
+            <td>Range: {{range_string}}</td>
+            <td>Starting Value: <b>${{filter_summary.range_start | floatformat:'0g'}}</b></td>
+            <td>Range Change: <b>${{ filter_summary.range_change|floatformat:"2g" }}</b> ({{filter_summary.range_percent | floatformat:'2g'}}%)</td>
+        </tr>
+        {% endif %}
+    </table>

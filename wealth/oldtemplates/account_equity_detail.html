@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Account Equity Details{% endblock %}
+{% load static %}
+{% block content %}
+
+    <div class="w3-container">
+        <h2 class="w3-margin">{{ equity.key }}
+            {% if equity.equity_type == 'Equity' %}-{{ equity.name }}{% endif %}
+        </h2>
+
+        <p class="w3-margin-left">Last updated : {{ equity.last_updated }}
+            {% if account_type == 'Account' %}
+                <h3 class="w3-margin">Details for {{ account_type }} <a
+                        href="{% url 'account_details' container.id %}">{{ container.name }}</a></h3>
+            {% else %}
+                <h3 class="w3-margin">Details for portfolio <a
+                        href="{% url 'portfolio_details' container.id %}">{{ container.name }}</a></h3>
+            {% endif %}
+
+        <div class="w3-row">
+            <div style="height:350px;" class="w3-container">
+                <canvas id="lineChart" class="w3-card-2"></canvas>
+            </div>
+        </div>
+
+        <div class="w3-row">
+            <div class="w3-half w3-container w3-margin-top w3-mobile">
+                <table class="w3-table w3-stripped">
+                    <caption class="w3-wide w3-padding-16">Equity Values</caption>
+                    <thead class="w3-margin-bottom" style="background:#eee;">
+                    <th style="width:100px">Date</th>
+                    <th class="w3-hide-small">Shares</th>
+                    <th class="w3-hide-small">Cost</th>
+                    <th class="w3-hide-small">Value</th>
+                    <th class="w3-hide-small">Dividends</th>
+                    <th>Price</th>
+                    <th>Avg Cost</th>
+                    </thead>
+                    {% for item in data %}
+                        {% if item.Shares != 0 %}
+                            <tr>
+                                <td>{{ item.Date }}</td>
+                                <td class="w3-hide-small">{{ item.Shares|floatformat:'0g' }}</td>
+                                <td class="w3-hide-small">${{ item.Cost|floatformat:'2g' }}</td>
+                                <td class="w3-hide-small">${{ item.Value|floatformat:'2g' }}</td>
+                                <td class="w3-hide-small">{% if item.TotalDividends != 0 %} $
+                                    {{ item.TotalDividends|floatformat:'2g' }} {% endif %}</td>
+                                <td>${{ item.Price|floatformat:'2g' }}</td>
+                                <td>${{ item.AvgCost|floatformat:'2g' }}</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </table>
+            </div>
+
+            <div class="w3-rest w3-container w3-margin-top w3-mobile">
+                {% include 'stocks/includes/transaction_list.html' %}
+            </div>
+        </div>
+    </div>
+
+    <script src="{% static 'stocks.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            cost_value_chart("{% url 'cost_value_chart' %}", "{{ container.id }}", "{{ account_type }}", "{{ equity.id }}")
+        });
+    </script>
+
+{% endblock content %}

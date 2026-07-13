@@ -3,15 +3,19 @@ import os
 import platform
 import pandas as pd
 import tempfile
+import traceback
 
-from datetime import datetime, date
+from datetime import datetime, date, time, timezone
 from dateutil.relativedelta import relativedelta
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from pathlib import Path
-from pandas import Period
-from typing import Dict, List
+from pandas.tseries.offsets import BusinessDay
+
+from typing import Dict, List, Union
 
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.template import loader
@@ -209,6 +213,29 @@ class DateUtil:
         return date_to_label(label_date, self.period)
 
 
+def adjust_date(value, normalize=True) -> date:
+    """
+    Date must be Monday to Friday
+    if normalize then make sure you don't adjust to a new month
+    """
+
+    if not (isinstance(value, pd.Timestamp) or isinstance(value, date) or isinstance(value, datetime)):
+        raise TypeError(f"Unsupported type: {type(value)}")
+
+    saturday = 5
+
+    weekday = value.weekday()
+    if weekday < saturday:
+        return value
+
+    month = value.month
+    adjust_by = 1 if weekday == saturday else 2  # For Sunday -> Moves day of week to Friday
+    value = value - relativedelta(days=adjust_by)
+
+    if normalize and value.month != month:
+        value = value + relativedelta(days=3)  # Moves day of week from last Friday to next Monday
+    return value
+
 def date_to_label(label_date: date, period: str) -> str:
     if period == 'YEAR':
         value = str(label_date.year)
@@ -299,6 +326,94 @@ def cache_dataframe(key: str, dataframe: pd.DataFrame, timeout=36000):
 def clear_cached_dataframe(key):
     if not settings.NO_CACHE:
         cache.delete(key)
+
+
+def df_start(scope: str, preferred: Union[pd.Timestamp, None] = None, utc: bool = True) -> datetime:
+    """
+    For parsing of the dataframe,  figure out the start based on scope and/or preferred value.
+    The preferred value matches the data download values so:
+        scope == minute  -> no more than 20 days
+        scope == day  -> no more than 1 year, but can be lorger if preferred
+        scope == month -> default 20 years,  but can be larger if preferred
+
+    Note this is part of Position, since other dataframes are merged based on dates in the Position dataframe
+    """
+    if utc:
+        start = to_utc_midnight(pd.to_datetime('now', utc=utc))
+        preferred = to_utc_midnight(pd.to_datetime(preferred, utc=utc)) if preferred else None
+    else:
+        start = pd.to_datetime("now").tz_localize("UTC").tz_convert("America/Toronto").normalize()
+        if preferred.tz is None:
+            preferred = pd.to_datetime(preferred).tz_localize("UTC").tz_convert("America/Toronto").normalize() if preferred else None
+        else:
+            preferred = pd.to_datetime(preferred).tz_convert("America/Toronto").normalize() if preferred else None
+
+    if scope == 'minute':
+        start = start - BusinessDay(20)
+        if preferred and preferred > start:  # We need a maximum to prevent incredibly huge dataframes
+            start = preferred
+    elif scope == 'day':
+        start = preferred if preferred else start - relativedelta(years=1)
+    elif scope == 'month':
+        start = preferred if preferred else start - relativedelta(years=20)
+        start = start.replace(day=1)  # Normalize for monthly based dataframes
+    else:
+        traceback.print_stack()  # Prints the full current call stack
+        raise RuntimeError("Invalid scope provided: %s" % scope)
+    return start
+
+
+def dates_dataframe(scope: str, start: Union[pd.Timestamp, None] = None, utc: bool = True) -> pd.DataFrame:
+    """
+    Build a DataFrame that contains a DateTime column and  Date column.
+    """
+
+    if scope in ['month', 'day']:
+        last = pd.Timestamp.utcnow().normalize() if utc else pd.Timestamp.now().normalize()
+        first = df_start(scope, preferred=start, utc=utc)
+        freq = 'MS' if scope == 'month' else 'B'
+        df = pd.DataFrame({'DateTime': pd.date_range(start=first, end=last, freq=freq)})
+    else:
+        first = df_start(scope, preferred=start, utc=False)
+        last = pd.to_datetime("now").tz_localize("UTC").tz_convert("America/Toronto").normalize()
+
+        business_days = pd.date_range(start=first, end=last, freq='B')
+        times = pd.timedelta_range('9:30:00', '16:00:00', freq='15min')
+        # Build the full DateTimeIndex
+        dt_index = pd.DatetimeIndex([
+            day + ttime for day in business_days for ttime in times
+        ])
+
+        # Create the DataFrame
+        df = pd.DataFrame(index=dt_index)
+        if utc:
+            #df['DateTime'] = dt_index.tz_convert('America/New_York').tz_convert('UTC')
+            df['DateTime'] = dt_index.tz_convert('UTC')
+        else:
+            df['DateTime'] = dt_index
+        df = df.reset_index(drop=True)
+
+    df['Date'] = df['DateTime'].dt.floor('D')
+    return df
+
+
+def force_decimal(value) -> Decimal:
+    """
+    Given a value,  make sure it is a Decimal number and if not return Decimal(0)
+    """
+    return_value = Decimal(0)
+    if value is not None:
+        try:
+            as_decimal = Decimal(str(value))
+            if as_decimal.is_nan():
+                logger.error('NaN value not support:%s' % as_decimal)
+            elif as_decimal.is_infinite():
+                logger.error('Infinite value is  not support:%s' % as_decimal)
+            else:
+                return_value = as_decimal
+        except (InvalidOperation, ValueError, TypeError) as e:
+            logger.error('Invalid Decimal supplied %s setting to 0 %s' % (value, e))
+    return return_value
 
 
 def get_cached_dataframe(key):
@@ -448,4 +563,68 @@ def send_diy_mail(subject, to, template, data):
     except Exception:
         logger.exception("Failed to send to %s", to)
 
+
+def to_utc_midnight(value) -> datetime:
+    """
+    Convert date/datetime/pd.Timestamp to a UTC-aware datetime at midnight.
+    """
+
+    # Convert pandas Timestamp first
+    if isinstance(value, pd.Timestamp):
+        if value.tzinfo is not None:
+            value = value.tz_convert("UTC")
+        value = value.to_pydatetime()
+
+    # If it's a date (but not datetime)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime.combine(value, time.min, tzinfo=timezone.utc)
+
+    # If it's a datetime
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            # assume naive datetimes are UTC
+            value = value.replace(tzinfo=timezone.utc)
+        else:
+            value = value.astimezone(timezone.utc)
+
+        return datetime.combine(
+            value.date(),
+            time.min,
+            tzinfo=timezone.utc
+        )
+
+    raise TypeError(f"Unsupported type: {type(value)}")
+
+
+def to_utc_datetime(value) -> datetime:
+    """
+    Convert date/datetime/pd.Timestamp to a UTC-aware datetime,
+    preserving hour/minute, zeroing seconds and microseconds.
+    """
+
+    # Handle pandas Timestamp first
+    if isinstance(value, pd.Timestamp):
+        if value.tzinfo is not None:
+            value = value.tz_convert("UTC")
+        value = value.to_pydatetime()
+
+    # date (no time info)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime.combine(
+            value,
+            time(0, 0),
+            tzinfo=timezone.utc
+        )
+
+    # datetime
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            # assume naive datetimes are already UTC
+            value = value.replace(tzinfo=timezone.utc)
+        else:
+            value = value.astimezone(timezone.utc)
+
+        return value.replace(second=0, microsecond=0)
+
+    raise TypeError(f"Unsupported type: {type(value)}")
 

@@ -1,0 +1,96 @@
+{% extends "wealth_base.html" %}
+{% load static %}
+{% load tz %}
+{% block title %}{% if title %}{{title}}{% else %}IOOM Wealth{% endif %}{% endblock %}
+
+{% block content %}
+    {% include 'wealth/includes/wealth_summary_header.html' %}
+    {% include 'wealth/includes/actions.html' %}
+
+    <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#ioom_chart">
+        <i class="bi bi-chevron-up"></i>
+    </button>
+    <div class="collapse" id="ioom_chart">
+        <div style="height: 300px;">
+            <canvas id="lineChart" aria-label="Chart"></canvas>
+        </div>
+    </div>
+    <div>
+        {% include 'wealth/includes/range.html' %}
+    </div>
+    <div>
+        <form method="post">
+            {% csrf_token %}
+            {{ formset.management_form }}
+            {% if formset.errors.errors %}
+                <div class="w3-panel w3-red">
+                    {% for dict in formset.error_messages %}
+                        {% for error in dict.values %}
+                            {{ error }}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div class="pt-2">
+                <button class="btn btn-outline-success btn-sm" type="submit">Submit</button>
+                <a class="btn btn-outline-warning btn-sm" href="">Cancel</a>
+             </div>
+
+            <table class="table table-striped caption-top">
+                <caption>Account Data and Reconcilation Table</caption>
+                <thead style="background:#eee;">
+                    <tr>
+                        <th>Date</th>
+                        {% if account.acct_type != 'Cash' %}
+                            <th>Value</th>
+                            <th>Funding</th>
+                        {% endif %}
+                        {% if account.acct_type != 'Value' %}
+                            <th>Cash</th>
+                        {% endif %}
+                        <th>Estimated Data</th>
+                    </tr>
+                </thead>
+                {% for form in formset %}
+                    <tr>
+                        {% for field in form.visible_fields %}
+                            {% if field.name == 'Date' %}<td>{{ field }}</td>{% endif %}
+                            {% if account.acct_type != 'Cash' and field.name == 'Total' %}
+                                <td>
+                                    {{ field }}
+                                    {% if account.acct_type == 'Trading' %}
+                                        <a href="{% url 'reconciliation' account.id  form.Date.value %}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
+                                    {% endif %}
+
+                                </td>
+                            {% endif %}
+                            {% if account.acct_type != 'Cash' and field.name == 'Funding' %}
+                                <td>{{ field }}</td>
+                            {% endif %}
+                            {% if account.acct_type != 'Value' and field.name == 'Cash' %}
+                                <td>{{ field }}</td>
+                            {% endif %}
+                            {% if field.name == 'Total_est' %}<td>{{ field | yesno:"Yes,No" }} </td>{% endif %}
+                        {% endfor %}
+                        {% if form.errors %}<td class="w3-red">{{form.errors}}</td>{% endif %}
+                    </tr>
+                {% endfor %}
+            </table>
+
+            <div class="pt-2">
+                <button class="btn btn-outline-success btn-sm" type="submit">Submit</button>
+                <a class="btn btn-outline-warning btn-sm" href="">Cancel</a>
+            </div>
+
+        </form>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            summary_chart("{{ range }}", "{{container.container_type}}", "{{container.id}}")
+        });
+    </script>
+
+
+
+{% endblock content %}

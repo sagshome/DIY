@@ -1,0 +1,45 @@
+{% extends "wealth_base.html" %}
+{% load static %}
+{% load tz %}
+{% block title %}{% if title %}{{title}}{% else %}IOOM Wealth{% endif %}{% endblock %}
+
+{% block content %}
+
+    {% include 'wealth/includes/wealth_summary_header.html' %}
+    <div>
+        {% include 'wealth/includes/actions.html' %}
+    </div>
+    <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#ioom_chart">
+        <i class="bi bi-chevron-up"></i>
+    </button>
+    <div class="collapse" id="ioom_chart">
+        <div style="height: 300px;">
+            <canvas id="lineChart" aria-label="Chart"></canvas>
+        </div>
+    </div>
+    <div>
+        {% include 'wealth/includes/range.html' %}
+    </div>
+    {% if positions_list %}
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col">
+                    {% include 'wealth/includes/wealth_data_list.html' %}
+                </div>
+                <div class="col">
+                    {% include 'wealth/includes/positions_list.html' %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        {% include 'wealth/includes/wealth_data_list.html' %}
+    {% endif %}
+    <script>
+        $(document).ready(function () {
+            summary_chart("{{ range }}", "{{container.container_type}}", "{{container.id}}")
+        });
+    </script>
+
+
+
+{% endblock content %}

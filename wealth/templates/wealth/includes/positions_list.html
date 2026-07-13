@@ -1,0 +1,33 @@
+<div>
+    <table id="positions_table" class="table caption-top w-auto">
+    <caption>Positions</caption>
+    <thead style="background:#eee;">
+        <th>Date</th>
+        <th>Symbol<br></th>
+        <th>Quantity</th>
+        <th>Price</th>
+    </thead>
+    <!-- Doing this in two passes so that I can move the less important data to the end -->
+    {% for x in positions_list %}
+            <tr>
+                <td> {{ x.date |date:"d-M-y"}} </td>
+                <td>{{x.investment.symbol}}</td>
+                <td>{{x.quantity }}</td>
+                <td>{{x.price}}</td>
+            </tr>
+    {% endfor %}
+    </table>
+</div>
+
+<script>
+    $(document).ready(function() {
+    var positions_table = $('#positions_table').DataTable({
+        "pageLength": 25,
+        "ordering": false
+    });
+
+});
+
+
+</script>
+

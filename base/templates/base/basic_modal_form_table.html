@@ -1,0 +1,53 @@
+{% extends "wealth_base.html" %}
+{% block title %}Account {{ view_verb }}{% endblock %}
+{% if is_modal %}
+    {% block navbar %}{% endblock navbar %}
+    {% block footer %}{% endblock footer %}
+{% endif %}
+{% block content %}
+    {% if view_verb %}
+        <h2 class="container">{{ view_verb }} {{ view_noun}}:</h2>
+    {% endif %}
+    <div class="container-fluid", role="alert" name="ioom_nonfield_errors"></div>
+    <form class="ioom_modal_form" action="{{ request.path }}" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="container-fluid alert alert-warning" role="alert">
+                {% for error in form.non_field_errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% for hidden_field in form.hidden_fields %}
+            {% if hidden_field.errors %}
+                <div class="container-fluid alert alert-warning" role="alert">
+                    {{ hidden_field.errors }}
+                </div>
+            {% endif %}
+            {{ hidden_field }}
+        {% endfor %}
+
+        <table class="table table-borderless">
+            {% for field in form.visible_fields %}
+                <tr>
+                    <td>{{ field.label_tag }}</td>
+                    <td> {{ field }}</td>
+                    {% if field.errors %}
+                        <td class="container-fluid alert alert-warning" role="alert">
+                            {% for error in field.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </table>
+
+        <div>
+            <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+            <button type="button" class="btn btn-outline-warning btn-sm" data-bs-dismiss="modal">Cancel</button>
+        </div>
+    </form>
+
+{% endblock %}

@@ -1,0 +1,58 @@
+<!-- Requires the variables:
+    {{account}}  : The account or portfolio we are working on
+     {{view_type}} :  Chart or Data
+-->
+<div id="action_buttons" class="pt-1 pb-1 btn-group" role="group" aria-label="Action List">
+    <button disabled class=".text-nowrap btn btn-sm btn-light">Go To:</button>
+    {% if container %}
+        {%  if container.container_type == 'Portfolio' or not container.portfolio %}
+            <a href="{% url 'wealth_home' %}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Wealth</a>
+        {% else %}
+            <a href="{{ container.portfolio.get_absolute_url }}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Portfolio</a>
+        {% endif %}
+
+        {% if view_type == 'Data' %}
+            <a href="{{ container.get_absolute_url }}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Chart</a>
+        {% elif view_type == 'Chart' %}
+            <a href="{{ container.get_data_url }}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Data</a>
+        {% endif %}
+    {% else %}
+        {% if view_type == 'Data' %}
+            <a href="{% url 'wealth_home' %}" class="btn btn-outline-success btn-sm" tabindex="-1" role="button">Chart</a>
+        {% elif view_type == 'Chart' %}
+            <a href="{% url 'wealth_data' %}" class="btn btn-outline-success btn-sm" tabindex="-1" role="button">Data</a>
+        {% endif %}
+    {% endif %}
+
+
+    <button disabled class=".text-nowrap btn btn-sm btn-light btn-link">Actions:</button>
+    {% if container %}
+        {% if container.container_type == 'Account' %}
+            {% if container.acct_type == 'Cash' %}
+                <a href="{% url 'set_balance' container.id %}" data-modal><button class="btn btn-outline-success btn-sm diy-button-auto diy-green"> Set Balance </button></a>
+            {% else %}
+                {% if not account.closed %}
+                  <a href="{% url 'set_fund' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Deposit</button></a>
+                  <a href="{% url 'set_withdraw' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Withdraw</button></a>
+                  {% if account.acct_type == 'Value' %}
+                      <a href="{% url 'set_value' account.id %}" data-modal class="btn btn-outline-success btn-sm">Set Value</a>
+                  {% else %}
+                      <a href="{% url 'transaction_add' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Add Transaction</button></a>
+                  {% endif %}
+                {% endif %}
+            {% endif %}
+        {% endif %}
+        <a href="{{ container.edit_url }}" data-modal><button class="btn btn-outline-success btn-sm">Edit</button></a>
+
+        {% if container.container_type == 'Account' and not account.closed %}
+            <a href="{{ container.close_url }}" data-modal> <button class="btn btn-outline-danger btn-sm">Close</button></a>
+        {% endif %}
+        <a href="{{ container.delete_url }}" data-modal class="btn btn-outline-danger btn-sm">Delete</a>
+
+    {% else %}
+        <a href="{% url 'account_add' %}" data-modal class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">New Account</a>
+        <a href="{% url 'portfolio_add' %}" data-modal class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">New Portfolio</a>
+    {% endif %}
+</div>
+
+

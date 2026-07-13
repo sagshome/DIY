@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ object_type }}{% endblock %}
+    {% block navbar %}{% endblock navbar %}
+    {% block footer %}{% endblock footer %}
+{% block content %}
+    <div class="container-fluid">
+        <h1 class="container">Upload</h1>
+    </div>
+    <div class="container-fluid", role="alert" name="ioom_nonfield_errors"></div>
+        <form class="ioom_modal_form" action="{{ request.path }}" method="post">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="container-fluid alert alert-warning" role="alert">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% for hidden_field in form.hidden_fields %}
+                {% if hidden_field.errors %}
+                    <div class="container-fluid alert alert-warning" role="alert">
+                        {{ hidden_field.errors }}
+                    </div>
+                {% endif %}
+                {{ hidden_field }}
+            {% endfor %}
+            {{ form }}
+            <div class="pt-2">
+                <button id="slow-submit-btn" class="btn btn-outline-success btn-sm" type="submit">Submit</button>
+                <a class="btn btn-outline-warning btn-sm" href="{{success_url}}">Cancel</a>
+             </div>
+            <div>
+                    <span id="spinner-text" style="display: none;" class="spinner">Loading - This may take a moment. Please be patient.</span>
+            </div>
+
+        </form>
+    </div>
+
+{% endblock %}

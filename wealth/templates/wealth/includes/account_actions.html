@@ -1,0 +1,93 @@
+<!-- Requires the variables:
+    {{account}}  : The account or portfolio we are working on
+     {{view_type}} :  Chart or Data
+-->
+<div id="action_buttons" class="btn-group" role="group" aria-label="Action List">
+    <button disabled class=".text-nowrap btn btn-light">Actions:</button>
+    {% if exists 'container' %}
+    {% else %}
+    {% endif %}
+
+        {%  if container.container_type == 'Portfolio' or not container.portfolio %}
+            <a href="#" class="btn btn-secondary btn-lg disabled" tabindex="-1" role="button" aria-disabled="true">Link</a>
+            <a href="{% url 'wealth_home' %}" class="btn btn-out"" class=".text-nowrap btn btn-sm {% if range == 'week' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}"
+                <button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>
+        {% else %}
+            <a href="{{ account.portfolio.get_absolute_url }}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
+        {% endif %}
+
+        {% if view_type == 'Data' %}
+            <a href="{{ account.get_absolute_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Chart</button></a>
+        {% elif view_type == 'Chart' %}
+            <a href="{{ account.get_data_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+        {% endif %}
+
+        {% if account.container_type == 'Account' %}
+            {% if account.account_type == 'Cash' %}
+                <a href="{% url 'set_balance' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
+            {% else %}
+                {% if not account.closed %}
+                  <a href="{% url 'set_fund' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
+                  <a href="{% url 'set_withdraw' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
+                  {% if account.account_type == 'Value' %}
+                      <a href="{% url 'set_value' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
+                  {% else %}
+                      <a href="{% url 'transaction_add' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+                  {% endif %}
+                {% endif %}
+            {% endif %}
+            {% if not account.closed %}
+                <a href="{{ account.close_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
+            {% endif %}
+        {% endif %}
+        <a href="{{ account.edit_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
+        <a href="{{ account.delete_url }}"><button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
+
+        <a href="#" class="btn btn-primary" role="button" data-bs-toggle="button">Toggle link</a>
+
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'week' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="week">1 Week</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'month' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="month">1 Month</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'ytd' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="ytd">YTD</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'year' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="year">1 Year</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '3years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="3years">3 Years</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '5years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="5years">5 Years</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'all' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="all">All</button>
+</div>
+
+<div class="w3-bar w3-hide-small">
+    <div class="w3-bar-item">
+        {%  if account.container_type == 'Portfolio' or not account.portfolio %}
+            <a href="{% url 'wealth_home' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>
+        {% else %}
+            <a href="{{ account.portfolio.get_absolute_url }}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
+        {% endif %}
+
+        {% if view_type == 'Data' %}
+            <a href="{{ account.get_absolute_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Chart</button></a>
+        {% elif view_type == 'Chart' %}
+            <a href="{{ account.get_data_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Data</button></a>
+        {% endif %}
+
+        {% if account.container_type == 'Account' %}
+            {% if account.account_type == 'Cash' %}
+                <a href="{% url 'set_balance' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Balance </button></a>
+            {% else %}
+                {% if not account.closed %}
+                  <a href="{% url 'set_fund' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Deposit</button></a>
+                  <a href="{% url 'set_withdraw' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Withdraw</button></a>
+                  {% if account.account_type == 'Value' %}
+                      <a href="{% url 'set_value' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green"> Set Value </button></a>
+                  {% else %}
+                      <a href="{% url 'transaction_add' account.id %}"><button class="w3-button-small w3-round-large diy-button-auto diy-green">Add Transaction</button></a>
+                  {% endif %}
+                {% endif %}
+            {% endif %}
+            {% if not account.closed %}
+                <a href="{{ account.close_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Close</button></a>
+            {% endif %}
+        {% endif %}
+        <a href="{{ account.edit_url }}"><button class="w3-button-small w3-round-large diy-button diy-green">Edit</button></a>
+        <a href="{{ account.delete_url }}"><button class="w3-button-small w3-round-large diy-button diy-red"> Delete </button></a>
+    </div>
+</div>
+

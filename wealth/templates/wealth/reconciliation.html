@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{account.name}} - Reconcile{% endblock %}
+{% block navbar %}{% endblock navbar %}
+{% block footer %}{% endblock footer %}
+
+{% block content %}
+    <form class="ioom_modal_form" method="post" novalidate, action="{{ request.path }}">
+        {% csrf_token %}
+        {{ form }}
+    <form class="ioom_modal_form" method="post" novalidate, action="{{ request.path }}">
+        {% csrf_token %}
+        {{ formset.management_form }}
+        {% if formset.errors.errors %}
+            <div class="w3-panel w3-red">
+                {% for dict in formset.error_messages %}
+                    {% for error in dict.values %}
+                        {{ error }}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <table class="table table-striped caption-top">
+            <caption>{{account}} Reconciliation for {{ date_str }}</caption>
+            <thead style="background:#eee;">
+                <tr>
+                    <th>Symbol</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Dividends</th>
+                </tr>
+            </thead>
+            {% for form in formset %}
+                <tr>
+                    {% for field in form.visible_fields %}
+                        <td>
+                            {{ field }}
+                        </td>
+                    {% endfor %}
+                    {% if form.errors %}<td class="w3-red">{{form.errors}}</td>{% endif %}
+                </tr>
+            {% endfor %}
+        </table>
+
+        <div>
+            <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+            <button type="button" class="btn btn-outline-warning btn-sm" data-bs-dismiss="modal">Cancel</button>
+        </div>
+
+    </form>
+    </form>
+{% endblock content %}

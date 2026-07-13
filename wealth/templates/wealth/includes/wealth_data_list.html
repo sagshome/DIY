@@ -1,0 +1,42 @@
+<div>
+    {% if container_list_data %}
+        <table id="wealth-data-tbl" class="table table-striped caption-top">
+            <caption>Portfolio / Account  Summary</caption>
+            <thead style="background:#eee;">
+                <tr>
+                    <th>Date</th>
+                    <th>Value</th>
+                    <!--
+                    <th>Trading</th>
+                    <th>Value</th>
+                    -->
+                    <th>Funding</th>
+                    <th>Cash</th>
+                </tr>
+            </thead>
+            {% for item in container_list_data %}
+                <tr>
+                    <td>{{item.DateStr}}</td>
+                    <td {% if item.Total_est %} class="text-info" {% endif %}>${{ item.Total | floatformat:'0g'}}</td>
+                    <!--
+                    <td>{% if item.Trading != 0 %}${{ item.Trading | floatformat:'0g'}}{% endif %}</td>
+                    <td>{% if item.Value != 0 %}${{ item.Value | floatformat:'0g'}}{% endif %}</td>
+                     -->
+                    <td {% if item.Funding_est %} class="text-info" {% endif %}>{% if item.Funding and item.Funding != 0 %}${{ item.Funding | floatformat:'0g'}}{% endif %}</td>
+                    <td {% if item.Cash_est %} class="text-info" {% endif %}>{% if item.Cash and itemCash != 0 %}${{ item.Cash | floatformat:'0g'}}{% endif %}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+</div>
+
+<script>
+    $(document).ready(function() {
+        var table = $('#wealth-data-tbl').DataTable({
+            "pageLength": 25,
+            "searching": false,
+            "ordering": false
+        });
+    });
+
+</script>

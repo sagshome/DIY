@@ -1,0 +1,29 @@
+<div id="range_buttons" class="btn-group" role="group" aria-label="Time range">
+    <button disabled class=".text-nowrap btn btn-light">Range Filter:</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'week' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="week">1 Week</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'month' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="month">1 Month</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'ytd' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="ytd">YTD</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'year' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="year">1 Year</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '3years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="3years">3 Years</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '5years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="5years">5 Years</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'all' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="all">All</button>
+</div>
+
+<script>
+    document.querySelectorAll('#range_buttons button').forEach(button => {
+        button.addEventListener('click', function () {
+            // Remove primary class from all
+            document.querySelectorAll('.btn-outline-primary').forEach(b =>
+                b.classList.replace('btn-outline-primary', 'btn-outline-secondary')
+            );
+            // Set clicked button as primary
+            this.classList.replace('btn-outline-secondary', 'btn-outline-primary');
+            const selectedValue = this.getAttribute('data-value');
+            console.log('Range change triggered - ' + selectedValue);
+            const url = new URL(window.location.href);
+            url.searchParams.set('range', selectedValue);
+            window.location.href = url.toString();
+        // range_api(selectedValue);  // must be provided by the including template
+    });
+        });
+</script>

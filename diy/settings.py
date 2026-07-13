@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'base.apps.BaseConfig',
     'expenses.apps.ExpensesConfig',
     'stocks.apps.StocksConfig',
+    'wealth.apps.WealthConfig',
 
     'django_bootstrap5',
     'django.contrib.admin',
@@ -223,7 +224,9 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 if NO_CACHE:
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'KEY_PREFIX': 'IOOM',
+            'VERSION': 1,
         }
     }
 else:

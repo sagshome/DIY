@@ -34,4 +34,5 @@ urlpatterns = [
     re_path('stocks/', include('stocks.urls')),
     re_path('expenses/', include('expenses.urls')),
     re_path("base/", include('base.urls')),
+    re_path("wealth/", include('wealth.urls')),
 ]

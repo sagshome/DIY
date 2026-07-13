@@ -1,0 +1,60 @@
+<div>
+    {% if container_list_data %}
+        <table class="table table-striped caption-top">
+            <caption>Portfolio / Account  Summary (Present Day Value)</caption>
+            <thead style="background:#eee;">
+                <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                    <th>Effective<br>Cost</th>
+                    <th>Cash</th>
+                    <th>New Dividends</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            {% for item in container_list_data %}
+                <tr>
+                    <td>
+                        {% if item.Type == 'Portfolio' %}
+                            Portfolio <a href="{% url 'portfolio_details' item.Id%}"><b>{{ item.Name }}</b></a>
+                        {% else %}
+                            Account <a href="{% url 'account_details' item.Id%}"><b>{{ item.Name }}</b></a>
+                            {% if item.Closed == 'Closed' %}
+                                 (<em>{{item.End}}</em>)
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    {% if item.Value == 0 %}
+                        <td></td>
+                    {% else %}
+                        <td>${{ item.Value | floatformat:'0g'}}</td>
+                    {% endif %}
+
+                    <td>${{ item.EffectiveCost | floatformat:'0g'}}</td>
+
+                    {% if item.Cash == 0 %}
+                        <td></td>
+                    {% else %}
+                        <td>${{ item.Cash | floatformat:'0g'}}</td>
+                    {% endif %}
+
+                    {% if item.TotalDividends == 0 %}
+                        <td></td>
+                    {% else %}
+                        <td>${{ item.TotalDividends | floatformat:'0g'}}</td>
+                    {% endif %}
+
+                    <td>
+                        {% if item.Type == 'Portfolio' %}
+                            <a href="{% url 'portfolio_edit' item.Id %}" data-modal><button class="btn btn-outline-success btn-sm">Edit</button></a>
+                            <a href="{% url 'portfolio_delete' item.Id %}" data-modal><button class="btn btn-outline-danger btn-sm">Delete</button></a>
+                        {% else %}
+                            <a href="{% url 'account_edit' item.Id %}" data-modal><button class="btn btn-outline-success btn-sm">Edit</button></a>
+                            <a href="{% url 'account_delete' item.Id %}" data-modal><button class="btn btn-outline-danger btn-sm">Delete</button></a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+</div>

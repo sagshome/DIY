@@ -2,12 +2,20 @@ import logging
 import requests
 
 from datetime import datetime, timedelta, UTC, date
+from dateutil.relativedelta import relativedelta
+
+from decimal import Decimal, InvalidOperation
 from phonenumber_field.modelfields import PhoneNumberField
 from requests.exceptions import ConnectTimeout, ConnectionError
 from requests.models import Response
+from typing import Dict
 from tzlocal import get_localzone
+
 from django.db import models
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+
 
 from .utils import BoolReason
 
@@ -49,6 +57,243 @@ COUNTRIES = [('CA', 'Canada'),
 
 DIY_EPOCH = datetime(2014, 1, 1).date()  # Before this date.   I was too busy working
 
+
+class DataSource(models.IntegerChoices):
+    ADMIN = 10, "Admin"
+    ADJUSTED = 20, "Adjusted"
+    SYSTEM = 25, "Generated"
+    API = 30, "API"
+    RECONCILED = 35, "Reconciled"
+    UPLOAD = 40, "Uploaded"
+    IMPORT = 45, "Imported"
+    USER = 50,  "Manual"
+    ESTIMATE = 60, "Estimated"
+
+    @classmethod
+    def get_label(cls, value):
+        try:
+            return cls(value).label
+        except ValueError:
+            return 'Invalid DataSource'
+
+
+class NormalizedDataManager(models.Manager):
+    """
+    Standard methods for NormalizedDataModel
+    """
+    def update_or_create(self, defaults=None, **kwargs):
+        """
+        Generic function for all date based classes.
+        kwarg - by_month  - set to True will be stripped from kwargs and cause search only be year/month
+        kwarg - type='month'  - same as by_month but will be kept in the search criteria
+        kwarg - type='day' - search on year/month/day instead of datetime
+
+        defaults + kwargs are the creation fields,  defaults are the update fields
+
+        FOO.objects.update_or_create('date'=<some_date>, 'FOO_value'=<somevalue>, defaults={'FOO_value2':<x>, 'FOO_value3':<y>})
+        """
+
+        defaults = defaults or {}
+        cls = self.model  # the concrete subclass
+
+        if 'source' in kwargs:  # Do not search or source
+            defaults['source'] = kwargs.pop('source')
+        elif 'source' not in defaults:
+            defaults['source'] = DataSource.ESTIMATE.value
+
+        try:
+            obj = self.get(**kwargs)
+        except cls.DoesNotExist:
+            # must create
+            try:
+                obj, created = super().update_or_create(defaults=defaults, **kwargs)
+                return obj, created, "New instance has been created"
+            except ValidationError as e:
+                logger.error('Validation Error:%s:%s - %s' % (kwargs, defaults, e))
+                return None, False, 'Validation Error:%s - %s' % (self, e)
+
+        # we must have already existed
+        if defaults['source'] < obj.source:
+            return obj, False, f"Update ignored - Existing Data Source({obj.source}) is not more precise ({defaults['source']})"
+
+        obj, created = super().update_or_create(defaults=defaults, **kwargs)
+        return obj, created, '"Updated - Data Source is more precise"'
+
+
+class NormalizedDataModel(models.Model):
+    """
+    Abstract class providing date, date and source.   Includes self.save() and cls.objects.update_or_create
+
+    from django.db.models.functions import Cast
+    from django.db.models.fields import DateField
+
+    qs = MyModel.objects.annotate(date_only=Cast('created_at', DateField()))
+    returning 1000 objects was 33 uS, vs 37 uS with Cast - This is good
+    """
+
+    date: date = models.DateField(null=False, blank=False)
+    source: int = models.IntegerField(choices=DataSource.choices, default=DataSource.ESTIMATE)
+    class Meta:
+        abstract = True
+
+    objects = NormalizedDataManager()
+
+    @property
+    def source_str(self):
+        return DataSource(self.source).name.capitalize()
+
+
+class ExchangeRate(NormalizedDataModel):
+    """
+        Store both the US to CAN and the CAN to US conversion rates for each month.   Always use the last
+        value for the month.
+    """
+
+    us_to_can: float = models.DecimalField(max_digits=4, decimal_places=2)
+    can_to_us: float = models.DecimalField(max_digits=4, decimal_places=2)
+
+    # Class variables - a simple cache
+    US_TO_CAN: Dict[datetime.date, Decimal] = {}
+    CAN_TO_US: Dict[datetime.date, Decimal] = {}
+
+    def __str__(self):  # pragma: no cover
+        return f'{self.date}({DataSource(self.source).name}) US:{self.us_to_can} CAN:{self.can_to_us}'
+
+    @classmethod
+    def us_to_can_rate(cls, target_date) -> Decimal:
+        if len(cls.US_TO_CAN) == 0:
+            cls.US_TO_CAN = dict(ExchangeRate.objects.all().values_list('date', 'us_to_can'))
+        try:
+            return cls.US_TO_CAN[target_date]
+        except KeyError:
+            cls.US_TO_CAN[target_date] = Decimal(1.0)
+        return Decimal(1.0)
+
+    @classmethod
+    def can_to_us_rate(cls, target_date) -> Decimal:
+        if len(cls.CAN_TO_US) == 0:
+            cls.CAN_TO_US = dict(ExchangeRate.objects.all().values_list('date', 'can_to_us'))
+        try:
+            return cls.CAN_TO_US[target_date]
+        except KeyError:
+            # logger.debug('CAN_TO_US - KeyError on date:%s' % target_date)
+            cls.CAN_TO_US[target_date] = Decimal(1.0)
+        return Decimal(1.0)
+
+    @classmethod
+    def _reset(cls):
+        cls.CAN_TO_US = {}
+        cls.US_TO_CAN = {}
+
+    @classmethod
+    def update(cls):
+        """
+        Update Exchange Rates,   since this is daily,  I will take the last rate of the month as the normalized
+        value for the month
+        """
+        first_str = settings.EPOCH.strftime('%Y-%m-%d')
+        result = API.get('BOC', f'FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc')
+
+        if not result.status_code == 200:  # pragma: no cover
+            logger.error('BOC: failure: %s - %s' % (result.status_code, result.reason))
+            return
+
+        data = result.json()
+        existing = {item['date']: item for item in ExchangeRate.objects.values('date', 'date', 'source')}
+        month_date = can_rate = us_rate = None  # Cheat the scope, so I can use the variables outside my loop
+        for record in range(len(data['observations'])):
+            this_date = datetime.strptime(data['observations'][record]['d'], '%Y-%m-%d').date()
+            month_date = datetime(this_date.year, this_date.month, 1).date()
+            if (month_date not in existing) or (existing[month_date]['date'] >= this_date):
+                can_rate = data['observations'][record]['FXCADUSD']['v']
+                us_rate = data['observations'][record]['FXUSDCAD']['v']
+                ExchangeRate.objects.update_or_create(date=this_date, source=DataSource.API.value, defaults={'can_to_us': can_rate, 'us_to_can': us_rate})
+
+        if month_date:  # Fill in future months
+            month_date = month_date + relativedelta(months=1)
+            while month_date <= datetime.now().date():  # Until we have better data, use that last
+                ExchangeRate.objects.update_or_create(date=month_date, source=DataSource.ESTIMATE.value, defaults={'can_to_us': can_rate, 'us_to_can': us_rate})
+                month_date = month_date + relativedelta(months=1)
+
+        ExchangeRate._reset()  # Clear any cached values
+
+
+class Inflation(NormalizedDataModel):
+    """
+    Class to capture a months worth of inflation.   BOC,  Bank of Canada's CPI (Consumer Price Index) is the data source.
+    """
+
+    cost = models.DecimalField(max_digits=6, decimal_places=2)       # CPI cost for month over month basket of goods
+    inflation = models.DecimalField(max_digits=5, decimal_places=2)  # Based on last month's CPI
+
+    def __str__(self):  # pragma: no cover
+        return f'{self.date}({DataSource(self.source).name}) Cost:{self.cost} Inflation:{self.inflation}'
+
+    @classmethod
+    def update(cls):
+        """
+        Update Inflation values
+        Since the current month(s) is not in the value we need to add it at the end
+        """
+        first: date = settings.EPOCH
+        first_str: str = first.strftime('%Y-%m-%d')
+
+        result = API.get('BOC', f'STATIC_INFLATIONCALC/json?start_date={first_str}')
+        if not result.status_code == 200:  # pragma: no cover
+            logger.error('BOC failure: %s - %s' % (result.status_code, result.reason))
+            return
+
+        data = result.json()
+        existing = {item['date']: item for item in cls.objects.values('date', 'date', 'source')}
+        this_inflation = 0
+        last_cost = this_cost = 0
+        month_date = None
+        for record in range(len(data['observations'])):
+            this_date = datetime.strptime(data['observations'][record]['d'], '%Y-%m-%d').date()
+            month_date = datetime(this_date.year, this_date.month, 1).date()
+            try:
+                this_cost = Decimal(data['observations'][record]['STATIC_INFLATIONCALC']['v'])
+            except InvalidOperation:  # pragma: no cover
+                logger.error('Received invalid cost (%s) from BOC' % Decimal(data['observations'][record]['STATIC_INFLATIONCALC']['v']))
+                pass  # Let this cost be the last cost if we ever get an error
+
+            if last_cost:
+                this_inflation = ((this_cost - last_cost) * 100) / last_cost
+            else:
+                try:
+                    previous = Inflation.objects.get(date=this_date - relativedelta(months=1))
+                    this_inflation = ((this_cost - previous.cost) * 100) / previous.cost
+                except Inflation.DoesNotExist:  # pragma: no cover
+                    pass
+
+            if month_date not in existing or existing[month_date]['date'] >= this_date:
+                Inflation.objects.update_or_create(date=this_date, source=DataSource.API.value,
+                                                   defaults={'cost': this_cost, 'inflation': this_inflation})
+                last_cost = this_cost
+
+        if month_date:  # Fill in future months
+            month_date = month_date + relativedelta(months=1)
+            while month_date <= datetime.now().date():  # Until we have better data, use that last
+                Inflation.objects.update_or_create(date=month_date, source=DataSource.ESTIMATE.value,
+                                                   defaults={'cost': this_cost, 'inflation': this_inflation})
+                month_date = month_date + relativedelta(months=1)
+
+    @classmethod
+    def inflated(cls, value: Decimal, from_date: date, to_date: date) -> Decimal:
+        """
+        calculate the cost based on inflation of value,  between date and date,
+        """
+        try:
+            from_value = Inflation.objects.get(date=from_date.replace(day=1)).cost
+        except Inflation.DoesNotExist:
+            return value
+
+        try:
+            to_value = Inflation.objects.get(date=to_date.replace(day=1)).cost
+        except Inflation.DoesNotExist:
+            return value
+
+        return value + value * (to_value - from_value) / from_value
 
 class Profile(models.Model):
     user: User = models.OneToOneField(User, on_delete=models.CASCADE)

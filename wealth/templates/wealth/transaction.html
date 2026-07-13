@@ -1,0 +1,111 @@
+﻿{% extends "base.html" %}
+{% block title %}IOOM Transaction{% endblock %}
+{% load static %}
+{% block navbar %}{% endblock navbar %}
+{% block footer %}{% endblock footer %}
+{% block content %}
+
+    <div class="row align-items-start">
+        <h5>
+            <b>{{view_verb}} Transaction</b> - Account: {{account.name}}
+            {% if account.portfolio %}
+              <em>(Portfolio:{{account.portfolio.name}})</em>
+            {% endif %}
+        </h5>
+
+
+    <form class="ioom_modal_form" action="{{ request.path }}" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="container-fluid alert alert-warning" role="alert">
+                {% for error in form.non_field_errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% for hidden_field in form.hidden_fields %}
+            {% if hidden_field.errors %}
+                <div class="container-fluid alert alert-warning" role="alert">
+                    {{ hidden_field.errors }}
+                </div>
+            {% endif %}
+            {{ hidden_field }}
+        {% endfor %}
+
+            <table class="table table-borderless">
+                    <thead><tr></tr><tr></tr><tr></tr></thead>
+                    <tbody>
+                    <tr>
+                        <td class="diy-label">Date:</td>
+                        <td>{{ form.date}}</td>
+                        <td>{{ form.date.errors }}</td>
+                    </tr>
+                    <tr id=actionRow">
+                        <td class="diy-label">{{ form.action.label_tag }}</td>
+                        <td>
+                                {{ form.action }}
+                       </td>
+                        <td>{{ form.action.errors }}</td>
+                    </tr>
+                    <tr id=equityRow>
+                        <td class="diy-label">{{ form.investment.label_tag }}</td>
+                        <td><select id="id_equity" name="investment" style="width: 100%;">
+                                <option value="">Select an option...</option>
+                            </select>
+                        </td>
+                        <td>{{ form.investment.errors }}</td>
+                    </tr>
+                    <tr id=priceRow>
+                        <td class="diy-label">{{ form.price.label_tag }}</td>
+                        <td>{{ form.price }}</td>
+                        <td>{{ form.price.errors }}</td>
+                    </tr>
+                    <tr id=quantityRow>
+                        <td class="diy-label">{{ form.quantity.label_tag }}</td>
+                        <td>{{ form.quantity }}</td>
+                        <td>{{ form.quantity.errors }}</td>
+                    </tr>
+                    <tr id=valueRow>
+                        <td class="diy-label">{{ form.value.label_tag }}</td>
+                        <td>{{ form.value }}</td>
+                        <td>{{ form.value.errors }}</td>
+                    </tr>
+                    <tr id=toAccountRow>
+                        <td class="diy-label">{{ form.to_account.label_tag }}</td>
+                        <td>{{ form.to_account }}</td>
+                        <td>{{ form.to_account.errors }}</td>
+                    </tr>
+                    <tr id=repeatRow>
+                        <td class="diy-label">{{ form.repeat.label_tag }}</td>
+                        <td>{{ form.repeat }}</td>
+                        <td>{{ form.repeat.errors }}</td>
+                    </tr>
+                    <tr id=numberRow>
+                        <td class="diy-label">{{ form.number.label_tag }}</td>
+                        <td>{{ form.number }}</td>
+                        <td>{{ form.number.errors }}</td>
+                    </tr>
+                    </tbody>
+                </table>
+            <div>
+                <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+                <a class="btn btn-outline-warning btn-sm" href="{{success_url}}">Cancel</a>
+                {% if view_verb == 'Add' %}
+                    <button class="btn btn-outline-primary btn-sm" name="submit-type" value="Add Another" type="submit">Add Another</button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    <div class="row align-items-start">
+        {% if view_verb != 'Quick' %}
+            <div id=newInvestment class="row">
+                <h5><b>Add Equity</b>/ETF/Fund</h5>
+                <div class="container p-3>">
+                    <input type="text" id="search" oninput="fetchOptions(this.value)" placeholder="Type to search...">
+                    <div id="checkbox-container"></div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock content %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Account {{ view_verb }}{% endblock %}
+{% block navbar %}{% endblock navbar %}
+{% block footer %}{% endblock footer %}
+
+{% block content %}
+    <h1 class="container">{{ view_verb }} Account:</h1>
+    <form class="ioom_modal_form" action="{{ request.path }}" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="container-fluid alert alert-warning" role="alert">
+                {% for error in form.non_field_errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% for hidden_field in form.hidden_fields %}
+            <div class="container-fluid alert alert-warning" role="alert">
+                {{ hidden_field.errors }}
+                {{ hidden_field }}
+            </div>
+        {% endfor %}
+        <table class="table table-borderless">
+            {% for field in form.visible_fields %}
+                <tr>
+                    <td>{{ field.label_tag }}</td>
+                    <td> {{ field }}</td>
+                    {% if field.errors %}
+                        <td>
+                            {% for error in field.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </table>
+        <div>
+            <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+            <a class="btn btn-outline-warning btn-sm" href="{{success_url}}">Cancel</a>
+        </div>
+    </form>
+{% endblock %}
+

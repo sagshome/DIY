@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{account.name}} - Details{% endblock %}
+{% block navbar %}{% endblock navbar %}
+{% block footer %}{% endblock footer %}
+{% block content %}
+<h2>Chart view for {{object_type}}:&nbsp;{{container.name}}</h2>
+<div>
+    <div >Value: <b>${{ value|floatformat:'2g' }}</b></div>
+    <div><em>Net</em> Funding: ${{ net_funded|floatformat:'2g' }}</div>
+    {%  if p_and_l < 0 %}
+      <div>Profit (or Loss): (${{ p_and_l|floatformat:'2g' }})</div>
+    {%  else %}
+      <div>Profit (or Loss): ${{ p_and_l|floatformat:'2g' }}</div>
+    {%  endif %}
+    <div class="w3-cell">Total Dividends: ${{ dividends|floatformat:'2g' }}</div>
+</div>
+    <hr>
+{% include '../includes/account_actions.html' %}
+<div class="w3-row">
+    <canvas id="lineChart" height=300 style="border:1px solid" >
+        A line chart showing Cost vs Value over time in months.
+    </canvas>
+</div>
+<div class="w3-container">
+    {% include '../includes/account_summary_list.html' %}
+</div>
+{% if object_type == 'Portfolio' or account.acct_type == 'Trading' %}
+    <div class="w3-row">
+        <div class="w3-container">
+            {% include '../includes/equity_summary_list.html' %}
+        </div>
+    </div>
+{% endif %}
+    <script src="{% static 'wealth.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            summary_chart("{{ container.container_type }}", "{{ container.id }}")
+        });
+    </script>
+
+{% endblock content %}

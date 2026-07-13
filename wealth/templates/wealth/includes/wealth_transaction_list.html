@@ -1,0 +1,118 @@
+{% if xa_list %}
+    <div class="col">
+        <table id="tx_table" class="table caption-top w-auto">
+        <caption>Transactions <input type="text" id="symsearch" placeholder="Search Symbol" /></caption>
+        <thead style="background:#eee;">
+            <th></th>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Symbol<br></th>
+            <th>Quantity</th>
+            <th>Value</th>
+            <th>Source</th>
+            <th>Notes</th>
+        </thead>
+        <!-- Doing this in two passes so that I can move the less important data to the end -->
+        {% for x in xa_list %}
+            <tr id="row-XA-{{ x.id }}" data-id="{{x.id}}" data-key={{x.rec_type}} class="ioom-action-row">
+                <td>
+                    <i class="bi bi-trash ioom-delete-action"></i>
+                        &nbsp;
+                        <a href="{% url 'transaction_edit' x.id x.rec_type %}" data-modal>
+                            <span class="bi bi-pencil"></span>
+                        </a>
+                    </td>
+
+                    <td> {{ x.date |date:"d-M-y"}} </td>
+                    <td>{{x.action_str}}</td>
+                    <td>{% if x.investment_id %}{{x.investment_id}} {% endif %}</td>
+                    <td>{% if x.quantity %}{{x.quantity}} {% endif %}</td>
+
+                    <td>{% if x.value %} ${{x.value|floatformat:'2g'}}{% endif %}</td>
+                    <td>{{x.source}}</td>
+
+                    <td>{% if x.note %}
+                            {{x.note }}
+                        {% else %}
+                            {%if x.quantity%}
+                                Traded {{x.quantity}} units @ ${{x.price}}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+
+                </tr>
+        {% endfor %}
+        </table>
+    </div>
+{% endif %}
+
+<script>
+    $(document).ready(function() {
+    var tx_table = $('#tx_table').DataTable({
+        "pageLength": 25,  // Show 25 rows per page
+        "ordering": false,
+        //"dom": "lrtip"
+    });
+
+
+    // Filter only the 'Name' column (index 0)
+    $('#symsearch').on('keyup', function() {
+        tx_table.column(3).search(this.value).draw();
+    });
+
+    document.querySelectorAll(".ioom-delete-action").forEach(icon => {
+        icon.addEventListener("click", async function (e) {
+            e.preventDefault();
+            // access row if needed
+            const row = this.closest("tr");
+
+            if (row) {
+                const elem = document.getElementById(row.id)
+                console.log("trash clicked", elem.dataset.id, elem.dataset.key);
+                row.classList.add("deleting-row");
+                try {
+                    const response = await fetch(
+                        `/wealth/api/quick_delete?action_id=${elem.dataset.id}&action_type=${elem.dataset.key}`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "X-CSRFToken": getCSRFToken(),
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+
+                    if (!response.ok) {
+                        console.error("Delete failed", response.status);
+                        return;
+                    }
+
+                    // success → strike through row
+                    row.classList.add("deleted-row");
+
+                    // optional: hide trash icon
+                    this.style.display = "none";
+
+                } catch (err) {
+                    console.error("Request error", err);
+                }
+
+                }
+        });
+    });
+
+
+    function getCSRFToken() {
+        const name = "csrftoken=";
+        return document.cookie
+            .split(";")
+            .map(c => c.trim())
+            .find(c => c.startsWith(name))
+            ?.substring(name.length) || null;
+    }
+
+});
+
+
+</script>
+

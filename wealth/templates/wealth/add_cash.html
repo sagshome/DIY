@@ -1,0 +1,345 @@
+﻿{% extends "base.html" %}
+{% block title %}IOOM Transaction{% endblock %}
+{% load static %}
+{% block content %}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+
+    <script>
+        const doing_edit =  "{{ view_verb }}" === "Edit";
+        const investment = "{{ account.account_type }}" === "Investment";
+        function hideDiv(divId) {
+           var div = document.getElementById(divId);
+           if (div === null) {
+           }
+           else {
+            div.style.display = "none";
+            }
+        }
+        function showDiv(divId) {
+            var div = document.getElementById(divId);
+            if (div === null) {
+            }
+            else {
+            div.style.display = "block";
+            }
+        }
+        function show_hide() {
+            /*  FUND = 1
+                BUY = 2
+                REDIV = 3
+                SELL = 4
+                REDEEM = 5
+                INTEREST = 6
+                FEES = 7
+                TRANS_IN = 8
+                TRANS_OUT = 9
+                VALUE = 10
+                BALANCE = 11 */
+            let action_value = parseInt($("#id_xa_action").val());
+            let repeat_value = $("#id_repeat").val();
+            let equity_value = $("#id_equity").val();
+            if (action_value === 1 || action_value === 5 || action_value === 6 || action_value === 7 || action_value === 10 || action_value === 11) {  // This is a Funding type
+                hideDiv('equityRow');
+                hideDiv('priceRow');
+                hideDiv('quantityRow');
+                hideDiv('toAccountRow');
+                showDiv('valueRow');
+                if (action_value === 1 || action_value === 5) {
+                    showDiv('repeatRow');
+                } else {
+                    hideDiv('repeatRow');
+               }
+            } else if (action_value === 8 || action_value === 9) {  // Transfer In/Out
+               if (action_value === 8) {
+                   update_cash(false);
+               } else {
+                   update_cash(true);
+               }
+               showDiv('equityRow');
+               hideDiv('priceRow');
+               hideDiv('repeatRow');
+               if (equity_value === "") {
+                    showDiv('valueRow');
+                    hideDiv('quantityRow')
+               } else {
+                    showDiv('quantityRow');
+                    hideDiv('valueRow')
+               }
+               showDiv('toAccountRow');
+            } else if ((action_value === 2 || action_value === 3 || action_value === 4 )) {
+                if (!investment) {
+                    hideDiv('equityRow');
+                    hideDiv('priceRow');
+                    hideDiv('quantityRow');
+                    showDiv('valueRow');
+                } else {
+                    showDiv('equityRow');
+                    showDiv('priceRow');
+                    showDiv('quantityRow');
+                    hideDiv('valueRow');
+                }
+                hideDiv('toAccountRow');
+                hideDiv('repeatRow')
+            } else {
+                hideDiv('equityRow');
+                hideDiv('priceRow');
+                hideDiv('quantityRow');
+                hideDiv('valueRow');
+                hideDiv('repeatRow')
+                hideDiv('toAccountRow')
+            }
+            if (repeat_value === 'yes') {
+                showDiv('numberRow');
+            } else {
+                hideDiv('numberRow');
+            }
+        }
+        function update_actions() {
+            if (!doing_edit) {
+                $.ajax({                       // initialize an AJAX request
+                    url: '{% url "action_list" %}',
+                    async: false,  // make sure we wait for the update
+                    data: {
+                        'account_id': '{{ account.id }}',
+                    },
+                    success: function (data) {   // `data` is the return of the `load_cities` view function
+                        $("#id_xa_action").html(data);
+                    }
+                });
+                showDiv('actionRow')
+            }
+        }
+        function update_cash(call_api) {
+            if (call_api) {
+                var account_value = $("#id_account").val();
+                var date_value = $("#id_real_date").val();
+                $.ajax({
+                    url: '{% url "cash_value" %}',
+                    async: false,  // make sure we wait for the update
+                    data: {
+                        'account_id': account_value,
+                        'date': date_value,
+                    },
+                    success: function (data) {   // `data` is the return of the `load_cities` view function
+                        document.getElementById('id_value').value = data['cash'];
+                    }
+                });
+            } else {
+                document.getElementById('id_value').value = 0
+            }
+        }
+        function update_equity() {
+            var portfolio_value = $("#id_account").val();
+            var action_value = $("#id_xa_action").val();
+            var date_value = $("#id_real_date").val();
+            var url = $("#XAForm").attr("equity-url");
+
+            $("#id_equity").select2({
+                placeholder: "Select or type to search...",
+                ajax: {
+                    url: '{% url "equity_list" %}',
+                    dataType: "json",
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            'q': params.term,
+                            'action': action_value,
+                            'portfolio_id': portfolio_value,
+                            'date': date_value,
+                        }
+                    },
+                    processResults: function (data) {
+                        return {results: data.results};
+                    }
+                }
+            });
+            showDiv('equityRow')
+        }
+        function update_values() {
+
+            var account_value = '{{ account.id }}';
+            var action_value = $("#id_xa_action").val();
+            var date_value = $("#id_real_date").val();
+            var equity_value = $("#id_equity").val();
+
+            $.ajax({                       // initialize an AJAX request
+                url: '{% url "xa_values" %}',
+                async: false,  // make sure we wait for the update
+                data: {
+                    'action': action_value,
+                    'account_id': account_value,
+                    'date': date_value,
+                    'equity_id': equity_value,
+                },
+                success: function (data) {
+                    document.getElementById('id_price').value = data['price'];
+                    document.getElementById('id_quantity').value = data['shares'];
+                }
+            });
+            if (equity_value === "") {
+                hideDiv('quantityRow')
+                showDiv('valueRow')
+            } else {
+                showDiv('quantityRow')
+                hideDiv('valueRow')
+            }
+            showDiv('equityRow')
+        }
+    </script>
+    <script>
+        $(document).ready(function() {
+            let action_locked = '{{ action_locked }}';
+            if (typeof action_locked === 'undefined') {
+                action_locked = false
+            }
+            if (!action_locked) {
+              update_actions();
+              action_id = document.getElementById("id_xa_action")
+              action_id.addEventListener("mouseup", show_hide);
+              action_id.addEventListener("change", update_equity);
+            }
+            document.getElementById("id_equity").addEventListener("change", update_values);
+            document.getElementById("id_repeat").addEventListener("change", show_hide);
+            show_hide();
+        });
+    </script>
+    <script>
+        document.addEventListener("change", function(event) {
+            if (event.target && event.target.type === "checkbox") {
+                $.ajax({
+                    url: '{% url "equity_search_add" %}',
+                    data: {
+                        'symbol': event.target.value,
+                    },
+                    async: true,  // no need to wait
+                });
+            }
+        });
+
+        async function fetchOptions(query) {
+            if (query.length < 2) return; // Avoid unnecessary API calls
+
+            const response = await fetch(`/stocks/api/search/?q=${query}`);
+            const data = await response.json();
+
+            const container = document.getElementById("checkbox-container");
+            container.innerHTML = ""; // Clear previous results
+
+            data.results.forEach(item => {
+                const label = document.createElement("label");
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = item.symbol;
+                checkbox.name = "options";
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(" " + item.symbol + " " + item.shortname));
+                container.appendChild(label);
+                container.appendChild(document.createElement("br"));
+            });
+        }
+    </script>
+    <div class="w3-row">
+        <h2>Account: {{account.name}}
+            {% if account.portfolio %}
+              <em>(Portfolio:{{account.portfolio.name}})</em>
+            {% endif %}</h2>
+    </div>
+    <div class="w3-cell-row">
+        <div class="w3-cell">
+            <h3>{{view_verb}} Transaction</h3>
+                <form method="post" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="success_url" value="{{ success_url }}">
+            {% for error in form.non_field_errors %}
+                <div class="w3-row w3-red">
+                    {{ error }}
+                </div>
+            {% endfor %}
+            {% for hidden_field in form.hidden_fields %}
+                <div class="w3-row w3-blue">
+                    {{ hidden_field.errors }}
+                    {{ hidden_field }}
+                </div>
+            {% endfor %}
+            <table>
+                <tr style="display: block;">
+                    <td class="diy-label">Date:</td>
+                    <td>{{ form.real_date}}</td>
+                    <td>{{ form.real_date.errors }}</td>
+                </tr>
+                <tr id=actionRow style="display: block;">
+                    <td class="diy-label">{{ form.xa_action.label_tag }}</td>
+                    <td>
+                            {{ form.xa_action }}
+                   </td>
+                    <td>{{ form.xa_action.errors }}</td>
+                </tr>
+                <tr id=equityRow style="display: block;">
+                    <td class="diy-label">{{ form.equity.label_tag }}</td>
+                    <td><select id="id_equity" name="equity" style="width: 100%;">
+                            <option value="">Select an option...</option>
+                        </select>
+                    </td>
+                    <td>{{ form.equity.errors }}</td>
+                </tr>
+                <tr id=priceRow style="display: block;">
+                    <td class="diy-label">{{ form.price.label_tag }}</td>
+                    <td>{{ form.price }}</td>
+                    <td>{{ form.price.errors }}</td>
+                </tr>
+                <tr id=quantityRow style="display: block;">
+                    <td class="diy-label">{{ form.quantity.label_tag }}</td>
+                    <td>{{ form.quantity }}</td>
+                    <td>{{ form.quantity.errors }}</td>
+                </tr>
+                <tr id=valueRow style="display: block;">
+                    <td class="diy-label">{{ form.value.label_tag }}</td>
+                    <td>{{ form.value }}</td>
+                    <td>{{ form.value.errors }}</td>
+                </tr>
+                <tr id=toAccountRow style="display: block;">
+                    <td class="diy-label">{{ form.to_account.label_tag }}</td>
+                    <td>{{ form.to_account }}</td>
+                    <td>{{ form.to_account.errors }}</td>
+                </tr>
+                <tr id=repeatRow style="display: block;">
+                    <td class="diy-label">{{ form.repeat.label_tag }}</td>
+                    <td>{{ form.repeat }}</td>
+                    <td>{{ form.repeat.errors }}</td>
+                </tr>
+                <tr id=numberRow style="display: block;">
+                    <td class="diy-label">{{ form.number.label_tag }}</td>
+                    <td>{{ form.number }}</td>
+                    <td>{{ form.number.errors }}</td>
+                </tr>
+            </table>
+
+            <div class="w3-row">
+                <div class="w3-col w3-container m2">
+                    <button class="w3-button-small w3-round-large subtle diy-button diy-green" type="submit">Submit</button>
+                </div>
+                {% if account %}
+                    <div class="w3-col w3-container m2">
+                        <a href="{{success_url}}">
+                            <button class="w3-button-small w3-round-xlarge diy-button diy-blue" type="button">Cancel</button>
+                        </a>
+                    </div>
+                {% endif %}
+                <div class="w3-col w3-container m2">
+                    {% if view_verb == 'Add' %}
+                        <button class="w3-button-small w3-round-large subtle diy-auto diy-green" name="submit-type" value="Add Another" type="submit">Add Another</button>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+        </div>
+        {% if view_verb != 'Quick' %}
+            <div class="w3-cell">
+                <h3>Add Equity/ETF/Fund</h3>
+                <input type="text" id="search" oninput="fetchOptions(this.value)" placeholder="Type to search...">
+                <div id="checkbox-container"></div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock content %}

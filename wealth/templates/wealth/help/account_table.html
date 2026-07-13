@@ -1,0 +1,37 @@
+<div class="w3-row">
+    <div class="w3-container w3-half">
+        <h4>Data Views</h4>
+        <p>
+            While the default view for looking at account or portfolio data is the chart view, this the <b>Data View</b>
+            is
+            where most of the work happens. The general idea behind the Data View is to provide a month-over-month
+            summary and
+            provide a mechanism to correct data. Data usually only needs to be correct if transactions were missing or
+            incorrect.
+        </p>
+
+        <h4>Account Types</h4>
+        <p>The data view is tuned based on account types.</p>
+        <li><b>Bank</b> Accounts - You simply edit/record the balance each month</li>
+        <li><b>Value</b> A little more complicated than a bank account. You still do the monthly value
+            updates, but you can add any funds deposited
+            or withdrawn in that time period. This allows us to track return on investment
+        </li>
+
+        <li><b>Investment</b> Accounts hold multiple equities, so we provide a
+            <button class="w3-button-small w3-round-large diy-button-auto diy-green">Reconcile</button>
+            button to update indivdual account entities. Most Equities/ETFs we can look up via our APIs so we can
+            calculate value (price * shares) and even find out if dividends were paid.
+
+        </li>
+        <h4>Portfolios vs Accounts</h4>
+        The data will look the same, but you can not reconcile at the portfolio level. You must tunnel down to an
+        account
+        <h4>Transactions</h4>
+        To help you make sense of the value, a second table to the left is provided listing all the transactions that
+        apply
+    </div>
+    <div class="w3-container w3-half">
+        {% include 'stocks/includes/about_accounts.html' %}
+    </div>
+</div>

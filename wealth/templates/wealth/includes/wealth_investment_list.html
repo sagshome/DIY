@@ -1,0 +1,28 @@
+
+<div>
+    {% if investment_summary_data %}
+        <table class="table table-striped caption_top">
+            <caption class="w3-wide w3-padding-16">Equity Summary</caption>
+            <thead class="w3-margin-bottom" style="background:#eee;">
+                <tr>
+                    <th>Symbol</th>
+                    <th>Quantity</th>
+                    <th>Avg Price</th>
+                    <th>Current<br>Price</th>
+                    <th>Value</th>
+                    <th>Cost</th>
+                </tr>
+            </thead>
+            {% for item in investment_summary_data %}
+                <tr>
+                    <td>{{ item.Symbol }}</td>
+                    <td>{% if item.Shares == 0 %}<em>Closed</em>{% else %}{{ item.Quantity | floatformat:'1g'}}{% endif %}</td>
+                    <td>${{ item.AvgPrice | floatformat:'2g'}}</td>
+                    <td>${{ item.CurrPrice | floatformat:'2g'}}</td>
+                    <td>{% if item.Value != 0 %}${{ item.Value | floatformat:'0g'}}{%endif%}</td>
+                    <td>${{ item.Cost | floatformat:'0g'}}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+</div>

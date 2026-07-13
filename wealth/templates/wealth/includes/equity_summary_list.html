@@ -1,0 +1,62 @@
+
+<div>
+    {% if equity_list_data %}
+        <table class="table table-striped">
+            <caption class="w3-wide w3-padding-16">Equity Summary</caption>
+            <thead class="w3-margin-bottom" style="background:#eee;">
+                <tr>
+                    <th>Symbol</th>
+                    <th>Value</th>
+                    <th>Shares</th>
+                    <th>Current<br>Price</th>
+                    <th>Effective<br>Price</th>
+                    <th>Total Cost</th>
+                    <th>Total<br>Dividends</th>
+                    <th>Gain</th>
+                    <th>Percent</th>
+                </tr>
+            </thead>
+            {% for item in equity_list_data %}
+                <tr>
+                    <td>
+                      {{ item.Symbol }}
+                    </td>
+                     {% if item.Value == 0 %}
+                        <td></td>
+                    {% else %}
+                        <td>${{ item.InvValue | floatformat:'0g'}}</td>
+                    {% endif %}
+                    <td>
+                        {% if item.Shares == 0 %}<em>Closed</em>{% else %}{{ item.Quantity | floatformat:'1g'}}{% endif %}
+                    </td>
+                    <td>${{ item.Value | floatformat:'2g'}}</td>
+                    <td>${{ item.Price | floatformat:'2g'}}</td>
+
+                    <td>${{ item.Cost | floatformat:'0g'}}</td>
+
+                    {% if item.DivTotal == 0 %}
+                        <td></td>
+                    {% else %}
+                        <td>${{ item.DivTotal | floatformat:'0g'}}</td>
+                    {% endif %}
+
+                    {% if item.Gain > 0 %}
+                        <td>${{item.Gain | floatformat:'0g'}}</td>
+                    {% else %}
+                        <td class="table-danger">${{item.Gain | floatformat:'0g'}}</td>
+                    {% endif %}
+                    {% if item.GainPercent > 0 %}
+                        <td>{{item.GainPercent | floatformat:'2g'}}%</td>
+                    {% else %}
+                        <td class="table-danger">{{item.GainPercent | floatformat:'2g'}}%</td>
+                    {% endif %}
+
+                </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <div class="w3-row w3-yellow">
+                <p>No Equity Summary data found</p>
+        </div>
+    {% endif %}
+</div>
