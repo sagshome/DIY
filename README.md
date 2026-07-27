@@ -1,11 +1,40 @@
-# Steps for letsencrypt certificates
-This only needs to be done if you destroy certificates or I need to start 
+# Steps for updating an Ubuntu environment
+From project's root
 
-   docker compose run --rm --command certbot certonly   --webroot -w /var/www/certbot   -d itsonlyourmoney.com -d www.itsonlyourmoney.com -v
-   docker compose restart
+sudo apt install -y npm default-mysql-client libmysqlclient21
 
-This should be in a cron
-   0 3 * * * cd /home/scott/Projects/DIY && docker compose run --rm certbot renew --quiet && docker compose exec nginx nginx -s reload
+
+```
+sudo mkdir /etc/ioom
+sudo chmod 700 /etc/ioom
+vi  docker-compose.yml
+    change (from nginx and certbot services)
+      dockerfile: build/nginx-Dockerfile
+      depends_on:
+         - certbot
+      entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --deploy-hook 'nginx -s reload' || true; done"
+
+    to 
+      dockerfile: build/nginx-Dockerfile-restart
+      #depends_on:
+      #   - certbot
+      # entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --deploy-hook 'nginx -s reload' || true; done"
+
+
+docker compose build nginx
+docker compose up nginx -d
+docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email <your-email> --agree-tos --non-interactive  --domains <your-domain>  # for domain
+docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email <your-email> --agree-tos --non-interactive  --domains <your-domain>  # for www.(domain)
+
+vi docker-compose.yml
+   undo your changes
+docker compose down
+
+./build/prep.sh
+./build/build.sh
+
+```
+
 
 Get rid of duplicates
    df = pd.DataFrame(Item.objects.exclude(description='Random Data').values().order_by('id'))

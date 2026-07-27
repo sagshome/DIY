@@ -55,10 +55,11 @@ services:
     container_name: ioom_nginx
     hostname: nginx.itsonlyourmoney.com
     volumes:
-      - ./webstore/certbot/www:/var/www/certbot
-      - ./webstore/certbot/conf:/etc/letsencrypt
+      - /etc/ioom/certbot/www:/var/www/certbot:ro
+      - /etc/ioom/data:/etc/letsencrypt
+
     depends_on:
-      - django
+      - certbot
     networks:
       ioom_network:
         ipv4_address: 172.20.0.20
@@ -68,8 +69,9 @@ services:
     image: certbot/certbot
     container_name: ioom_certbot
     volumes:
-      - ./webstore/certbot/www:/var/www/certbot
-      - ./webstore/certbot/conf:/etc/letsencryptw
+      - /etc/ioom/certbot/www:/var/www/certbot
+      - /etc/ioom/data:/etc/letsencrypt
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --deploy-hook 'nginx -s reload' || true; done"
 
   redis:
     # Since this is not visible outside the docker network.   No need to expose the port
@@ -125,6 +127,7 @@ services:
 
 volumes:
   redis_data:
+  shared_keys:
 
 networks:
   ioom_network:
