@@ -5,7 +5,7 @@
 <div class="w3-bar w3-hide-small">
     <div class="w3-bar-item">
         {%  if account.container_type == 'Portfolio' or not account.portfolio %}
-            <a href="{% url 'stocks_main' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Wealth</button></a>
+            <a href="{% url 'stocks_main' %}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">stock</button></a>
         {% else %}
             <a href="{{ account.portfolio.get_absolute_url }}"><button class="w3-margin-left w3-button-small w3-round-large diy-button diy-green">Portfolio</button></a>
         {% endif %}

@@ -308,6 +308,96 @@ class WealthDF:
 
         return self.dates.merge(merged, on='Date', how='left')  # Strip out anything we don't need
 
+    def build_positions_df_v3(self) -> DataFrame:
+        """
+        V3,  not currently used.   Avoid the HUGE dataframe for scope = day.   100 Invesments * 250 days * 20 years
+        Trying to extract all and join via FFILL maybe instead I could pull the earlier and collect the last value per investment to the first row
+
+        Build a dataframe based on Position data overlaid with TimeSeries data appropriate for the scope and subclass
+        force_start will cause the dataframe to span to the first Position date (based on account and investment parameters)
+        requires
+        """
+        df_columns = ['Date', 'AccountID', 'PortfolioID', 'Symbol', 'Quantity', 'Price']
+        # todo: I can not just use the default day calendar becuase postions are older.  This fullgird is very expensive,  Maybe I could
+        # look into sorting by symbol and taking the last value if it less then day start ???
+        self.dates = self.dates = IOOMDates(start=self.start, force=True).days_df
+        self.scope = 'day'
+        self._positions = Position.objects.filter(investment__in=self._investments, inv_type='trading', account__in=self._accounts, scope=self.scope)
+        if self.dates.empty:
+            logger.warning('No position data exists for user:%s, scope:%s' % (self.user, self.scope))
+            return DataFrame(columns=df_columns)
+
+        query_columns = ['date', 'account_id', 'account__portfolio', 'investment__symbol', 'investment__inv_type', 'quantity', 'price']
+
+        '''if self.scope == 'month':
+            df = DataFrame(self._positions.values(*query_columns).order_by('account_id', 'investment__symbol', 'date'))
+        else:
+            delimiter = IOOMDates().day_start
+            latest = self._positions.filter(
+                date__lte=delimiter,
+                investment=OuterRef('investment'),
+                account_id=OuterRef('account_id'),  # ← critical
+            ).order_by('-date')
+
+            part1 = DataFrame(self._positions.filter(quantity__gt=0, id__in=Subquery(latest.values('id')[:1])).values(*query_columns))
+            part1['date'] = delimiter
+            part2 = DataFrame(self._positions.filter(date__gt=delimiter).values(*query_columns))
+            df = pd.concat([part1, part2])'''
+
+        df = DataFrame(self._positions.values(*query_columns).order_by("account_id", "investment__symbol", "date"))
+        df['Date'] = pd.to_datetime(df['date'])
+        df.rename(columns={"account_id": "AccountID", "account__portfolio": "PortfolioID", "investment__symbol": "Symbol",
+                           "investment__inv_type": "InvType", "quantity": "Quantity", "price": "Price"}, inplace=True)
+
+        # from chatgpt  15M rows - 2.8 seconds using day scope and epoch
+        full_grid = pd.MultiIndex.from_product([self.dates['Date'], df['AccountID'].unique(), df['Symbol'].unique()], names=['Date', 'AccountID', 'Symbol'])
+        merged = (df.set_index(['Date', 'AccountID', 'Symbol']).reindex(full_grid).reset_index())
+        if self.scope == 'day':  # Add in the positions prior to the day lower limit
+            merged = pd.concat([merged, df.loc[df['Date'] < merged['Date'].min()]])
+        merged.sort_values(['AccountID', 'Symbol', 'Date'], inplace=True)
+
+        merged['InvType'] = merged.groupby(['AccountID', 'Symbol'])['InvType'].ffill()
+        merged['PortfolioID'] = merged.groupby(['AccountID'])['PortfolioID'].ffill()
+        merged.dropna(subset=["InvType"], inplace=True)  # Clear out values prior to the first good record - Testing,  50.1 MB drops to 967 KB
+
+        merged.loc[merged['InvType'] != 'Trading', 'Price'] = 1.0
+
+        merged = merged.astype({"Quantity": "float64", "Price": "float64"})
+
+        # Step 1,   Trading accounts with a price of 1 use Quantity for the value,  so don't Forward Fill them.
+        mask = ((merged['InvType'] == 'Trading') & (merged['Price'] != 1))
+        merged.loc[mask, 'Quantity'] = (
+            merged.loc[mask, 'Quantity']
+            .ffill()
+        )
+        # Prices is not the value,  it is the price we paid,  so like quantity forward fill
+        merged.loc[mask, 'Price'] = (
+            merged.loc[mask, 'Price']
+            .ffill()
+        )
+
+        # Funding should also be Forward Filled
+        mask = merged['InvType'] == 'Funding'
+        merged.loc[mask, 'Quantity'] = (
+            merged.loc[mask, 'Quantity']
+            .ffill()
+        )
+
+        # Remove the 0 values to prevent interpolate from moving quantities down to 0 - previous trading fills mean they are excluded already
+        mask = merged['Quantity'] != 0
+        merged.loc[mask, 'Quantity'] = (
+            merged.loc[mask]
+            .groupby(['AccountID', 'Symbol'])['Quantity']
+            .transform(lambda x: x.interpolate(method='linear'))
+        )
+
+        # What ever is left can be forward filled,  or set to 0
+        merged[['Quantity', 'Price']] = merged[['Quantity', 'Price']].ffill().fillna(0)
+        merged['PortfolioID'] = pd.to_numeric(merged['PortfolioID'], errors='coerce').fillna(0)  # Set to 0, accounts outside of portfolios can be filtered
+        merged = merged.drop(columns=['date'])  # No longer required
+
+        return self.dates.merge(merged, on='Date', how='left')  # Strip out anything we don't need
+
     def build_values_df(self) -> DataFrame:
         """
         Build a dataframe based on Value data overlaid with TimeSeries data appropriate for the scope

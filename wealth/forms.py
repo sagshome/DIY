@@ -122,6 +122,7 @@ class AccountCloseForm(forms.ModelForm):
         self.fields["accounts"].queryset = self.initial['accounts']
         self.fields["closed"].queryset = self.initial['closed']
 
+
     def clean(self):
         cleaned_data = super().clean()
         if 'accounts' in cleaned_data and cleaned_data['accounts']:

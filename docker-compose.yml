@@ -71,7 +71,6 @@ services:
     volumes:
       - /etc/ioom/certbot/www:/var/www/certbot
       - /etc/ioom/data:/etc/letsencrypt
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --deploy-hook 'nginx -s reload' || true; done"
 
   redis:
     # Since this is not visible outside the docker network.   No need to expose the port

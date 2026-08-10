@@ -42,7 +42,7 @@
 
         $(document).ready(function () {
             cash_flow_chart("{% url 'cash_flow_data' %}", "{{trends}}", "{{period}}", "{{span}}")
-            build_wealth_pie("{% url 'wealth_pie' %}")
+            build_wealth_pie("{% url 'stock_pie' %}")
         });
     </script>
 {% endblock content %}

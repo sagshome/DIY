@@ -18,7 +18,7 @@ class Command(BaseCommand):
         df.to_csv(output_file, index=False)
 
         df = pd.DataFrame(Account.objects.values(
-            'id', 'name', 'currency', 'account_type', 'account_name', 'managed', 'portfolio__id', 'portfolio__name', 'portfolio__currency', 'user__username'))
+            'id', 'name', 'currency', 'account_type', 'account_name', '_end', 'managed', 'portfolio__id', 'portfolio__name', 'portfolio__currency', 'user__username'))
         output_file = Path.home().joinpath('Accounts.csv')
         df.to_csv(output_file, index=False)
 

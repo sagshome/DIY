@@ -48,7 +48,7 @@ def get_or_add_user(username: str) -> User:
     return users[username]
 
 
-def get_or_add_account(pk: int, account: str, account_name: str, account_type: str, currency: str, managed: str, username: str, portfolio) -> Account:
+def get_or_add_account(pk: int, account: str, account_name: str, account_type: str, currency: str, managed: str, username: str, closed, portfolio) -> Account:
     if pk not in account_transl:
         user = get_or_add_user(username)
         try:
@@ -57,7 +57,7 @@ def get_or_add_account(pk: int, account: str, account_name: str, account_type: s
             print(f'    {datetime.now()} - Creating Account:{account_name}')
             acc_type = 'Trading' if account_type == 'Investment' else 'Value' if account_type == 'Value' else 'Cash'
             managed = True if acc_type in ['Value', 'Cash'] else managed
-            account = Account.objects.create(name=account, account_name=account_name, acct_type=acc_type, managed=managed, currency=currency, portfolio=portfolio, user=user)
+            account = Account.objects.create(name=account, account_name=account_name, acct_type=acc_type, managed=managed, currency=currency, closed=closed, portfolio=portfolio, user=user)
         account_transl[pk] = account.id
         accounts[account.id] = account
     return accounts[account_transl[pk]]
@@ -159,7 +159,7 @@ def import_accounts():
             portfolio = get_or_add_portfolio(row.portfolio__id, row.portfolio__name, row.portfolio__currency, user)
         else:
             portfolio = None
-        get_or_add_account(row.id, row.name, row.account_name, row.account_type, row.currency, row.managed, user.username, portfolio=portfolio)
+        get_or_add_account(row.id, row.name, row.account_name, row.account_type, row.currency, row.managed, user.username, closed=row._end, portfolio=portfolio)
 
 
 def import_funding(df):

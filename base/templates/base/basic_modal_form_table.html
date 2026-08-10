@@ -5,6 +5,7 @@
     {% block footer %}{% endblock footer %}
 {% endif %}
 {% block content %}
+
     {% if view_verb %}
         <h2 class="container">{{ view_verb }} {{ view_noun}}:</h2>
     {% endif %}
@@ -18,7 +19,7 @@
                 {% endfor %}
             </div>
         {% endif %}
-
+        foobar
         {% for hidden_field in form.hidden_fields %}
             {% if hidden_field.errors %}
                 <div class="container-fluid alert alert-warning" role="alert">

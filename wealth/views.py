@@ -176,12 +176,12 @@ class AccountCloseView(LoginRequiredMixin, ModalBaseMixin, UpdateView):
         initial['accounts'] = self.valid_accounts()
         initial['user'] = self.request.user.id
         initial['closed'] = self.object.last_date
-        initial['success_url'] = reverse('wealth_home')
         return initial
 
     def form_valid(self, form):
         form.save()
         return super().form_valid(form)
+
 
     def dispatch(self, request, *args, **kwargs):
         response = super().dispatch(request, *args, **kwargs)  # This will close the account, so we need to specify re_close=True

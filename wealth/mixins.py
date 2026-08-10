@@ -29,8 +29,7 @@ class ModalBaseMixin:
 
     def get_initial(self):
         initial = super().get_initial()
-        self.get_modal_data(initial)
-        return initial
+        return self.get_modal_data(initial)
 
     def get_modal_data(self, initial: dict = None):
         """

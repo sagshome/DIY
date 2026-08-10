@@ -17,9 +17,9 @@ urlpatterns = [
 
     path(r'api/cost_value/', charts.cost_value_chart, name='cost_value_chart'),
     path(r'api/compare_chart/', charts.compare_equity_chart, name='compare_equity_chart'),
-    path(r'api/wealth', charts.wealth_summary_chart, name='wealth_chart'),
-    path(r'api/wealth_pie', charts.wealth_summary_pie, name='wealth_pie'),
-    path(r'api/wealth_summary', charts.acc_summary, name='wealth_summary'),
+    path(r'api/stock', charts.wealth_summary_chart, name='stock_chart'),
+    path(r'api/stock_pie', charts.wealth_summary_pie, name='stock_pie'),
+    path(r'api/stock_summary', charts.acc_summary, name='stock_summary'),
     path(r'api/equity_summary', charts.equity_summary, name='equity_summary'),
     path(r'api/<pk>/<orig_id>/<compare_id>/compare/', charts.account_equity_compare, name='portfolio_equity_compare_chart'),
 
@@ -27,9 +27,9 @@ urlpatterns = [
     path(r'equity/<id>/update/', views.equity_update, name='equity_update'),
 
     path(r'account/', views.StocksMain.as_view(), name='stocks_main'),
-    path(r'account/help', views.wealth_help, name='wealth_help'),
+    path(r'account/help', views.wealth_help, name='stock_help'),
     path(r'account/add/', views.add_account, name='account_add'),
-    path(r'account/<pk>/', views.AccountDetailView.as_view(), name='account_details'),
+    path(r'account/<pk>/', views.AccountDetailView.as_view(), name='stock_account_details'),
     path(r'account/<pk>/close/', views.AccountCloseView.as_view(), name='account_close'),
     path(r'account/<pk>/edit/', views.AccountEdit.as_view(), name='account_edit'),
     path(r'account/<pk>/delete/', views.AccountDeleteView.as_view(), name='account_delete'),
@@ -44,7 +44,7 @@ urlpatterns = [
     path(r'account/<a_pk>/<date_str>/update', views.reconciliation, name='update_account_date'),
 
     path(r'portfolio/add/', views.PortfolioAdd.as_view(), name='portfolio_add'),
-    path(r'portfolio/<pk>/', views.PortfolioDetailView.as_view(), name='portfolio_details'),
+    path(r'portfolio/<pk>/', views.PortfolioDetailView.as_view(), name='stock_portfolio_details'),
     path(r'portfolio/<pk>/edit/', views.PortfolioEdit.as_view(), name='portfolio_edit'),
     path(r'portfolio/<pk>/delete/', views.PortfolioDeleteView.as_view(), name='portfolio_delete'),
     path(r'portfolio/<pk>/table/', views.PortfolioTableView.as_view(), name='portfolio_table'),

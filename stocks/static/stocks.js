@@ -42,7 +42,7 @@ function cost_value_chart(api, object_id, object_type, equity_id) {
 
 function summary_chart(object_type, object_id) {
 
-      let url = "/stocks/api/wealth_summary";
+      let url = "/stocks/api/stock_summary";
       let data = {};
       if (object_type !== undefined) {
           data['object_type'] = object_type

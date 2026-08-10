@@ -14,6 +14,12 @@ EPOCH = Timestamp('January-01-2000')
 DEFAULT_ZONE = "America/Toronto"
 
 """
+all_dates = DataFrame({'Date': date_range(start=EPOCH, end=datetime.today(), freq='B')})  # 86ms
+all_dates.loc[all_dates['Date'] >= Timestamp('2026/08/01')]
+
+
+"""
+"""
 When used in yfinance history
 from wealth.dates_dataframe import FullDatesDF
 dates_df = FullDatesDF()

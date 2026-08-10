@@ -1014,8 +1014,10 @@ class Account(BaseContainer):
     account_name: str = models.CharField(max_length=128, null=True, blank=True, help_text='Specific Account Name, use in imports from your trading account')
     managed: bool = models.BooleanField(default=True, help_text="Set when Dividends will be automatically reinvested")
     portfolio = models.ForeignKey(Portfolio, blank=True, null=True, on_delete=models.SET_NULL)
+    # todo: remove acct_type
     acct_type: str = models.CharField(max_length=10, blank=True, null=True, choices=choices, default='Trading')
-    positions = models.ManyToManyField(Investment, through='Position')
+    positions = models.ManyToManyField(Investment, through='Position')  # Investments, summerized over transactions
+
     closed: date = models.DateField(null=True, blank=True, help_text='Date when account was closed')
     user: User = models.ForeignKey(User, related_name='accounts', blank=False, null=False, on_delete=models.CASCADE)
 
@@ -1040,6 +1042,7 @@ class Account(BaseContainer):
                 if not self.closed:
                     self.closed = this_date
                     self.save()
+
 
         scope = 'month' if this_date < IOOMDates(start=this_date, build=False).day_start else 'day'
         pos_date = this_date if scope == 'day' else this_date.replace(day=1)
