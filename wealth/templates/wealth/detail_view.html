@@ -6,16 +6,73 @@
     <div>
         {% include 'wealth/includes/actions.html' %}
     </div>
+    <div>
+        {% include './includes/range.html' %}
+    </div>
+
     <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#ioom_chart">
+        Chart:
         <i class="bi bi-chevron-up"></i>
     </button>
     <div class="collapse show" id="ioom_chart">
+        <div class="d-flex gap-4 align-items-center">
+            <div class="form-check">
+                <input class="form-check-input chart-option"
+                       type="checkbox"
+                       value="growth"
+                       id="option_growth">
+                <label class="form-check-label" for="option_growth">
+                    Growth
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input chart-option"
+                       type="checkbox"
+                       value="dividends"
+                       id="option_dividends">
+                <label class="form-check-label" for="option_dividends">
+                    Dividends
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input chart-option"
+                       type="checkbox"
+                       value="funding"
+                       id="option_funding">
+                <label class="form-check-label" for="option_funding">
+                    Funding
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input chart-option"
+                       type="checkbox"
+                       value="inflation"
+                       id="option_inflation">
+                <label class="form-check-label" for="option_inflation">
+                    Inflation
+                </label>
+            </div>
+            <div>
+                <select id="chart_scope" class="form-select">
+                    <option value="">- Scope -</option>
+                    <option value="day">Day</option>
+                    <option value="month">Month</option>
+                    <option value="">Default</option>
+                </select>
+            </div>
+
+            <div>
+                <select id="chart_compare" class="form-select">
+                    <option value="">- Compare To -</option>
+                    <option value="sp500">S&P 500</option>
+                    <option value="tsx">S&P/TSX</option>
+                    <option value="nasdaq">NASDAQ</option>
+                </select>
+            </div>
+        </div>
         <div style="height: 300px;">
             <canvas id="lineChart" aria-label="Chart"></canvas>
         </div>
-    </div>
-    <div>
-        {% include './includes/range.html' %}
     </div>
     {% if not container or container.container_type == 'Portfolio' %}
         {% include './includes/wealth_summary_list.html' %}
@@ -30,10 +87,128 @@
         </div>
     {% endif %}
     <script>
-        $(document).ready(function () {
-            zero_summary_chart("{{ range }}", "{{container.container_type}}", "{{container.id}}")
+    $(document).ready(function () {
+
+        const storageKey = 'ioom_chart_options';
+
+        function getSelectedOptions() {
+            return $('.chart-option:checked').map(function () {
+                return this.value;
+            }).get();
+        }
+
+        function setSelectedOptions(options) {
+            $('.chart-option').each(function () {
+                $(this).prop('checked', options.includes(this.value));
+            });
+        }
+
+        function loadChartSettings() {
+            const saved = localStorage.getItem(storageKey);
+
+            if (saved) {
+                try {
+                    const settings = JSON.parse(saved);
+
+                    // New format
+                    if (settings && Array.isArray(settings.options)) {
+                        return settings;
+                    }
+
+                    // Old format - just an array of options
+                    if (Array.isArray(settings)) {
+                        return {
+                            options: settings,
+                            compare: '',
+                            scope: ''
+                        };
+                    }
+
+                } catch (e) {
+                    // Invalid saved value
+                }
+            }
+
+            return {
+                options: ['growth'],
+                compare: '',
+                scope: ''
+            };
+        }
+
+        function enforceRequiredOption(options) {
+            // Growth or Dividends must always be selected
+            if (!options.includes('growth') &&
+                !options.includes('dividends')) {
+                options.push('growth');
+            }
+
+            return options;
+        }
+
+        function redrawChart() {
+
+            let options = getSelectedOptions();
+
+            // Growth or Dividends must always be selected
+            options = enforceRequiredOption(options);
+
+            // Make sure the checkboxes reflect the enforced selection
+            setSelectedOptions(options);
+
+            // Get Compare selection
+            const compare = $('#chart_compare').val();
+            const scope = $('#chart_scope').val();
+
+            // Save settings
+            localStorage.setItem(storageKey, JSON.stringify({
+                options: options,
+                compare: compare,
+                scope: scope,
+            }));
+
+            // Redraw chart
+            generic_wealth_chart(
+                "{{ range }}",
+                "{{container.container_type}}",
+                "{{container.id}}",
+                options,
+                compare,
+                scope
+            );
+        }
+
+        // Restore previous selections
+        const settings = loadChartSettings();
+
+        let options = enforceRequiredOption(settings.options);
+
+        setSelectedOptions(options);
+
+        // Restore picker selection
+        $('#chart_compare').val(settings.compare);
+        $('#chart_scope').val(settings.scope);
+        // Draw the chart using restored selections
+        redrawChart();
+
+        // Redraw whenever a checkbox changes
+        $('.chart-option').on('change', function () {
+            redrawChart();
         });
-    </script>
+
+        // Redraw whenever Compare changes
+        $('#chart_compare').on('change', function () {
+            redrawChart();
+        });
+
+        // Redraw whenever Scope changes
+        $('#chart_scope').on('change', function () {
+            redrawChart();
+        });
+
+
+    });
+</script>
 
 
 {% endblock content %}

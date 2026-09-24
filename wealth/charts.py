@@ -14,9 +14,147 @@ from django.urls import reverse
 from .models import Account, Investment, Dividend, Value, Portfolio
 from .dataframes import WealthDF
 from base.ioom_dates import IOOMDates
-from base.models import COLORS, PALETTE
+from base.models import COLORS, PALETTE, Inflation
 
 logger = logging.getLogger(__name__)
+
+@login_required
+def generic_wealth_data(request):
+    '''
+    object_type + object_id produces a chart based on Portfolio or Account,
+        blank = Portfolios and orphan Accounts
+    date_range for the length of time to chart out
+        default = year
+    equity - An equity held in the account or portfolio,
+        blank just show totals
+
+    scope day for an item for each day,  month for each month
+        blank is select vs date_range
+    options:
+        growth - Show the value change over the time
+        dividend - Show the total dividends over time
+        funding - Include a row for funding
+        inflation - show the value of
+        equities - show the values as stacked lines
+
+    compare
+        add an equity item to compare to.   This will change value to a
+
+    '''
+
+    user = request.user
+    object_id = request.GET.get('object_id')
+    object_type = request.GET.get('object_type')
+    date_range = request.GET.get('range', 'year')
+    object_id = int(object_id) if object_id else object_id
+    options = request.GET.getlist('options[]')
+    compare = request.GET.get('compare')
+    scope = request.GET.get('scope')
+
+    # scope only make sense when you want day data for a period longer then 1 year So picking a scope of month
+    # and a range of 1 year will produce strange results.
+    if scope:
+        dfo = WealthDF(user, scope=scope)  # Get the DF based on scope - will force by_day or by_month
+    else:
+        dfo = WealthDF(user, date_range=date_range)  # Calculate the DF based on default scope for range
+
+    df = dfo.by_range(date_range)                # Limit dataframe to start date of the selected range (regardless of scope
+
+    # Step 1 - trim the data
+    if object_type and object_type == 'Account':
+        df = df.loc[df['AccountID'] == object_id]     # Limit dataframe only items matching this account
+    elif object_type and object_type == 'Portfolio':  # Limit dataframe to only items matching this portfolio
+        df = df.loc[df['PortfolioID'] == object_id]   # expand using AccountID
+    # else we are working with all the data
+    
+    if df.empty:
+        return JsonResponse({'labels': [], 'datasets': []})
+
+    ldf = dfo.dated_summary_df(df)
+
+    if 'dividends' in options and 'DivTotal' in df.columns:
+        ldf = ldf.merge(df[['Date', 'DivTotal']], on='Date', how='left')
+
+    if 'inflation' in options:
+        ldf = ldf.merge(Inflation.as_dataframe(ldf, scope=dfo.scope), on='Date', how='left')
+        # ------------------------------------------------------------
+        # Funding
+        # ------------------------------------------------------------
+
+        # Change in cumulative funding from the previous month.
+        # Positive = money added
+        # Negative = money withdrawn
+        ldf['NewFunding'] = ldf['Funding'].diff()
+
+        # Inflation rate for each month
+        ldf['Inflation'] = ldf['CPICost'].pct_change()
+
+        # ------------------------------------------------------------
+        # Inflation-adjusted funding
+        # ------------------------------------------------------------
+
+        # Convert each month's funding change into CPI units.
+        #
+        # Example:
+        #   $10,000 deposited when CPI = 160
+        #   10,000 / 160 = 62.5 CPI units
+        #
+        # Withdrawals are automatically negative.
+        ldf['FundingCPIUnits'] = ldf['NewFunding'] / ldf['CPICost']
+
+        # Accumulate the CPI units and convert them back into
+        # dollars using the current month's CPI.
+        #
+        # This tells us what all of the deposits/withdrawals since
+        # the beginning of the dataframe are worth after inflation.
+        ldf['InflationAdjustedFunding'] = ldf['FundingCPIUnits'].cumsum() * ldf['CPICost']
+
+        # ------------------------------------------------------------
+        # Inflation-adjusted portfolio value
+        # ------------------------------------------------------------
+
+        # Convert the actual portfolio value into the purchasing
+        # power of the first month.
+        #
+        # Example:
+        #   $1,000,000 when CPI = 160
+        #   is equivalent to less than $1,000,000 when expressed
+        #   in the purchasing power of the earlier month.
+        initial_cpi = ldf['CPICost'].iloc[0]
+
+        ldf['RealTotalValue'] = ldf['TotalValue'] / ldf['CPICost'] * initial_cpi
+
+        # ------------------------------------------------------------
+        # Investment gain after inflation
+        # ------------------------------------------------------------
+
+        # The difference between the actual portfolio and the
+        # inflation-adjusted funding.
+        ldf['RealGain'] = ldf['TotalValue'] - ldf['InflationAdjustedFunding']
+
+        #ldf["ValueChange"] = ldf["TotalValue"].diff()
+        #ldf['Inflation'] = ldf['CPICost'].pct_change()
+        #ldf["NewFunding"] = ldf["Funding"].diff()
+
+        #ldf["FundingCPIUnits"] = ldf["NewFunding"] / ldf["CPICost"]
+        #ldf["InflationAdjustedFunding"] = ldf["FundingCPIUnits"].cumsum() * ldf["CPICost"]
+
+        #initial_value = ldf.loc[0, "TotalValue"]
+        #initial_funding = ldf.loc[0, "Funding"]
+        #initial_cpi = ldf.loc[0, "CPICost"]
+
+        #ldf["RealGain"] = ldf["TotalValue"] - ldf["InflationAdjustedFunding"]
+        #ldf["RealTotalValue"] = ldf["TotalValue"] / ldf["CPICost"] * ldf["CPICost"].iloc[0]
+        
+    starting = df.iloc[0].InvValue
+    data = df["InvValue"].to_list()
+
+    if dfo.scope == 'month' or scope == 'month':
+        labels = [this_date.strftime('%Y-%b') for this_date in df["Date"].to_list()]
+    else:
+        labels = [this_date.strftime('%b-%d') for this_date in df["Date"].to_list()]
+
+    return JsonResponse({"labels": labels, "data": data, "starting": starting})
 
 
 @login_required
@@ -162,6 +300,7 @@ def cost_value_chart(request):
 def acc_summary(request):
     '''
     Three modes,  1) Portfolio,  2) Account,  3) Everything
+    Data for a chart that shows growth by 1) Accounts, 2) Investments, 3) Containers
     '''
     colors = COLORS.copy()
     ci = 0
@@ -238,6 +377,105 @@ def acc_summary(request):
 
     return JsonResponse({'labels': labels, 'datasets': datasets})
 
+@login_required
+def growth_and_dividends(request):
+    """
+    Chartjs,  X axis is dates,  Yleft is lines with values (change or raw ?),  Yright is Dividend Price or Value
+
+    <canvas id="myChart"></canvas>
+
+<script>
+const ctx = document.getElementById('myChart');
+
+new Chart(ctx, {
+    data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+
+        datasets: [
+            {
+                type: 'line',
+                label: 'Portfolio Value',
+                data: [100000, 103000, 101000, 108000, 112000, 115000],
+                yAxisID: 'yValue',
+
+                borderWidth: 2,
+                tension: 0.2,
+                pointRadius: 0
+            },
+            {
+                type: 'bar',
+                label: 'Contributions',
+                data: [5000, 2000, 0, 7500, 3000, 0],
+                yAxisID: 'yContributions',
+
+                borderWidth: 0,
+                barPercentage: 0.6
+            }
+        ]
+    },
+
+    options: {
+        responsive: true,
+
+        interaction: {
+            mode: 'index',
+            intersect: false
+        },
+
+        scales: {
+
+            // LEFT Y AXIS
+            yValue: {
+                type: 'linear',
+                position: 'left',
+
+                title: {
+                    display: true,
+                    text: 'Portfolio Value'
+                },
+
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toLocaleString();
+                    }
+                }
+            },
+
+            // RIGHT Y AXIS
+            yContributions: {
+                type: 'linear',
+                position: 'right',
+
+                title: {
+                    display: true,
+                    text: 'Contributions'
+                },
+
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toLocaleString();
+                    }
+                },
+
+                // Don't draw another grid over the chart
+                grid: {
+                    drawOnChartArea: false
+                }
+            }
+        }
+    }
+});
+</script>
+    """
+    user = request.user
+    account = request.GET.get('account')
+    symbol = request.GET.get('symbol')
+    date_range = request.GET.get('range', 'year')
+    detail = request.GET.get('detail', 'detail') # vs 'trend'
+
+    dfo = WealthDF(user, date_range=date_range)  # Calculate the span (months vs days)
+    df = dfo.by_range(date_range)                # Limit dataframe to match requested range
+
 
 @login_required
 def zero_acc_summary(request):
@@ -251,6 +489,7 @@ def zero_acc_summary(request):
     object_type = request.GET.get('object_type')
     date_range = request.GET.get('range', 'year')
     object_id = int(object_id) if object_id else object_id
+    options = request.GET.getlist('options[]')
 
     dfo = WealthDF(user, date_range=date_range)  # Calculate the span (months vs days)
     df = dfo.by_range(date_range)                # Limit dataframe to match requested range
@@ -264,17 +503,29 @@ def zero_acc_summary(request):
     if df.empty:
         return JsonResponse({'labels': [], 'datasets': []})
 
-    these_dates = dfo.dates.loc[dfo.dates['Date'] >= IOOMDates(build=False).range_start(date_range)]  # Limit dates to just those in the range
-    these_dates = these_dates.loc[these_dates['Date'] >= df['Date'].min()]
+    df = (df.loc[(df["InvType"] == "Trading") | (df["InvType"] == "Value")].groupby(["Date"]).
+          agg({"InvValue": "sum"}).reset_index())
 
-    values = these_dates.merge(df.loc[(df['InvType'] == 'Trading') | (df['InvType'] == 'Value')].groupby(['Date']).agg({'InvValue': 'sum'}), on='Date', how='left')
+    starting = df.iloc[0].InvValue
+    data = df["InvValue"].to_list()
+
+    if dfo.scope == 'month':
+        labels = [this_date.strftime('%Y-%b') for this_date in df["Date"].to_list()]
+    else:
+        labels = [this_date.strftime('%b-%d') for this_date in df["Date"].to_list()]
+
+    return JsonResponse({"labels": labels, "data": data, "starting": starting})
+
+    values = df.loc[(df['InvType'] == 'Trading') | (df['InvType'] == 'Value')].groupby(['Date']).agg({'InvValue': 'sum'}).reset_index()
+    these_dates = values["Date"]
     values['InvValue'] = values['InvValue'].fillna(0)
     starting = values.iloc[0].InvValue
     data = values['InvValue'].to_list()
-    if dfo.scope == 'month':
-        labels = [this_date.strftime('%Y-%b') for this_date in these_dates['Date'].to_list()]
-    else:
-        labels = [this_date.strftime('%b-%d') for this_date in these_dates['Date'].to_list()]
+
+    labels = [
+        this_date.strftime("%Y-%b-%d") for this_date in these_dates.to_list()
+    ]
+
     return JsonResponse({'labels': labels, 'data': data, 'starting': starting})
 
 

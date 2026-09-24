@@ -11,8 +11,10 @@ import numpy as np
 import pandas as pd
 
 from collections import defaultdict
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
+from decimal import Decimal
 from pandas import DataFrame, Timestamp
 from typing import List, Dict
 
@@ -26,7 +28,8 @@ from django.db.models import Value as ORMValue
 from django.db.models.functions import TruncMonth
 from django.forms import formset_factory
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import render, get_object_or_404, Http404, redirect
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import Http404
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, DeleteView, UpdateView, View, FormView, TemplateView
 from django.views.generic.dates import DateMixin
@@ -39,12 +42,40 @@ from base.views import BaseDeleteView
 
 from .mixins import ContextMixinBase, ModalBaseMixin, TransactionMixin, WealthRangeMixin, WealthSummaryMixin
 from .dataframes import WealthDF
-from .models import Account, Dividend, Portfolio, Position, Investment, Value, Transaction, BaseContainer, Funding, CashFlow, DataSource, ValueBalance, clear_caches
+from .models import Account, Dividend, DividendAmount, Portfolio, Position, Investment, Value, Transaction, BaseContainer, Funding, CashFlow, DataSource, ValueBalance, clear_caches
 
 #from .tasks import equity_new_estimates
-from .forms import ModalBase, TransactionForm, ModalBaseForm, SimpleReconcileFormSet, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountEditForm, UploadFileForm, AccountForm, TransactionSetValueForm, ManualUpdateEquityForm, AddEquityForm, ReconciliationFormSet
+from .forms import ModalBase, DividendAmountFormSet, TransactionForm, ModalBaseForm, SimpleReconcileFormSet, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountEditForm, UploadFileForm, AccountForm, TransactionSetValueForm, ManualUpdateEquityForm, AddEquityForm, ReconciliationFormSet, DividendAmountForm
 from .importers import BaseImporter
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ReconciliationRow:
+    date: date
+    row_type: str
+    cash_flow: CashFlow
+    source: object
+
+    @classmethod
+    def sort(cls, sort_input: List) -> List:
+        TYPE_ORDER = {
+            "Deposit": 1,
+            "Dividend": 2,
+            "Sell": 3,
+            "Buy": 4,
+            "Withdraw": 5,
+            "Other": 100,
+        }
+
+        sort_input.sort(
+            key=lambda sort_input: (
+                sort_input.date,
+                TYPE_ORDER[sort_input.row_type]
+            )
+        )
+        return sort_input
+
 
 def debug_import(request):
     from wealth.importers import import_from_diy
@@ -101,9 +132,10 @@ def debug(request):
     #BaseImporter.set_importer('/home/scott/Downloads/QT_gail.xlsx', AppUser.objects.get(username='sparky')).process()
     #
     # hisBaseImporter.set_importer('/home/scott/Downloads/QT_scott.xlsx', AppUser.objects.get(username='sparky')).process()
-    account = Account.objects.get(id=16)
-    vb = ValueBalance.objects.filter(account=account, investment=account.value_investment)[6]
-    vb.save(rebuild=True)
+    Value.update_dividends()
+    #account = Account.objects.get(id=16)
+    #vb = ValueBalance.objects.filter(account=account, investment=account.value_investment)[6]
+    #vb.save(rebuild=True)
     return HttpResponse(status=404)
 
 
@@ -193,6 +225,100 @@ class AccountCloseView(LoginRequiredMixin, ModalBaseMixin, UpdateView):
         return response
 
 
+class accountDateDetailReconcileView(ModalBaseMixin, LoginRequiredMixin, ContextMixinBase, View):
+
+    template_name = "wealth/includes/activity_log.html"
+
+    def setup(self, request, *args, **kwargs):
+        super().setup(request, *args, **kwargs)
+        self.account = get_object_or_404(Account, pk=kwargs['pk'])
+        try:
+            self.view_date = datetime.strptime(self.kwargs['date_str'], '%Y-%m-%d').date()
+        except ValueError:
+            raise Http404('Invalid Date')
+
+        self.scope = self.kwargs['scope_str']
+        if self.scope == 'month':
+            self.view_date = self.view_date.replace(day=1)
+            self.view_end = self.view_date + relativedelta(months=1)
+        else:
+            raise Http404('Only month scope is permitted')
+
+
+
+    def get_context_data(self, **kwargs):
+        columns = ['Date', 'Cash', 'Funding', 'Total']
+
+        context = super().get_context_data(**kwargs)
+        context['account'] = self.account
+        context['form'] = ModalBaseForm(initial=self.get_modal_data())
+        context['help_file'] = 'stocks/help/account_close.html'
+
+        df = self.dfo = WealthDF(user=self.request.user, scope=self.scope).df
+        df = df.loc[df['AccountID'] == self.account.id]
+        df = WealthDF.container_values_by_date_df(df)[columns]
+
+        context['end_data'] = df.loc[df['Date'] == pd.to_datetime(self.view_date)].iloc[0].to_dict()
+        previous_date_df = df.loc[df['Date'] == pd.to_datetime(self.view_date) - relativedelta(months=1)]
+
+        if len(previous_date_df) == 0:
+            context['start_data'] = None
+        else:
+            context["start_data"] = previous_date_df[columns].iloc[0].to_dict()
+
+        data = []
+
+        for transaction in Transaction.objects.filter(
+            account=self.account,
+            date__gte=self.view_date,
+            date__lt=self.view_end,
+        ).select_related("cash_record"):
+            data.append(
+                ReconciliationRow(
+                    date=transaction.date,
+                    row_type=transaction.action_str,
+                    cash_flow=transaction.cash_record,
+                    source=transaction,
+                )
+            )
+
+        for funding in Funding.objects.filter(
+            account=self.account,
+            date__gte=self.view_date,
+            date__lt=self.view_end,
+        ).select_related("cash_record"):
+            data.append(
+                ReconciliationRow(
+                    date=funding.date,
+                    row_type=funding.funding_str,
+                    cash_flow=funding.cash_record,
+                    source=funding,
+                )
+            )
+
+        for divamount in (DividendAmount.objects.filter(
+                cash_record__in=CashFlow.objects.filter(dividendamount__isnull=False,
+                                                        account=self.account,
+                                                        date__gte=self.view_date,
+                                                        date__lt=self.view_end))
+        ).select_related("cash_record"):
+            data.append(
+                ReconciliationRow(
+                    date=divamount.cash_record.date,
+                    row_type='Dividend',
+                    cash_flow=divamount.cash_record,
+                    source=divamount,
+                )
+            )
+        ReconciliationRow.sort(data)
+        context['activity_log'] = data
+        return context
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data()
+        return render(request, self.template_name, context)
+
+
 class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, WealthRangeMixin, ContextMixinBase, View):
     template_name = "wealth/reconciliation.html"
 
@@ -223,7 +349,8 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, WealthRangeMi
         return render(request, self.template_name, context)
 
     def get_formset(self, data=None):
-        df = self.dfo.on_datetime(self.dfo.df, self.view_date)[['Symbol', 'Quantity', 'Price', 'DivValue', 'InvType', 'AccountID', 'Estimated']]
+        df = self.dfo.df
+        df = self.dfo.on_datetime(df, self.view_date)[['Symbol', 'Quantity', 'Price', 'DivAmount', 'InvType', 'AccountID', 'ValueEstimated']]
         df = df.loc[(df['InvType'] == 'Trading') & (df['AccountID'] == self.account.pk) & (df['Quantity'] != 0)].sort_values('Symbol')
         initial = df.to_dict(orient='records')
 
@@ -366,7 +493,6 @@ class AccountEdit(LoginRequiredMixin, ModalBaseMixin, UpdateView, DateMixin):
         context['help_file'] = 'stocks/help/add_account.html'
         return context
 
-
 class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinBase, View):
     template_name = "wealth/reconciliation_table.html"
 
@@ -408,6 +534,105 @@ class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinB
             df = df.loc[df.AccountID == self.object.pk]
         summary = dfo.container_values_by_date_df(df)
         return summary.to_dict(orient='records')
+
+    def post(self, request, *args, **kwargs):
+        self.object = Account.objects.get(pk=self.kwargs['pk'], user=self.request.user)
+        context = self.get_context_data()
+        context['account'] = self.object
+        formset = self.get_formset(data=request.POST)
+
+        if formset.is_valid():
+            updated = False
+            for form in formset.forms:
+                if form.has_changed():
+                    for field in form.changed_data:
+                        if field in ['Cash', 'Total', 'Funding']:  # fix up None vs 0
+                            form.cleaned_data[field] = 0 if not form.cleaned_data[field] else form.cleaned_data[field]
+                            form.initial[field] = 0 if not form.initial[field] else form.initial[field]
+
+                    if 'Cash' in form.changed_data and form.cleaned_data['Cash'] != form.initial['Cash']:
+                        CashFlow.set_balance(form.initial['Date'], amount=form.cleaned_data['Cash'], account=self.object)
+                        updated = True
+                    if 'Funding' in form.changed_data and form.cleaned_data['Funding'] != form.initial['Funding']:
+                        Funding.set_balance(form.initial['Date'], amount=form.cleaned_data['Funding'], account=self.object)
+                        updated = True
+                    if 'Value' in form.changed_data and self.object.acct_type == 'Value' and form.cleaned_data['Value'] != form.initial['Value']:
+                        ValueBalance.set_balance(form.initial['Date'], amount=form.cleaned_data['Value'], account=self.object)
+                        updated = True
+            if updated:
+                self.object.rebuild()
+                clear_caches(request.user)
+            formset = self.get_formset()  # Build a new formset with the updated data as initial,  else the original with post, data including errors is used
+
+        context["formset"] = formset
+        return render(request, self.template_name, context)
+
+class EquityView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinBase, View):
+    template_name = "wealth/equity_view.html"
+
+    #def get_object(self):
+    #    return super().get_object(queryset=Account.objects.filter(user=self.request.user))
+
+    def get_context_data(self):
+
+        context = super().get_context_data(**self.kwargs)
+        self.dfo = WealthDF(self.request.user, date_range=context['range'])  # Build and cache the proper scoped dataframe based on range
+        context['full_summary'] = self.dfo.container_summary_by_date(self.dfo.df)
+        try:
+            context['last_updated'] = Investment.objects.filter(account=self.account).latest('last_updated').last_updated
+        except Investment.DoesNotExist:
+            context['last_updated'] = None
+        context['view_type'] = 'Data'
+        context['container'] = self.account
+        return context
+
+    def get(self, request, *args, **kwargs):
+        self.account = Account.objects.get(pk=self.kwargs['pk'], user=self.request.user)
+        self.equity = Investment.objects.get(pk=self.kwargs["symbol"])
+        context = self.get_context_data()
+        context['account'] = self.account
+        context["formset"] = self.get_formset()
+        return render(request, self.template_name, context)
+
+    def get_formset(self, data=None):
+        initial = self.get_initial_data()
+        if data:
+            return DividendAmountFormSet(data, initial=initial)
+
+        return DividendAmountFormSet(initial=initial)
+
+    def get_initial_data(self):
+
+
+        wealth_range = self.request.session['wealth_range'] if 'wealth_range' in self.request.session else 'year'
+        dfo = WealthDF(self.request.user, date_range=wealth_range)
+        #df = dfo.df
+        #if not df.empty:
+        #    df = df.loc[(df.AccountID == self.account.pk) & (df.Symbol == self.equity.symbol)]
+
+        divamt_df = pd.DataFrame(
+            DividendAmount.objects.filter(
+                cash_record__date__gte=dfo.start,
+                cash_record__account=self.account,
+                dividend__investment=self.equity
+            ).order_by('-cash_record__date').values(
+                "dividend__date",
+                "dividend__value",
+                "cash_record__date",
+                "altered",
+                "cash_record__value",
+                "cash_record__note",
+            )
+        )
+        divamt_df.rename(columns={"cash_record__date": "paid_date", "dividend__date": "ex_date", "dividend__value": "ex_value",
+                           "cash_record__note": "note", 'cash_record__value': 'value'}, inplace=True)
+        divamt_df['Date'] = pd.to_datetime(divamt_df['paid_date'])
+        divamt_df["Date"] = divamt_df["Date"].dt.to_period("M").dt.to_timestamp()
+        df = dfo.df
+        df = df.loc[(df['AccountID'] == self.account.id) & (df['Symbol'] == self.equity.symbol) & (df['DivAmount'] != 0)][['Date', 'Quantity', 'DivAmount', 'DivTotal']]
+
+        new = divamt_df.merge(df, on='Date', how='outer')
+        return divamt_df.to_dict(orient='records')
 
     def post(self, request, *args, **kwargs):
         self.object = Account.objects.get(pk=self.kwargs['pk'], user=self.request.user)
@@ -890,9 +1115,9 @@ def set_transaction(request, account_id, action):
     """
     account = get_object_or_404(Account, id=account_id, user=request.user)
     if ((action == 'BALANCE' and account.acct_type != 'Cash') or
-            (action == 'VALUE' and account.acct_type != 'Value') or
-            (action in ['REDEEM', 'FUND'] and account.acct_type not in ['Value', 'Trading'])):
-
+        (action == 'VALUE' and account.acct_type != 'Value') or
+        (action in ['REDEEM', 'FUND'] and account.acct_type not in ['Value', 'Trading']) or
+        (action == 'ADJDIV' and account.acct_type != 'Trading')):
         raise Http404('Action %s is not supported' % action)
 
     if request.method == 'POST':
@@ -937,6 +1162,69 @@ def set_transaction(request, account_id, action):
         'view_verb': 'Quick',
         'account': account,
         'action_locked': True})
+
+@login_required(login_url='/accounts/login/')
+def update_dividend_amount(request, div_amount_id):
+    """
+    Update the cashflow record and the dividend amount record.
+
+    """
+    dividend_amount = get_object_or_404(DividendAmount, pk=div_amount_id)
+
+    if request.method == 'POST':
+        cashflow = get_object_or_404(CashFlow, pk=dividend_amount.cash_record)
+        form = DividendAmountForm(request.POST)
+        success = False
+        if form.is_valid():
+            if (not form.cleaned_data['note'] == cashflow.note or
+                not form.cleaned_data['paid_date'] == cashflow.date or
+                not form.cleaned_data['value'] == cashflow.value
+            ):  # todo: this should be atomic
+                cashflow.note = form.cleaned_data['note']
+                cashflow.value = form.cleaned_data['value']
+                cashflow.date = form.cleaned_data['paid_date']
+                cashflow.save()
+                dividend_amount.altered = True
+                dividend_amount.save()
+            success = True
+            cashflow.build_positions(
+                cashflow.account,
+                cashflow.investment,
+                CashFlow.objects.filter(
+                    account=cashflow.account, investment=cashflow.investment
+                ),
+            )
+            clear_caches(request.user)
+
+        if 'is_modal' in form.cleaned_data and form.cleaned_data['is_modal']:
+            if success:
+                if 'success_url' in form.cleaned_data:
+                    return JsonResponse({"ok": True, "redirect": form.cleaned_data['success_url']})
+                else:
+                    return JsonResponse({"ok": True, "redirect": reverse('/', kwargs={})})
+        else:
+            if success:
+                if 'success_url' in form.cleaned_data:
+                    return HttpResponseRedirect(reverse('new_account_done'))
+
+                else:
+                    return HttpResponseRedirect(reverse('/'))
+
+            else:
+                return render(request, 'base/basic_modal_form_table', form=form)
+
+
+    initial={'success_url': request.META.get('HTTP_REFERER', '/'),
+             'is_modal': True,
+             'ex_date': dividend_amount.dividend.date,
+             'paid_date': dividend_amount.cash_record.date,
+             'altered': dividend_amount.altered,
+             'note': dividend_amount.cash_record.note,
+             'value': dividend_amount.cash_record.value,
+        }
+    form = DividendAmountForm(initial=initial)
+
+    return render(request, 'wealth/adjust_dividends.html', context={'form': form})
 
 
 @login_required

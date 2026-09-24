@@ -4,7 +4,7 @@ from pandas import Timestamp
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from .models import DataSource, Investment, Value, Account, Transaction, Portfolio, CURRENCIES
+from .models import DataSource, Investment, Value, Account, Transaction, Portfolio, CURRENCIES, DividendAmount
 from django.forms import formset_factory, inlineformset_factory, modelformset_factory, BaseFormSet
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -137,6 +137,25 @@ class AccountCloseForm(forms.ModelForm):
         return cleaned_data
 
 
+class DividendAmountForm(forms.Form):
+    success_url = forms.URLField(required=False, widget=forms.HiddenInput())
+    is_modal = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    altered = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    ex_date = forms.DateField(required=True, help_text='This is the date when the Dividend was issued')
+    paid_date = forms.DateField(required=True, help_text='This is the date when the Dividend appears in your account')
+    value = forms.DecimalField(required=True, validators=[MinValueValidator(Decimal('0.00'))], help_text='How much was transferred into your account')
+    note = forms.CharField(required=False, max_length=128, help_text='An optional short description of the event')
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ex_date"].widget.attrs["readonly"] = True
+        self.fields['ex_date'].widget.attrs['style'] = 'background-color:Wheat;'
+        self.fields["ex_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
+        self.fields["paid_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
+        self.fields["value"].widget.attrs['style'] = 'width:100px;height:28.5px;'
+        self.fields["note"].widget.attrs['style'] = 'width:700px;height:28.5px;'
+
+
 class PortfolioForm(forms.ModelForm):
 
     success_url = forms.URLField(required=False, widget=forms.HiddenInput())
@@ -164,6 +183,7 @@ class TransactionForm(forms.Form):
                         ('TRANS_OUT', 'Transfer Out'),
                         ('VALUE', 'Set Value'),
                         ('BALANCE', 'Set Balance'),
+                        ('ADJDIV', 'Adjust Dividend')
                         )
 
     TRANSACTION_DICT = dict(TRANSACTION_TYPE) # Used in views for form rendering
@@ -333,7 +353,7 @@ class ReconciliationForm(forms.Form):
         self.fields["Symbol"].widget.attrs['readonly'] = True
         self.fields["Symbol"].widget.attrs['style'] = 'text-align: left;width:95;background-color:Wheat;'
 
-        for field in ['Price', 'Quantity', 'DivValue']:
+        for field in ['Price', 'Quantity', 'DivAmount']:
             if not self.initial[field]:
                 self.initial[field] = Decimal(0)
             else:
@@ -437,3 +457,17 @@ class BaseSimpleReconcileFormSet(BaseFormSet):
 SimpleReconcileFormSet = formset_factory(SimpleReconcileForm,
                                          formset=BaseSimpleReconcileFormSet,
                                          extra=0)
+
+class BaseDividendAmountFormSet(BaseFormSet):
+
+    def __init__(self, *args, account=None, equity=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+
+        return kwargs
+
+DividendAmountFormSet = formset_factory(DividendAmountForm,
+                                        formset=BaseDividendAmountFormSet,
+                                        extra=0)

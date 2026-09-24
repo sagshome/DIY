@@ -89,7 +89,85 @@ function summary_chart(range, object_type, object_id) {
       });
 }
 
-function zero_summary_chart(range, object_type, object_id) {
+
+function generic_wealth_chart(range, object_type, object_id, options, compare, scope) {
+
+      let url = "/wealth/api/generic_wealth";
+      let data = {};
+
+      if (range !== undefined) {
+          data['range'] = range
+      }
+      if (object_type !== undefined) {
+          data['object_type'] = object_type
+          if (object_type === 'Account') {
+              url = url;
+          }
+      }
+      if (object_id !== undefined) {
+          data['object_id'] = object_id
+      }
+
+      if (options !== undefined) {
+          data['options'] = options
+      }
+
+      if (compare !== undefined) {
+          data['compare'] = compare
+      }
+
+      if (scope !== undefined) {
+          data['scope'] = scope
+      }
+
+      $.ajax({
+            url: url,
+            data: data,
+            success: function (data) {
+                new Chart("lineChart", {
+                    type: "line",
+                    data: {
+                        labels: data['labels'],
+                        datasets: [
+                            {
+                                data: data['data'],
+                                fill: false,
+                                segment: {
+                                    borderColor: (ctx) => {
+                                        const prevValue = ctx.p0.parsed.y;
+                                        const nextValue = ctx.p1.parsed.y;
+
+                                        if (prevValue < data['starting'] || nextValue < data['starting']) {
+                                            return 'red';
+                                        }
+                                         return 'green';
+                                    }
+                                },
+                            },
+                        ],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Current Value Chart'
+                            },
+                            legend: {
+                                display: false,
+                            },
+                        }
+                    },
+                });
+            },
+            error: function(data) {
+                console.log('Error occurred' + data);
+            }
+      });
+}
+
+function zero_summary_chart(range, object_type, object_id, options) {
 
       let url = "/wealth/api/zero_wealth_summary";
       let data = {};
@@ -105,6 +183,10 @@ function zero_summary_chart(range, object_type, object_id) {
       }
       if (object_id !== undefined) {
           data['object_id'] = object_id
+      }
+
+      if (options !== undefined) {
+          data['options'] = options
       }
       $.ajax({
             url: url,

@@ -1,0 +1,50 @@
+<div class="modal-body">
+    <div class="container-fluid", role="alert" name="ioom_nonfield_errors"></div>
+    <form class="ioom_modal_form" action="{{ request.path }}" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="container-fluid alert alert-warning" role="alert">
+                {% for error in form.non_field_errors %}
+                    {{ error }}
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% for hidden_field in form.hidden_fields %}
+            {% if hidden_field.errors %}
+                <div class="container-fluid alert alert-warning" role="alert">
+                    {{ hidden_field.errors }}
+                </div>
+            {% endif %}
+            {{ hidden_field }}
+        {% endfor %}
+        <table class="table table-borderless">
+            {% for field in form.visible_fields %}
+                <tr>
+                    <td
+                        {% if field.help_text %}
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="right"
+                            title="{{ field.help_text }}"
+                            class="help-cell"
+                        {% endif %}>
+                        {{ field.label_tag }}
+                    </td>
+                    <td> {{ field }}</td>
+                    {% if field.errors %}
+                        <td class="container-fluid alert alert-warning" role="alert">
+                            {% for error in field.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </table>
+
+        <div>
+            <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+            <button type="button" class="btn btn-outline-warning btn-sm" data-bs-dismiss="modal">Cancel</button>
+        </div>
+    </form>
+
+</div>

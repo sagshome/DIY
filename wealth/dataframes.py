@@ -9,7 +9,7 @@ import time
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from pandas import DataFrame, Timestamp
-from typing import Union, Dict
+from typing import Union, Dict, List
 
 from itertools import groupby
 
@@ -18,11 +18,13 @@ from django.contrib.auth.models import User
 
 from django.db.models import QuerySet, OuterRef, Subquery
 from django.db.models.functions import Trunc, TruncDay, TruncMonth
+from django.db.models import F, Window, Q, Max
+from django.db.models.functions import TruncMonth, RowNumber
 
 from base.models import Inflation
 from base.utils import df_start, to_utc_midnight
 from base.ioom_dates import IOOMDates, IOOM_RANGES
-from wealth.models import Account, CashFlow, Portfolio, Dividend, Funding, Investment, Position, Value
+from wealth.models import Account, CashFlow, Portfolio, Dividend, DividendAmount, Funding, Investment, Position, Value
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +59,7 @@ class WealthDF:
         self._account_lookup = dict(self._accounts.values_list('id', 'name'))
         self._portfolio_lookup = dict(Portfolio.objects.filter(id__in=self._accounts.values_list('portfolio_id', flat=True).distinct()).values_list('id', 'name'))
 
-        self._positions = Position.objects.filter(investment__in=self._investments, account__in=self._accounts, scope=scope)
+        self._positions = Position.objects.filter(investment__in=self._investments, account__in=self._accounts)
 
         if self._positions.count():
             self.start = self._positions.earliest('date').date
@@ -72,35 +74,130 @@ class WealthDF:
             self.dates = DataFrame()
             logger.warning('No position data exists for user:%s, scope:%s' % (self.user, self.scope))
 
+    @staticmethod
+    def coerce_positions_df(queryset: QuerySet, values: List) -> pd.DataFrame:
+        extend_values = values.append('month')
+        df = pd.DataFrame((
+            queryset
+                .annotate(month=TruncMonth("date"))
+                .annotate(
+                    row_number=Window(
+                        expression=RowNumber(),
+                        partition_by=[
+                            F("month"),
+                            F('account'),
+                            F('investment')
+                        ],
+                        order_by=F("date").desc(),
+                    )
+                )
+                .filter(row_number=1)
+                .order_by("date")
+            ).values(*values)
+        )
+        df["posDate"] = pd.to_datetime(df["date"])
+        df["Date"] = pd.to_datetime(df["month"])
+        return df
+
+    @staticmethod
+    def coerce_values_df(queryset: QuerySet, values: List) -> pd.DataFrame:
+        extend_values = values.append('month')
+        df = pd.DataFrame((
+            queryset
+                .annotate(month=TruncMonth("date"))
+                .annotate(
+                    row_number=Window(
+                        expression=RowNumber(),
+                        partition_by=[
+                            F("month"),
+                            F('investment')
+                        ],
+                        order_by=F("date").desc(),
+                    )
+                )
+                .filter(row_number=1)
+                .order_by("date")
+            ).values(*values)
+        )
+        df["posDate"] = pd.to_datetime(df["date"])
+        df["Date"] = pd.to_datetime(df["month"])
+        return df
+
+    @staticmethod
+    def coerce_values_df2(queryset: QuerySet, values: List) -> pd.DataFrame:
+        extend_values = values.append('month')
+        df = pd.DataFrame((
+            queryset
+                .annotate(month=TruncMonth("date"))
+                .values('investment', 'month')
+                .annotate(last_date=Max('date'))
+                .order_by('investment', 'month')
+            ).values(*values)
+        )
+        return df
+
     @property
     def df(self) -> DataFrame:
         if self.dates.empty:
             logger.warning('No position data exists for user:%s, scope:%s' % (self.user, self.scope))
             return DataFrame()
-
+        logger.debug("Get DF for user:%s scope:%s" % (self.user, self.scope))
         base_key = self.df_cache_key
 
-        if self.scope == 'day':
-            try:
-                return cache.get_or_set(
-                    f'{base_key}_day',
-                    lambda: self.build_dataframe(),
-                    timeout=CACHE_TTL,
-                )
-            except Exception as e:
-                logger.error('Failed - dataframe user:%s Error:%s' % (self.user, e))
+        try:
+            day_df = cache.get_or_set(
+                f"{base_key}_day",
+                lambda: self.build_dataframe(),
+                timeout=CACHE_TTL,
+            )
 
-        elif self.scope == 'month':
-            try:
-                return cache.get_or_set(
-                    f'{base_key}_month',
-                    lambda: self.build_dataframe(),
-                    timeout=CACHE_TTL,
-                )
-            except Exception as e:
-                logger.error('Failed - dataframe user:%s Error:%s' % (self.user, e))
+            month_df = cache.get_or_set(
+                f"{base_key}_month",
+                lambda: self.get_month_scoped_df(day_df),
+                timeout=CACHE_TTL,
+            )
+            month_df["Date"] = month_df["Date"].values.astype("datetime64[M]")  # Normalize date to the 1st
+            logger.debug("GOT DF for user:%s scope:%s" % (self.user, self.scope))
 
+            if self.scope == 'day':
+                return day_df
+            else:
+                return month_df
+
+        except Exception as e:
+            logger.error("Failed - dataframe user:%s Error:%s" % (self.user, e))
+
+
+         
         return DataFrame()
+
+    @staticmethod
+    def get_month_scoped_df(df: DataFrame) -> DataFrame:
+        '''
+        Given a dataframe based on days,  return a version which is formatted to be month
+        todo: maybe do a bit of checking ?
+        '''
+        return (
+            df.groupby(
+                ["AccountID", "Symbol", pd.Grouper(key="Date", freq="ME")]
+            )
+            .agg(
+            {
+                "Quantity": "last",
+                "Price": "last",
+                "Value": "last",
+                "DivAmount": "sum",
+                "InvValue": "last",
+                "DivTotal": "last",
+                "PortfolioID": "last",
+                "ValueEstimated": "last",  # Avoid false positive if any day in the month was a bank holiday
+                "QuantityEstimated": "last",  # Missing Data
+                "InvType": "last",
+                "EX_Div": "sum",
+            }
+        )
+        .reset_index()
+        )
 
     def build_dataframe(self) -> DataFrame:
         """
@@ -112,33 +209,34 @@ class WealthDF:
 
         start is used to build a dates_df dataframe from the very first possible date.
         """
-        logger.debug('Get/Set DF for user:%s scope:%s' % (self.user, self.scope))
+        logger.debug('Set DF for user:%s scope:%s' % (self.user, self.scope))
 
-        positions_df = self.build_positions_df_v2()
-        value_df = self.build_values_df()
+        df = self.build_positions_df_v3()
+        logger.debug('positions DF for user:%s scope:%s' % (self.user, self.scope))
 
-        result = positions_df.merge(value_df, on=['Date', 'Symbol'], how='left')
+        df = self.add_values_df_v3(df)
+        logger.debug('values DF for user:%s scope:%s' % (self.user, self.scope))
 
-        result['Value'] = result['Value'].astype('float64').fillna(1)  # Set the default value for everything that is not managed via 'Value' records
+        div_df = self.build_dividends_df_v2(df)
+        logger.debug('dividend DF for user:%s scope:%s' % (self.user, self.scope))
+
+        result = df.merge(div_df[['Date', 'AccountID', 'Symbol', 'DivAmount']], on=['Date', 'AccountID', 'Symbol'], how='left')
+
+        # Fix things up
         result['InvValue'] = result['Quantity'] * result['Value']
-        dividends = self.build_dividends_df(positions_df=positions_df)
-        if not dividends.empty:
-            result = result.merge(dividends, on=['Date', 'Symbol', 'AccountID'], how='left')
-            result[['DivAmount', 'DivValue']] = result[['DivAmount', 'DivValue']].fillna(0)
-            result['DivTotal'] = result['DivTotal'].ffill()
-        else:
-            result[['DivTotal', 'DivAmount', 'DivValue']] = 0
-        result[['Value', 'InvValue']] = result[['Value', 'InvValue']].fillna(0)
-        result.dropna(subset=["AccountID", "Symbol"], inplace=True)
-        result["Symbol"] = result["Symbol"].str.split("~").str[-1]  # Cleanup alias names
-        if 'Estimated' in result.columns:
-            result['Estimated'] = result['Estimated'].astype('boolean').fillna(True)
-        result = self.calc_inflation(result, column='Funding')
-        if 'Funding_infl' in result.columns:
-            result.rename(columns={"Funding_infl": "InflatedCost"}, inplace=True)
+        result['DivAmount'] = result['DivAmount'].fillna(0)
+
+        result.sort_values(["AccountID", "Symbol", "Date"], inplace=True)
+        result["DivTotal"] = result.groupby(["AccountID", "Symbol"])["DivAmount"].cumsum()
+        result.dropna(subset=["AccountID", "Symbol"], inplace=True)  # todo: is this even necessary
+
+        result["Symbol"] = result["Symbol"].str.split("~").str[-1]  # Cleanup alias names - this is SLOW
+        result.to_csv(f'debug_dump_{self.scope}_{self.user}.csv')  # todo: remove this
+        logger.debug("Done Set DF for user:%s scope:%s" % (self.user, self.scope))
         return result
 
-    def build_dividends_df(self, positions_df: DataFrame) -> pd.DataFrame:
+
+    def build_dividends_df_v2(self, positions_df: DataFrame) -> pd.DataFrame:
 
         """
         Build a dataframe based on Dividend data overlaid with TimeSeries data appropriate for the scope
@@ -148,165 +246,35 @@ class WealthDF:
         audit: is used when building a DataFrame for the population of CashFlow records (see DividendAmount)
         """
         start = positions_df['Date'].min()
-        day_scope = True if self.scope == 'day' else False
         columns = ['Datetime', 'Symbol', 'Dividend']
 
-        query = Dividend.objects.filter(investment__in=self._investments, day_scope=day_scope, date__gte=start)
-        div_df = pd.DataFrame(query.values('value', 'date', 'investment'))
+        div_df = pd.DataFrame(
+            DividendAmount.objects.filter(
+                cash_record__date__gte=start,
+                cash_record__account__user=self.user,
+            ).order_by('-cash_record__date', 'cash_record__account', 'dividend__investment__symbol').values(
+                "dividend__date",
+                "dividend__investment__symbol",
+                "cash_record__account",
+                "dividend__value",
+                "cash_record__date",
+                "altered",
+                "cash_record__value",
+                "cash_record__note",
+            )
+        )
+        
         if div_df.empty:
             return pd.DataFrame(columns=columns)
 
-        div_df['Date'] = pd.to_datetime(div_df['date'])
+        div_df.rename(columns={"cash_record__date": "Paid_Date", "dividend__date": "EX_Date", "dividend__value": "DivValue",
+                           "cash_record__note": "Note", 'cash_record__value': 'DivAmount', 'dividend__investment__symbol': 'Symbol',
+                               "cash_record__account": "AccountID"}, inplace=True)
+        div_df['Date'] = pd.to_datetime(div_df['Paid_Date'])
+        div_df["Date"] = div_df["Date"]+ pd.offsets.BDay(0)  # todo: Is this really necessary?
+        div_df['DivAmount'] = div_df['DivAmount'].astype('float64')
+        return div_df
 
-        div_df.rename(columns={"investment": "Symbol", 'value': 'DivValue'}, inplace=True)
-        div_df['DivValue'] = div_df['DivValue'].astype('float64')
-
-        df = positions_df[['Date', 'AccountID', 'Symbol', 'Quantity']]
-        df = df.merge(div_df, on=['Date', 'Symbol'], how='right')  # Clears out dates that don't apply since we are dealing with the largest possible set
-        df.dropna(subset=["AccountID"], inplace=True)  # Clear out values prior to the first good record - Testing,  50.1 MB drops to 967 KB
-
-        # This groupby is required in the VDY.TO example of two entries in the same month - Not needed with scoped Dividends
-        # df = df.groupby(['Date', 'AccountID', 'Symbol'], as_index=False).agg(DivValue=('DivValue', 'sum'), Quantity=('Quantity', 'mean'))
-
-        df['DivAmount'] = df['DivValue'] * df['Quantity']  # Calculate the payout
-
-        df = df.sort_values(["AccountID", "Symbol", "Date"])
-        df["DivTotal"] = df.groupby(["AccountID", "Symbol"])["DivAmount"].cumsum()
-
-        df.drop(columns=['Quantity', 'date'], inplace=True)  # It will be re-added with the merge
-
-        # Fix up the holes
-        df[['DivValue', 'DivAmount']] = df[['DivValue', 'DivAmount']].fillna(0)
-        df['DivTotal'] = df['DivTotal'].fillna(0)
-        return df
-
-    def build_positions_df(self) -> DataFrame:
-        """
-        Build a dataframe based on Position data overlaid with TimeSeries data appropriate for the scope and subclass
-        force_start will cause the dataframe to span to the first Position date (based on account and investment parameters)
-        requires
-        """
-        df_columns = ['Date', 'AccountID', 'PortfolioID', 'Symbol', 'Quantity', 'Price']
-        # todo: I can not just use the default day calendar becuase postions are older.  This fullgird is very expensive,  Maybe I could
-        # look into sorting by symbol and taking the last value if it less then day start ???
-        dates = IOOMDates(start=self.start, force=True, build=True)
-        dates = dates.days_df if self.scope == 'day' else dates.months_df
-        if dates.empty:
-            logger.warning('No position data exists for user:%s, scope:%s' % (self.user, self.scope))
-            return DataFrame(columns=df_columns)
-
-        query_columns = ['date', 'account_id', 'account__portfolio', 'investment__symbol', 'investment__inv_type', 'quantity', 'price']
-
-        queryset = self._positions.values(*query_columns).order_by('account_id', 'investment__symbol', 'date')
-        df = DataFrame(queryset)
-        df['Date'] = pd.to_datetime(df['date'])
-
-        df.rename(columns={"account_id": "AccountID", "account__portfolio": "PortfolioID", "investment__symbol": "Symbol",
-                           "investment__inv_type": "InvType", "quantity": "Quantity", "price": "Price"}, inplace=True)
-        # from chatgpt
-        full_grid = pd.MultiIndex.from_product([dates['Date'], df['AccountID'].unique(), df['Symbol'].unique()], names=['Date', 'AccountID', 'Symbol'])
-
-        merged = (df.set_index(['Date', 'AccountID', 'Symbol']).reindex(full_grid).reset_index())
-        merged.sort_values(['AccountID', 'Symbol', 'Date'], inplace=True)
-        merged = merged.astype({"Quantity": "float64", "Price": "float64"})
-        merged['InvType'] = merged.groupby(['AccountID', 'Symbol'])['InvType'].ffill()
-        merged['PortfolioID'] = merged.groupby(['AccountID'])['PortfolioID'].ffill()
-        merged.dropna(subset=["InvType"], inplace=True)  # Clear out values prior to the first good record - Testing,  50.1 MB drops to 967 KB
-        merged.loc[merged['InvType'] != 'Trading', 'Price'] = 1.0
-
-        merged['i_q'] = merged['Quantity'].interpolate(method='linear')  # used to fill the quantity gaps in Cash and Value Accounts
-        merged.loc[(merged['InvType'] == 'Cash') | (merged['InvType'] == 'Value'), 'Quantity'] = merged.loc[merged['InvType'] != 'Trading', 'i_q']
-        merged[['Quantity', 'Price']] = merged[['Quantity', 'Price']].ffill().fillna(0)
-        merged['PortfolioID'] = pd.to_numeric(merged['PortfolioID'], errors='coerce').fillna(0)
-        merged = merged.drop(columns=['i_q', 'date'])
-
-        return self.dates.merge(merged, on='Date', how='left')  # Strip out anything we don't need
-
-    def build_positions_df_v2(self) -> DataFrame:
-        """
-        V2,  not currently used.   Avoid the HUGE dataframe for scope = day.   100 Invesments * 250 days * 20 years
-        Trying to extract all and join via FFILL maybe instead I could pull the earlier and collect the last value per investment to the first row
-
-        Build a dataframe based on Position data overlaid with TimeSeries data appropriate for the scope and subclass
-        force_start will cause the dataframe to span to the first Position date (based on account and investment parameters)
-        requires
-        """
-        df_columns = ['Date', 'AccountID', 'PortfolioID', 'Symbol', 'Quantity', 'Price']
-        # todo: I can not just use the default day calendar becuase postions are older.  This fullgird is very expensive,  Maybe I could
-        # look into sorting by symbol and taking the last value if it less then day start ???
-        if self.dates.empty:
-            logger.warning('No position data exists for user:%s, scope:%s' % (self.user, self.scope))
-            return DataFrame(columns=df_columns)
-
-        query_columns = ['date', 'account_id', 'account__portfolio', 'investment__symbol', 'investment__inv_type', 'quantity', 'price']
-
-        if self.scope == 'month':
-            df = DataFrame(self._positions.values(*query_columns).order_by('account_id', 'investment__symbol', 'date'))
-        else:
-            delimiter = IOOMDates().day_start
-            latest = self._positions.filter(
-                date__lte=delimiter,
-                investment=OuterRef('investment'),
-                account_id=OuterRef('account_id'),  # ← critical
-            ).order_by('-date')
-
-            part1 = DataFrame(self._positions.filter(quantity__gt=0, id__in=Subquery(latest.values('id')[:1])).values(*query_columns))
-            part1['date'] = delimiter
-            part2 = DataFrame(self._positions.filter(date__gt=delimiter).values(*query_columns))
-            df = pd.concat([part1, part2])
-
-        df['Date'] = pd.to_datetime(df['date'])
-        df.rename(columns={"account_id": "AccountID", "account__portfolio": "PortfolioID", "investment__symbol": "Symbol",
-                           "investment__inv_type": "InvType", "quantity": "Quantity", "price": "Price"}, inplace=True)
-
-        # from chatgpt
-        full_grid = pd.MultiIndex.from_product([self.dates['Date'], df['AccountID'].unique(), df['Symbol'].unique()], names=['Date', 'AccountID', 'Symbol'])
-        merged = (df.set_index(['Date', 'AccountID', 'Symbol']).reindex(full_grid).reset_index())
-        if self.scope == 'day':  # Add in the positions prior to the day lower limit
-            merged = pd.concat([merged, df.loc[df['Date'] < merged['Date'].min()]])
-        merged.sort_values(['AccountID', 'Symbol', 'Date'], inplace=True)
-
-        merged['InvType'] = merged.groupby(['AccountID', 'Symbol'])['InvType'].ffill()
-        merged['PortfolioID'] = merged.groupby(['AccountID'])['PortfolioID'].ffill()
-        merged.dropna(subset=["InvType"], inplace=True)  # Clear out values prior to the first good record - Testing,  50.1 MB drops to 967 KB
-
-        merged.loc[merged['InvType'] != 'Trading', 'Price'] = 1.0
-
-        merged = merged.astype({"Quantity": "float64", "Price": "float64"})
-
-        # Step 1,   Trading accounts with a price of 1 use Quantity for the value,  so don't Forward Fill them.
-        mask = ((merged['InvType'] == 'Trading') & (merged['Price'] != 1))
-        merged.loc[mask, 'Quantity'] = (
-            merged.loc[mask, 'Quantity']
-            .ffill()
-        )
-        # Prices is not the value,  it is the price we paid,  so like quantity forward fill
-        merged.loc[mask, 'Price'] = (
-            merged.loc[mask, 'Price']
-            .ffill()
-        )
-
-        # Funding should also be Forward Filled
-        mask = merged['InvType'] == 'Funding'
-        merged.loc[mask, 'Quantity'] = (
-            merged.loc[mask, 'Quantity']
-            .ffill()
-        )
-
-        # Remove the 0 values to prevent interpolate from moving quantities down to 0 - previous trading fills mean they are excluded already
-        mask = merged['Quantity'] != 0
-        merged.loc[mask, 'Quantity'] = (
-            merged.loc[mask]
-            .groupby(['AccountID', 'Symbol'])['Quantity']
-            .transform(lambda x: x.interpolate(method='linear'))
-        )
-
-        # What ever is left can be forward filled,  or set to 0
-        merged[['Quantity', 'Price']] = merged[['Quantity', 'Price']].ffill().fillna(0)
-        merged['PortfolioID'] = pd.to_numeric(merged['PortfolioID'], errors='coerce').fillna(0)  # Set to 0, accounts outside of portfolios can be filtered
-        merged = merged.drop(columns=['date'])  # No longer required
-
-        return self.dates.merge(merged, on='Date', how='left')  # Strip out anything we don't need
 
     def build_positions_df_v3(self) -> DataFrame:
         """
@@ -317,51 +285,45 @@ class WealthDF:
         force_start will cause the dataframe to span to the first Position date (based on account and investment parameters)
         requires
         """
+        db_columns = ['date', 'account_id', 'account__portfolio', 'investment_id', 'investment__inv_type', 'quantity', 'price']
         df_columns = ['Date', 'AccountID', 'PortfolioID', 'Symbol', 'Quantity', 'Price']
-        # todo: I can not just use the default day calendar becuase postions are older.  This fullgird is very expensive,  Maybe I could
-        # look into sorting by symbol and taking the last value if it less then day start ???
-        self.dates = self.dates = IOOMDates(start=self.start, force=True).days_df
-        self.scope = 'day'
-        self._positions = Position.objects.filter(investment__in=self._investments, inv_type='trading', account__in=self._accounts, scope=self.scope)
-        if self.dates.empty:
-            logger.warning('No position data exists for user:%s, scope:%s' % (self.user, self.scope))
+
+        df = DataFrame.from_records(list(self._positions.values(*db_columns)))
+        if df.empty:
+            logger.warning('No position data exists for user:%s' % (self.user))
             return DataFrame(columns=df_columns)
 
-        query_columns = ['date', 'account_id', 'account__portfolio', 'investment__symbol', 'investment__inv_type', 'quantity', 'price']
+        master = IOOMDates(force=True, start=df['date'].min()).days_df
 
-        '''if self.scope == 'month':
-            df = DataFrame(self._positions.values(*query_columns).order_by('account_id', 'investment__symbol', 'date'))
-        else:
-            delimiter = IOOMDates().day_start
-            latest = self._positions.filter(
-                date__lte=delimiter,
-                investment=OuterRef('investment'),
-                account_id=OuterRef('account_id'),  # ← critical
-            ).order_by('-date')
-
-            part1 = DataFrame(self._positions.filter(quantity__gt=0, id__in=Subquery(latest.values('id')[:1])).values(*query_columns))
-            part1['date'] = delimiter
-            part2 = DataFrame(self._positions.filter(date__gt=delimiter).values(*query_columns))
-            df = pd.concat([part1, part2])'''
-
-        df = DataFrame(self._positions.values(*query_columns).order_by("account_id", "investment__symbol", "date"))
-        df['Date'] = pd.to_datetime(df['date'])
-        df.rename(columns={"account_id": "AccountID", "account__portfolio": "PortfolioID", "investment__symbol": "Symbol",
+        df.rename(columns={"account_id": "AccountID", "account__portfolio": "PortfolioID", "investment_id": "Symbol",
                            "investment__inv_type": "InvType", "quantity": "Quantity", "price": "Price"}, inplace=True)
+        df["Date"] = pd.to_datetime(df["date"])
 
-        # from chatgpt  15M rows - 2.8 seconds using day scope and epoch
-        full_grid = pd.MultiIndex.from_product([self.dates['Date'], df['AccountID'].unique(), df['Symbol'].unique()], names=['Date', 'AccountID', 'Symbol'])
-        merged = (df.set_index(['Date', 'AccountID', 'Symbol']).reindex(full_grid).reset_index())
-        if self.scope == 'day':  # Add in the positions prior to the day lower limit
-            merged = pd.concat([merged, df.loc[df['Date'] < merged['Date'].min()]])
+        # from chatgpt
+        results = []
+        today = pd.Timestamp.today().normalize()
+        for (inv, acct), group in df.groupby(["Symbol", "AccountID"]):
+            start = group["Date"].min()
+            end = group["Date"].max()
+            end = end if group.loc[group['Date'] == end]['Quantity'].iloc[0] == 0 else today
+            dates = master[(master["Date"] >= start) & (master["Date"] <= end)].copy()
+
+            dates["Symbol"] = inv
+            dates["AccountID"] = acct
+
+            result = dates.merge(
+                group, on=["Symbol", "AccountID", "Date"], how="left"
+            )
+
+            results.append(result)
+
+        merged = pd.concat(results, ignore_index=True)
         merged.sort_values(['AccountID', 'Symbol', 'Date'], inplace=True)
 
         merged['InvType'] = merged.groupby(['AccountID', 'Symbol'])['InvType'].ffill()
         merged['PortfolioID'] = merged.groupby(['AccountID'])['PortfolioID'].ffill()
-        merged.dropna(subset=["InvType"], inplace=True)  # Clear out values prior to the first good record - Testing,  50.1 MB drops to 967 KB
-
+        # merged.dropna(subset=["InvType"], inplace=True)  # Not requred with incremental approach,  50.1 MB drops to 967 KB
         merged.loc[merged['InvType'] != 'Trading', 'Price'] = 1.0
-
         merged = merged.astype({"Quantity": "float64", "Price": "float64"})
 
         # Step 1,   Trading accounts with a price of 1 use Quantity for the value,  so don't Forward Fill them.
@@ -385,6 +347,8 @@ class WealthDF:
 
         # Remove the 0 values to prevent interpolate from moving quantities down to 0 - previous trading fills mean they are excluded already
         mask = merged['Quantity'] != 0
+        merged['QuantityEstimated'] = False
+        merged.loc[merged['Quantity'].isna() == True, 'QuantityEstimated'] = True
         merged.loc[mask, 'Quantity'] = (
             merged.loc[mask]
             .groupby(['AccountID', 'Symbol'])['Quantity']
@@ -395,10 +359,10 @@ class WealthDF:
         merged[['Quantity', 'Price']] = merged[['Quantity', 'Price']].ffill().fillna(0)
         merged['PortfolioID'] = pd.to_numeric(merged['PortfolioID'], errors='coerce').fillna(0)  # Set to 0, accounts outside of portfolios can be filtered
         merged = merged.drop(columns=['date'])  # No longer required
+        return merged
 
-        return self.dates.merge(merged, on='Date', how='left')  # Strip out anything we don't need
 
-    def build_values_df(self) -> DataFrame:
+    def add_values_df_v3(self, df) -> DataFrame:
         """
         Build a dataframe based on Value data overlaid with TimeSeries data appropriate for the scope
         Columns for the dataframe are:
@@ -406,43 +370,41 @@ class WealthDF:
         Any DateTime without a Value will be set to 0
 
         """
-        day_scope = self.scope == 'day'
-        columns = ['Date', 'Symbol', 'Value', 'Estimated']
-        query = Value.objects.filter(investment__in=self._investments, day_scope=day_scope)
-
-        if not query.count():
-            return DataFrame(columns=columns)
-
-        queryset = query.values('date', 'investment__symbol', 'investment__inv_type', 'close_value', 'day_scope').order_by('investment__symbol', 'date')
-
-        df = DataFrame(queryset)
-        df['Date'] = pd.to_datetime(df['date'])
-        df.rename(columns={"investment__symbol": "Symbol", "investment__inv_type": "type", "close_value": "Value"}, inplace=True)
+        df_columns = ['Date', 'Symbol', 'Value', 'ValueEstimated', 'ExDividend']
+        db_columns = ['date', 'investment', 'value', 'ex_dividend']
 
 
-        full_grid = pd.MultiIndex.from_product([self.dates['Date'], df['Symbol'].unique()], names=['Date', 'Symbol'])
-        #full_grid = pd.MultiIndex.from_product([dates['Date'], self.investments.values_list('symbol', flat=True)], names=['Date', 'Symbol'])
+        results = []
+        # today = pd.Timestamp.today().normalize()
+        for inv, group in df.loc[df['InvType'] == 'Trading'].groupby("Symbol"):
+            start = group["Date"].min()
+            # todo: Why did I take out end ?  Because I would merge in symbol multiple times
+            # end = group["Date"].max()
+            # end = end if group.loc[group['Date'] == end]['Quantity'].iloc[0] == 0 else today
+            results.append(DataFrame.from_records(
+                    list(
+                        Value.objects.filter(investment__symbol=inv, date__gte=start).
+                        values(*db_columns))))
+        if not results:
+            return DataFrame(columns=df_columns)
 
-        merged = (df.set_index(['Date', 'Symbol']).reindex(full_grid).reset_index())
-        merged.sort_values(['Symbol', 'Date'], inplace=True)
-        merged = merged.astype({"Value": "float64"})
-        merged['Estimated'] = False
-        merged.loc[merged['Value'].isna(), 'Estimated'] = True
+        values_df = pd.concat(results)
+        values_df['Date'] = pd.to_datetime(values_df['date'])
+        values_df.rename(columns={"investment": "Symbol", "value": "Value", 'ex_dividend': 'EX_Div'}, inplace=True)
+        values_df['Value'] = values_df['Value'].astype("float64")
+        values_df.drop(columns=['date'], inplace=True)
 
-        merged['Value'] = merged.groupby('Symbol')['Value'].transform(
-            lambda s: s.interpolate()
+        df = df.merge(values_df, on=['Date', 'Symbol'], how='left')  # todo: what about inner ?
+        df.loc[~df['InvType'].eq('Trading'), 'Value'] = 1  # Set fake investment values
+
+        df['ValueEstimated'] = False
+        df.loc[df['Value'].isna() == True, 'ValueEstimated'] = True
+        df['Value'] = df.groupby(['AccountID', 'Symbol'])['Value'].transform(
+            lambda s: s.interpolate().ffill()
         )
-        merged.groupby('Symbol').ffill()
-        merged.dropna(subset=["Value"], inplace=True)
-        merged.drop(columns=['date', 'type', 'day_scope'], inplace=True)
+        df["EX_Div"] = df["EX_Div"].astype("float64").fillna(0)
+        return df
 
-        non_value = self._investments.exclude(inv_type='Trading').values_list('symbol', flat=True)
-        full_grid = pd.MultiIndex.from_product([self.dates['Date'], non_value], names=['Date', 'Symbol'])
-        full_grid = full_grid.to_frame(index=False)
-        full_grid['Value'] = 1
-        full_grid['Estimated'] = False
-
-        return pd.concat([merged, full_grid])
 
     @property
     def df_cache_key(self):
@@ -567,24 +529,31 @@ class WealthDF:
 
         return equity_data
 
-    def container_values_by_date_df(self, ldf):
+    @classmethod
+    def container_values_by_date_df(cls, idf):
         """
-        Return a dataframe, that has the ordered list of summary values (Cash, Funding, Trading, Value) ordered by Date (newest to oldest)
+        Return a dataframe, that has the ordered list of summary values (Cash, Funding, Trading, Value) ordered by
+        Date (newest to oldest), with ESTimated values
         """
-        if not ldf.empty:
-            saveit = ldf
-            ldf = ldf.groupby(['Date', 'InvType']).agg({'InvValue': 'sum', 'Estimated': 'any'}).reset_index()
+        data_columns = set(['Funding', 'Value', 'Cash', 'Trading'])
+        if not idf.empty:
+            ldf = idf.groupby(['Date', 'InvType']).agg({'InvValue': 'sum', 'ValueEstimated': 'last', 'QuantityEstimated': 'any'}).reset_index()
             g1 = ldf.pivot(index='Date', columns='InvType', values='InvValue').reset_index()
-            g1 = g1.fillna(0)
-            g2 = ldf.pivot(index='Date', columns='InvType', values='Estimated').reset_index()
-            g2 = g2.fillna(False)
-            ldf = g1.join(g2, rsuffix='_est')
-            ldf = self.force_columns(ldf)
+            for missing in data_columns - set(g1.columns):
+                g1[missing] = 0
+            g1 = g1.fillna(0)  # todo:  How can we have NA values?
+            g2 = ldf.groupby('Date').agg({'ValueEstimated': 'last', 'QuantityEstimated': 'last'})
+
+            df = g1.merge(g2, on='Date', how='left')
+
             # Create the Totals
-            ldf['Total'] = ldf['Trading'] + ldf['Value']
-            ldf['Total_est'] = ldf['Value_est'] | ldf['Trading_est']
-            ldf.sort_values('Date', ascending=False, inplace=True)
-        return ldf
+            # todo:  When calculating QuantityEstimated - be smarter - Funding is never estimated,  Value account'd
+            # don't have cash so   ValueEstimated should be used unless it is cash where is CashEstimated
+            df['Total'] = df['Trading'] + df['Value']
+            df['TotalEstimated'] = df['ValueEstimated'] | df['QuantityEstimated']
+            df.sort_values('Date', ascending=False, inplace=True)
+
+        return df
 
     @staticmethod
     def _container_change(cdf: DataFrame) -> Dict:
@@ -594,6 +563,7 @@ class WealthDF:
             run_date = Timestamp('today').date()
         else:
             cdf = cdf.groupby(['Date', 'InvType']).agg({'InvValue': 'sum'}).reset_index()
+
             cdf = cdf.pivot(index='Date', columns='InvType', values='InvValue').reset_index()
             cdf.sort_values('Date', inplace=True)
             prev_index = -2 if len(cdf) > 1 else 0  # Just in case we are provided a DF of len 1
@@ -704,19 +674,19 @@ class WealthDF:
 
         balance_df = self.df.loc[(self.df['AccountID'] == account_id) & (self.df['InvType'] == 'Cash')]
 
-    def container_summary_values(self, ldf: DataFrame, run_date: Timestamp, is_portfolio=False) -> dict:
+    def container_summary_values(self, idf: DataFrame, run_date: Timestamp, is_portfolio=False) -> dict:
         """
         Return the summary dictionary based on the run_date with a value for:
         Value, Cash, EffectiveCost, TotalDividends, ID, Type, Name
         """
-        if 'AccountName' not in ldf.columns:
-            ldf = self.set_names(ldf)
-        ldf = ldf.loc[ldf['Date'] == run_date]
+        if 'AccountName' not in idf.columns:
+            idf = self.set_names(idf)  # Set AccountName and PortfolioName columns
+        ldf = idf.loc[idf['Date'] == run_date]
 
         results = {'Value': ldf.loc[(ldf['InvType'] == 'Trading') | (ldf['InvType'] == 'Value')].agg({'InvValue': 'sum'}).item(),
                    'Cash': ldf.loc[ldf['InvType'] == 'Cash'].agg({'InvValue': 'sum'}).item(),
                    'EffectiveCost': ldf.loc[ldf['InvType'] == 'Funding'].agg({'InvValue': 'sum'}).item(),
-                   'TotalDividends': ldf.loc[ldf['InvType'] == 'Trading'].agg({'DivAmount': 'sum'}).item(),
+                   'TotalDividends': ldf.loc[ldf['InvType'] == 'Trading'].agg({'DivTotal': 'sum'}).item(),
                    }
         if is_portfolio:
             results['Id'] = int(ldf['PortfolioID'].max())
@@ -740,7 +710,7 @@ class WealthDF:
             this_date = this_date.replace(day=1)
         this_date = Timestamp(this_date)
 
-        df = self.set_names(df)
+        df = self.set_names(df)  # Add column Account
 
         results = []
         if len(df['PortfolioID'].unique()) > 1:
@@ -794,3 +764,25 @@ class WealthDF:
         key = self.df_cache_key
         cache.delete(key)
         cache.set(key, new_df, timeout=CACHE_TTL)
+
+    @staticmethod
+    def dated_summary_df(df: DataFrame) -> DataFrame:
+        """
+        Prepare a DataFrame what will have the following Columns:
+            Date Cash Funding Trading Value TotalValue
+        Input DataFrame must have
+            Date InvValue InvType
+        """
+        output_columns = ['Date', 'Cash', 'Funding', 'Trading', 'Value', 'TotalValue']
+        input_columns = ['Date', 'InvType', 'InvValue']
+        if df.empty or not set(input_columns) & set(df.columns) == set(input_columns):
+            logger.error('Invalid dataframe supplied - %s' % df.columns)
+            return DataFrame(columns=output_columns)
+
+        ldf = df.groupby(["Date", "InvType"]).agg({"InvValue": "sum"}).reset_index()
+        ldf = ldf.pivot(index='Date', columns='InvType', values='InvValue').reset_index()
+        ldf['Trading'] = ldf['Trading'].fillna(0)
+        ldf['Value'] = ldf['Value'].fillna(0)
+        ldf['TotalValue'] = ldf['Value'] + ldf['Trading']
+
+        return ldf

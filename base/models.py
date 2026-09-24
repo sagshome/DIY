@@ -1,4 +1,5 @@
 import logging
+import pandas as pd
 import requests
 
 from datetime import datetime, timedelta, UTC, date
@@ -8,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from phonenumber_field.modelfields import PhoneNumberField
 from requests.exceptions import ConnectTimeout, ConnectionError
 from requests.models import Response
-from typing import Dict
+from typing import Dict, Union
 from tzlocal import get_localzone
 
 from django.db import models
@@ -18,6 +19,7 @@ from django.core.exceptions import ValidationError
 
 
 from .utils import BoolReason
+from .ioom_dates import IOOMDates
 
 # We can not import CURRENCIES since it will be an import loop - from stocks.models import CURRENCIES
 CURRENCIES = (
@@ -142,6 +144,19 @@ class NormalizedDataModel(models.Model):
     def source_str(self):
         return DataSource(self.source).name.capitalize()
 
+    def save(self, *args, **kwargs):
+        preserve = kwargs.pop('preserve') if 'preserve' in kwargs else 'keep'
+
+        if not preserve == 'off':
+            normalized = IOOMDates.align_day(self.date, keep_month=(preserve == 'keep'))
+            if normalized != self.date:
+                try:
+                    if normalized != self.date.date():
+                        logger.info('Date %s has been realigned to %s' % (self.date, normalized))
+                except:
+                    pass
+                self.date = normalized
+        super().save(*args, **kwargs)
 
 class ExchangeRate(NormalizedDataModel):
     """
@@ -191,7 +206,7 @@ class ExchangeRate(NormalizedDataModel):
         Update Exchange Rates,   since this is daily,  I will take the last rate of the month as the normalized
         value for the month
         """
-        first_str = settings.EPOCH.strftime('%Y-%m-%d')
+        first_str = DIY_EPOCH.strftime('%Y-%m-%d')
         result = API.get('BOC', f'FXUSDCAD,FXCADUSD/json?start_date={first_str}&order_dir=desc')
 
         if not result.status_code == 200:  # pragma: no cover
@@ -235,7 +250,7 @@ class Inflation(NormalizedDataModel):
         Update Inflation values
         Since the current month(s) is not in the value we need to add it at the end
         """
-        first: date = settings.EPOCH
+        first: date = DIY_EPOCH
         first_str: str = first.strftime('%Y-%m-%d')
 
         result = API.get('BOC', f'STATIC_INFLATIONCALC/json?start_date={first_str}')
@@ -294,6 +309,37 @@ class Inflation(NormalizedDataModel):
             return value
 
         return value + value * (to_value - from_value) / from_value
+
+    @classmethod
+    def as_dataframe(cls, df: pd.DataFrame = pd.DataFrame(), scope: str = 'month') -> pd.DataFrame:
+
+        #1 Get the raw data
+        query = cls.objects.all()
+        if not df.empty:
+            query = query.filter(date__gte=df['Date'].min(), date__lte=df['Date'].max())
+
+        idf = pd.DataFrame(list(query.values('date', 'cost')))
+        idf['Date'] = pd.to_datetime(idf['date'])
+        idf['CPICost'] = idf["cost"].astype("float64")
+        idf = idf.drop(columns=['date', 'cost'])
+
+        if scope == 'month':
+            idf = idf.groupby(pd.Grouper(key="Date", freq="ME")).agg({'CPICost': 'last'}).reset_index()
+            idf["Date"] = idf["Date"].values.astype("datetime64[M]")  # Normalize date to the 1st
+
+        if df.empty:
+            if scope == 'month':
+                df = IOOMDates(build=True, start=idf['Date'].min()).months_df
+            else:
+                df = IOOMDates(force=True, build=True, start=idf['Date'].min()).days_df
+
+        df = df[['Date']].merge(idf, on='Date', how='left')
+
+        df['CPICost'] = df['CPICost'].transform(
+            lambda s: s.interpolate()
+        )
+        df['CPICost'] = df['CPICost'].bfill()  # Required since CPI data is monthly and we may not have a day before
+        return df
 
 class Profile(models.Model):
     user: User = models.OneToOneField(User, on_delete=models.CASCADE)

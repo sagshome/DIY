@@ -166,6 +166,21 @@ thead {
     z-index: 1; /* Ensure the header stays above the body content */
 }
 
+
+.left-scroll {
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.right-panel {
+    position: sticky;
+    top: 0;
+}
+
+.table-striped > tbody > tr.altered-row > * {
+    background-color: #cff4fc !important;
+}
+
 /*
 th, td {
     padding: 10px; /* Add padding for better readability

@@ -13,7 +13,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from base.models import API, DataSource
-from .models import Account, Portfolio, CashFlow, Funding, Investment, Transaction, Value, ValueBalance, Dividend, clear_caches
+from .models import Account, AccountInvestment, Portfolio, CashFlow, Funding, Investment, Transaction, Value, ValueBalance, Dividend, clear_caches
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,9 @@ JUNK = 99
 users = {user.username: user for user in User.objects.all()}
 accounts = {account.id: account for account in Account.objects.all()}
 portfolios = {portfolio.id: portfolio for portfolio in Portfolio.objects.all()}
-investments = {investment.symbol: investment for investment in Investment.objects.all()}
+investments = {} #{investment.symbol: investment for investment in Investment.objects.all()}
 
+account_link_transl = {}
 account_transl = {}
 portfolio_transl = {}
 
@@ -47,6 +48,18 @@ def get_or_add_user(username: str) -> User:
 
     return users[username]
 
+def update_AccountInvestment(investment, account_id, xa_date):
+    if investment.symbol not in account_link_transl:
+        account_link_transl[investment] = {}
+    if account_id not in account_link_transl[investment]:
+        AccountInvestment(account=account_transl[account_id], investment=investments[investment], open_date=xa_date).save()
+        account_link_transl[investment][account_id] = AccountInvestment.objects.get(account=accounts[account_transl[account_id]], investment=investments[investment])
+    else:
+        if xa_date < account_link_transl[investment][account_id].open_date:
+            account_link_transl[investment][account_id].open_date = xa_date
+            account_link_transl[investment][account_id].save()
+    
+            
 
 def get_or_add_account(pk: int, account: str, account_name: str, account_type: str, currency: str, managed: str, username: str, closed, portfolio) -> Account:
     if pk not in account_transl:
@@ -57,6 +70,7 @@ def get_or_add_account(pk: int, account: str, account_name: str, account_type: s
             print(f'    {datetime.now()} - Creating Account:{account_name}')
             acc_type = 'Trading' if account_type == 'Investment' else 'Value' if account_type == 'Value' else 'Cash'
             managed = True if acc_type in ['Value', 'Cash'] else managed
+            closed = None if pd.isna(closed) else closed
             account = Account.objects.create(name=account, account_name=account_name, acct_type=acc_type, managed=managed, currency=currency, closed=closed, portfolio=portfolio, user=user)
         account_transl[pk] = account.id
         accounts[account.id] = account
@@ -95,9 +109,8 @@ def get_or_add_investment(symbol: str, name: str=None, region: str=None) -> Inve
 
     symbol = get_investment(symbol, region, set_default=True)
     if symbol not in investments:
-
         print(f'    {datetime.now()} - Creating Investment:{symbol}')
-        investment = Investment(symbol=symbol, name=name)
+        investment = Investment(symbol=symbol, description=name)
         investment.validate()
         investment.save(update=True)
         investments[symbol] = investment
@@ -152,6 +165,9 @@ def import_apis():
 def import_accounts():
     input_file = Path.home().joinpath('Accounts.csv')
     df = pd.read_csv(input_file)
+    df['closed'] = pd.to_datetime(df['_end'])
+    df["closed"] = coerce_business_day_preserve_month(df["closed"])
+
     df['portfolio__id'] = df['portfolio__id'].fillna(0)
     for row in df.itertuples(index=False):
         user = get_or_add_user(row.user__username)
@@ -159,7 +175,7 @@ def import_accounts():
             portfolio = get_or_add_portfolio(row.portfolio__id, row.portfolio__name, row.portfolio__currency, user)
         else:
             portfolio = None
-        get_or_add_account(row.id, row.name, row.account_name, row.account_type, row.currency, row.managed, user.username, closed=row._end, portfolio=portfolio)
+        get_or_add_account(row.id, row.name, row.account_name, row.account_type, row.currency, row.managed, user.username, closed=row.closed, portfolio=portfolio)
 
 
 def import_funding(df):
@@ -185,6 +201,8 @@ def import_xas(df):
     for row in xas.itertuples(index=False):
         if row.account__id in account_transl:
             investment = get_or_add_investment(row.equity__symbol, row.equity__name)
+            accounts[account_transl[row.account__id]].add_investment(investment, row.date)
+
             process_date = row.date
             note = None
             if row.price == 0:
@@ -207,6 +225,7 @@ def import_reinvested(df):
     for row in reinvested.itertuples(index=False):
         if row.account__id in account_transl:
             investment = get_or_add_investment(row.equity__symbol, row.equity__name)
+            accounts[account_transl[row.account__id]].add_investment(investment, row.date)
             process_date = row.date
             if row.quantity > 0:
                 Transaction.buy(account=accounts[account_transl[row.account__id]], price=0, quantity=row.quantity, this_date=process_date, investment=investment, note='Reinvested', source=DataSource.IMPORT.value)
@@ -258,8 +277,8 @@ def import_from_diy():
     df, reinvested = prune_imported(df, ['Reinvested Dividend',])
     df, cash = prune_imported(df, ['Dividends/Interest', 'Fees Paid'])
 
-    import_funding(funds)
-    import_xas(xas)
+    #import_funding(funds)
+    #import_xas(xas)
 
     import_reinvested(reinvested)
     import_cash(cash)
@@ -282,7 +301,16 @@ def import_from_diy():
         for row in idf.itertuples(index=False):
             if row.equity__symbol in investments:
                 investment = investments[row.equity__symbol]
-                Value.create_values(investment, row.date, row.price, row.source)
+                Value.objects.update_or_create(
+                    date=row.date,
+                    investment=investment,
+                    defaults={
+                        "source": row.source,
+                        "value": row.price,
+                        'ex_dividend': 0,
+                    },
+                )
+
     print(f'{datetime.now()} - Ending EquityValues Import')
 
     print(f'{datetime.now()} - Starting FundValues Import')
@@ -302,10 +330,10 @@ def import_from_diy():
                     continue
                 previous = row.value
                 if account.acct_type == 'Value':
-                    ValueBalance.objects.update_or_create(account=account, value=row.value, date=row.date, balance=True)
+                    ValueBalance.objects.update_or_create(account=account, value=row.value, date=row.date, balance=True, source=DataSource.IMPORT.value)
                 elif account.acct_type == 'Cash':
                     CashFlow.objects.update_or_create(account=account, investment=account.cash_investment, date=row.date, value=row.value, balance=True,
-                                                      note='Imported Balance')
+                                                      source=DataSource.SYSTEM.value, note='Imported Balance')
             else:
                 print(f'Value, skipping no account information for {row.account__id}')
     print(f'{datetime.now()} - Ending FundValues Import')
@@ -341,7 +369,6 @@ class BaseImporter:
         Do a lookup and cache the value
         """
         return get_or_add_investment(symbol, region=region).symbol
-
 
     def process_group(self, group):
         pass
@@ -403,6 +430,8 @@ class BaseImporter:
 
         for _, row in merged.loc[merged['_merge'] == 'left_only'].iterrows():
             investment = get_or_add_investment(row['Symbol'], row['Symbol'])
+            self.account_cache[row['AccountKey']].add_investment(investment, row['Date'])
+            account = get_or_add_account(row['AccountID'])
             quantity = row['Quantity'] / 100
             logger.debug('Transaction:%s:%s %s: %s@%s Note:%s' % (row['Date'], row['AccountKey'], row['Symbol'], quantity, row['Price'], row['Description']))
             if quantity > 0:
@@ -487,7 +516,6 @@ class BaseImporter:
             return
 
         self.create_accounts(list(idf['AccountKey'].unique()))
-
         self.process_funding(idf)
         self.process_transactions_df(idf)
         self.process_cash_df(idf)
@@ -587,8 +615,6 @@ class NewQuestrade(BaseImporter):
         df = self._validate_dividends(df)  # Requires _validate_symbols(df)
         df = self._extract_fees(df)
         return df
-
-
 
     def _scan_lookup(self, sdf: pd.DataFrame, symbol: str, description: str) -> str:
         """
@@ -811,6 +837,7 @@ class NewManLife(BaseImporter):
         for idx, row in df.loc[df['Transaction Type'] == 'Dividend'].iterrows():
             # We have a case where quantity is less than 0 it is a sell (makes no sense buy I see it in the exports (buy/sell) combo
             investment = get_or_add_investment(row['Symbol'], region=self.region_key(row['Market']))
+            self.account_cache[row['AccountKey']].add_investment(investment, row['Date'])
             if investment.searchable:
                 df.loc[idx, 'Transaction Type'] = 'skipped DIV'
         return df

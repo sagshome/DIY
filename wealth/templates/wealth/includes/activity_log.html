@@ -1,0 +1,85 @@
+
+<div>
+    {% if start_data %}
+        <div class="row">
+            <table class="table caption-top">
+                <caption class="w3-wide w3-padding-16">Activity Start</caption></caption>
+                <tr>
+                    <th>Date</th>
+                    <th>Value</th>
+                    <th>Funding</th>
+                    <th>Cash</th>
+                </tr>
+                <tr>
+                    <td>{{ start_data.Date }}</td>
+                    <td>${{ start_data.Total | floatformat:'0g' }}</td>
+                    <td>${{ start_data.Funding | floatformat:'0g' }}</td>
+                    <td>${{ start_data.Cash | floatformat:'0g' }}</td>
+                </tr>
+            </table>
+        </div>
+    {% endif %}
+    {% if activity_log %}
+        <hr>
+        <div class="row">
+            <table class="table table-striped caption_top">
+                <caption class="w3-wide w3-padding-16">Equity Summary</caption>
+                <thead class="w3-margin-bottom" style="background:#eee;">
+                    <tr>
+                        <th></th>
+                        <th>Date</th>
+                        <th>Activity</th>
+                        <th>Investment</th>
+                        <th>Cash</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                {% for item in activity_log %}
+                    <tr class="{% if item.row_type == 'Dividend' and item.source.altered %}altered-row{% endif %}">
+                        <td>
+                            {% if item.row_type == 'Dividend' %}
+                                <a href="{% url 'adjust_dividend' item.source.pk %}" data-modal><span class="bi bi-pencil"></span></a>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.date }}</td>
+                        <td>{{ item.row_type }}</td>
+                        <td>
+                            {% if item.row_type == 'Dividend' %}
+                                {{ item.source.dividend.investment }}
+
+                            {% elif item.row_type == 'Buy' or item.row_type == 'Sell' %}
+                                {{ item.source.investment }}
+                            {% endif %}
+                        </td>
+                        <td>{{ item.cash_flow.value }}</td>
+                        <td>{{ item.cash_flow.note }}</td>
+
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+    {% if end_data %}
+        <hr>
+        <div class="row">
+            <table class="table caption-top">
+                <caption class="w3-wide w3-padding-16">Activity End</caption></caption>
+                <tr>
+                    <th>Date</th>
+                    <th>Value</th>
+                    <th>Funding</th>
+                    <th>Cash</th>
+                </tr>
+                <tr>
+                    <td>{{ end_data.Date }}</td>
+                    <td>${{ end_data.Total | floatformat:'0g' }}</td>
+                    <td>${{ end_data.Funding | floatformat:'0g' }}</td>
+                    <td>${{ end_data.Cash | floatformat:'0g' }}</td>
+                </tr>
+            </table>
+        </div>
+    {% endif %}
+
+
+
+</div>

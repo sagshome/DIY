@@ -20,7 +20,7 @@
     </div>
     <div class="container-fluid">
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="left-scroll">
                     <form method="post">
                     {% csrf_token %}
@@ -40,46 +40,30 @@
                      </div>
 
                     <table class="table table-striped caption-top">
-                        <caption>Account Data and Reconcilation Table</caption>
-                        <thead style="background:#eee;">
-                            <tr>
-                                <th>Date</th>
-                                {% if account.acct_type != 'Cash' %}
-                                    <th>Value</th>
-                                    <th>Funding</th>
-                                {% endif %}
-                                {% if account.acct_type != 'Value' %}
-                                    <th>Cash</th>
-                                {% endif %}
-                                <th>Estimated Data</th>
-                            </tr>
-                        </thead>
-                        {% for form in formset %}
-                            <tr class="reconciliation-row" data-date="{{ form.Date.value | date:'Y-m-d' }}" role="button">
+                        <caption>Equity Data - Account {{account}} Symbol {{symbol}}</caption>
+                        {% for form in formset.forms %}
+                            {% if forloop.first %}
+                                <thead>
+                                    <tr>
+                                        {% for field in form.visible_fields %}
+                                        <th
+                                            {% if field.help_text %}
+                                                data-bs-toggle="tooltip"
+                                                data-bs-placement="right"
+                                                title="{{ field.help_text }}"
+                                                class="help-cell"
+                                            {% endif %}>
+                                        {{ field.label }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                            {% endif %}
+                            <tr class="{% if form.initial.altered %}altered-row{% endif %}">
                                 {% for field in form.visible_fields %}
-                                    {% if field.name == 'Date' %}
                                         <td>
                                             {{ field }}
                                         </td>
-                                {% endif %}
-                                    {% if account.acct_type != 'Cash' and field.name == 'Total' %}
-                                        <td>
-                                            {{ field }}
-                                            {% if account.acct_type == 'Trading' %}
-                                                <a href="{% url 'reconciliation' account.id  form.Date.value %}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
-                                            {% endif %}
-
-                                        </td>
-                                    {% endif %}
-                                    {% if account.acct_type != 'Cash' and field.name == 'Funding' %}
-                                        <td>{{ field }}</td>
-                                    {% endif %}
-                                    {% if account.acct_type != 'Value' and field.name == 'Cash' %}
-                                        <td>{{ field }}</td>
-                                    {% endif %}
-                                    {% if field.name == 'Total_est' %}<td>{{ field | yesno:"Yes,No" }} </td>{% endif %}
                                 {% endfor %}
-                                {% if form.errors %}<td class="w3-red">{{form.errors}}</td>{% endif %}
                             </tr>
                         {% endfor %}
                     </table>

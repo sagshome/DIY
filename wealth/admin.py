@@ -21,8 +21,8 @@ class PortfolioAdmin(admin.ModelAdmin):
 
 @admin.register(Investment)
 class InvestmentAdmin(admin.ModelAdmin):
-    list_display = ("symbol", "inv_type", "user", "last_updated", "validated", "searchable", "closed")
-    list_filter = ("user", "inv_type")
+    list_display = ("symbol", "inv_type", "last_updated", "validated", "searchable")
+    list_filter = ("inv_type",)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -30,8 +30,8 @@ class InvestmentAdmin(admin.ModelAdmin):
 
 
 class ValueAdmin(admin.ModelAdmin):
-    list_display = ("pk", "investment", "date", "day_scope", "open_value", "close_value", "source", "split_fixed")
-    list_filter = ("day_scope", "investment__symbol", "source")
+    list_display = ("pk", "investment", "date", "value", "ex_dividend", "source", "split_fixed")
+    list_filter = ("investment__symbol", "source")
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -45,8 +45,8 @@ class DividendAdmin(admin.ModelAdmin):
 
 @admin.register(Position)
 class PositionAdmin(admin.ModelAdmin):
-    list_display = ("account", "investment", "quantity", "price", "date", "scope")
-    list_filter = ("scope", "investment__symbol", "account__name")
+    list_display = ("account", "investment", "quantity", "price", "date")
+    list_filter = ("investment__symbol", "account__name")
 
 
 class AmountAdmin(admin.ModelAdmin):
@@ -87,8 +87,8 @@ class FundingAdmin(admin.ModelAdmin):
 
 @admin.register(ValueBalance)
 class ValueBalanceAdmin(admin.ModelAdmin):
-    list_display = ("account", "date", "value", "balance", "note")
-    list_filter = ("account__user", "account__name",)
+    list_display = ("account", "date", "value", "balance", "source", "note")
+    list_filter = ("source", "account__user", "account__name",)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "investment":
@@ -105,10 +105,10 @@ class CashAdmin(admin.ModelAdmin):
     list_display = ("account", "get_account_id", "date", "value", "balance", "source", "note")
     list_filter = ("source", "account__user", "account__name",)
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "investment":
-            kwargs["queryset"] = Investment.objects.filter(name__endswith='~Funding')
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    #def formfield_for_foreignkey(self, db_field, request, **kwargs):
+    #    if db_field.name == "investment":
+    #        kwargs["queryset"] = Investment.objects.filter(name__endswith='~Funding')
+    #    return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def get_account_id(self, obj):
         """Returns the ID of the related account."""

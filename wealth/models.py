@@ -6,13 +6,15 @@ import pandas as pd
 import time
 import yfinance as yf
 
+from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, InvalidOperation
 
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.db import models, IntegrityError
+from django.db import models, IntegrityError, connection
 from django.db.models import Value as DJValue, QuerySet, BooleanField, IntegerField, Q, F, Sum, Subquery, OuterRef, Max
 from django.db.models.functions import Trunc, TruncDay, TruncMonth
 from django.urls import reverse
@@ -23,7 +25,7 @@ from itertools import groupby
 from operator import itemgetter
 from yfinance.exceptions import YFRateLimitError
 
-from typing import List, Union
+from typing import List, Union, Dict
 
 from base.ioom_dates import IOOMDates
 from base.models import API, DataSource, NormalizedDataModel, CURRENCIES
@@ -328,26 +330,34 @@ def clear_caches(user=None):
     wealth.dataframes caches values,  to avoid a circular loop I need to move the clear caches to here
     """
     from collections import OrderedDict
-    to_delete = []
 
-    if isinstance(cache._cache, OrderedDict):  # simple cache
+    if isinstance(cache._cache, OrderedDict): 
+        # simple cache
+        to_delete = []
         for item in cache._cache.keys():
             if user:
                 if item.startswith('IOOM:1:user_dataframe:{user}'):
                     to_delete.append(item[7:])
             elif item.startswith(f'IOOM:1:user_dataframe:'):
                 to_delete.append(item[7:])
+            if to_delete:
+                cache.delete_many(to_delete)
 
     else:  # Assume this is Redis backend
         client = cache._cache.get_client(write=True)
-        for key in client.scan_iter(match="*user_dataframe*"):
-            to_delete.append(key)
+        if user:
+            pattern = f"*:user_dataframe:{user}:*"
+        else:
+            pattern = "*:user_dataframe:*"
 
-    cache.delete_many(to_delete)
+        keys = list(client.scan_iter(match=pattern))
+
+        if keys:
+            client.delete(*keys)
+            
 
 
-
-def build_running_totals(query: QuerySet, value_key: str = 'value', static_quantity: bool = False) -> []:
+def build_running_totals(query: QuerySet, value_key: str = 'value', static_quantity: bool = False) -> List[Dict]:
     """
     Provided a queryset that will return a list of dictionaries with each dictionary having the following values:
 
@@ -368,7 +378,7 @@ def build_running_totals(query: QuerySet, value_key: str = 'value', static_quant
     result = []
     for key in data.keys():
         for record in data[key]:
-            if 'balance' in record and record['balance'] or static_quantity:
+            if 'balance' in record and record['balance']:
                 running_total = record[value_key]
                 if record['price'] == 1:
                     running_spend = running_total
@@ -408,22 +418,25 @@ def filter_by_account_and_investment(query: QuerySet, account: Union[QuerySet, '
     return query
 
 
+
 class Investment(models.Model):
     """
     Class to hold information regarding an investment vehicle
     """
 
     symbol: str = models.CharField(max_length=64, blank=False, null=False, primary_key=True, verbose_name='Trading symbol')  # Symbol
-    country: str = models.CharField(max_length=2, blank=False, null=False, default='CA', verbose_name='Country hosting the investment')
-    user: User = models.ForeignKey(User, blank=True, null=True, on_delete=models.CASCADE)  # Set on non-equity accounts
-    name: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Investments Full Name')
+    description: str = models.CharField(max_length=128, blank=True, null=True, verbose_name='Investments Full Name')
+    
     inv_type: str = models.CharField(max_length=10, blank=True, null=True, choices=INVESTMENT_CLASS, default='Trading')
+    
+    country: str = models.CharField(max_length=2, blank=False, null=False, default='CA', verbose_name='Country hosting the investment')
     currency: str = models.CharField(max_length=3, null=True, blank=True, choices=CURRENCIES, default='CAD')
+    
     last_updated: date = models.DateTimeField(blank=True, null=True)
-    deactivated_date: date = models.DateField(blank=True, null=True, verbose_name='Date this investment was de-listed or deactivated')
+    deactivated: date = models.DateField(blank=True, null=True, verbose_name='Date this investment was de-listed or deactivated')
+    
     searchable: bool = models.BooleanField(default=False)  # Set to True if validation found an API that could be used to search this data
-    validated: bool = models.BooleanField(default=False)   # Set to True was validation is done
-    closed: date = models.DateField(null=True, blank=True, help_text='The date an investment is de-listed')
+    validated: bool = models.BooleanField(default=False)   # Set to True when validation is done
 
     static_values = ['Cash', 'Funding', 'Values']  # Investment types that have a Value of 1,  where the quantity alone dictates the Investment Value
 
@@ -436,11 +449,11 @@ class Investment(models.Model):
         return proper[0] if len(proper) == 2 else proper[1]
 
     @staticmethod
-    def _process_value_diff(scope:bool, diff_df, last_update=None):
+    def _process_value_diff(diff_df, last_update=None):
         if diff_df.empty:
             return
 
-        required_columns = {'id', 'Date', 'investment', 'Close', 'Open', 'source'}
+        required_columns = {'id', 'Date', 'investment', 'Close', 'Dividends', 'source'}
         result = required_columns - (required_columns & set(diff_df.columns))
         if result:
             logger.error('Missing Columns: %s' % result)
@@ -456,13 +469,13 @@ class Investment(models.Model):
         diff_df.sort_values(['investment', 'Date'], inplace=True)
         for index, row in diff_df.iterrows():
             this_id = row.id if not math.isnan(row.id) else None
-            open_value = row.Open
-            close_value = row.Close
+            value = row.Close
+            dividend = row.Dividends
             this_date = IOOMDates.ioom_ts(row.Date)
-            logger.debug('Updating %s for %s = old:(%s,%s) new:(%s,%s)' % (row.investment, row.Date, row.open_value, row.close_value, open_value, close_value))
+            logger.debug('Updating %s for %s = old:(%s,%s) new:(%s,%s)' % (row.investment, row.Date, row.value, row.ex_dividend, value, dividend))
 
-            items.append(Value(id=this_id, date=this_date, day_scope=scope, investment=investments[row.investment],
-                               source=DataSource.API.value, open_value=force_decimal(open_value), close_value=force_decimal(close_value)))
+            items.append(Value(id=this_id, date=this_date, investment=investments[row.investment],
+                               source=DataSource.API.value, value=force_decimal(value), ex_dividend=force_decimal(dividend)))
             run_date = this_date if not run_date or this_date > run_date else run_date
             if row.investment not in updated:
                 updated.append(row.investment)
@@ -476,7 +489,10 @@ class Investment(models.Model):
                 this_date = item.date
 
         if len(cleaned):
-            Value.objects.bulk_create(cleaned, batch_size=500, update_conflicts=True, update_fields=['open_value', 'close_value', 'source'], unique_fields=['id'])
+            if connection.vendor == 'mysql':
+                Value.objects.bulk_create(cleaned, update_conflicts=True, batch_size=500, update_fields=['value', 'ex_dividend', 'source'])
+            else:
+                Value.objects.bulk_create(cleaned, update_conflicts=True, batch_size=500, update_fields=['value', 'ex_dividend', 'source'], unique_fields=['id'])
         else:
             return
 
@@ -504,7 +520,6 @@ class Investment(models.Model):
         """
         for investment in Investment.objects.filter(searchable=True):
             investment.limited_update()
-
         clear_caches()
 
     @classmethod
@@ -586,65 +601,46 @@ class Investment(models.Model):
         clear_caches()
 
     def limited_update(self):
+        """
+        Update Value records with the lastest data
+
+        df = yf_df.groupby(pd.Grouper(key='Date', freq='MS')).agg({'Open': 'first', 'Close': 'last', 'Dividends': 'sum'}).reset_index(
+        """
         if not self.searchable:
             return
 
-        yf_df = yf.Ticker(self.symbol).history(auto_adjust=False,  interval='1d', period='20y').reset_index()
+        if self.last_updated:
+            if (self.deactivated and self.deactivated < self.last_updated) or not self.deactivated:
+                yf_df = yf.Ticker(self.symbol).history(auto_adjust=False,  interval='1d', start=self.last_updated.date()).reset_index()
+        else:  # This must be a new pull.
+            yf_df = yf.Ticker(self.symbol).history(auto_adjust=False,  interval='1d', period='20y').reset_index()
+
         if yf_df.empty:
             return
 
-        yf_df['Date'] = yf_df['Date'].dt.tz_localize(None)
+        yf_df['Date'] = yf_df['Date'].dt.tz_localize(None)  # Effectively make it just a date
+        yf_df['investment'] = self.symbol  # Add the symbol for merging this value
 
-        ioom_dates = IOOMDates(build=False)
-        for day_scope in [True, False]:
-            if day_scope:
-                df = yf_df.loc[(yf_df['Date'] >= pd.Timestamp(ioom_dates.day_start))].reset_index()
-            else:
-                df = yf_df.groupby(pd.Grouper(key='Date', freq='MS')).agg({'Open': 'first', 'Close': 'last', 'Dividends': 'sum'}).reset_index()
-            df['investment'] = self.symbol  # Restore this value
+        update_start = yf_df['Date'].min()  # Limit the update of the data to that was downloaded
+        values_df = pd.DataFrame(Value.objects.filter(investment=self, date__gte=update_start).values(
+                'id', 'date', 'value', 'ex_dividend', 'source'))
 
-            update_start = df['Date'].min()  # Limit the update of the data to that was found in (older stuff is no longer retrievable
-            values_df = pd.DataFrame(Value.objects.filter(investment=self, date__gte=update_start, day_scope=day_scope).values(
-                'id', 'date', 'open_value', 'close_value', 'day_scope', 'source'))
+        if values_df.empty:
+            values_df = pd.DataFrame(columns=['id', 'Date', 'value', 'ex_dividend', 'source'])  # Needed for the merge
+        else:
+            values_df.rename(columns={"date": "Date"}, inplace=True)
+            values_df['Date'] = pd.to_datetime(values_df['Date'])
 
-            if values_df.empty:
-                values_df = pd.DataFrame(columns=['id', 'Date', 'open_value', 'close_value', 'day_scope', 'source'])  # Needed for the merge
-            else:
-                values_df.rename(columns={"date": "Date"}, inplace=True)
-                values_df['Date'] = pd.to_datetime(values_df['Date'])
+        values_df = yf_df.merge(values_df, on='Date', how='left')
 
-            dividends_df = pd.DataFrame(Dividend.objects.filter(investment=self, date__gte=update_start, day_scope=day_scope).values(
-                'id', 'date', 'value', 'source'))
-            if dividends_df.empty:
-                dividends_df = pd.DataFrame(columns=['id', 'Date', 'value', 'source'])  # Needed for the merge
-            else:
-                dividends_df.rename(columns={"date": "Date"}, inplace=True)
-                dividends_df['Date'] = pd.to_datetime(dividends_df['Date'])
+        values_df['value'] = values_df['value'].astype('float64')
+        values_df['ex_dividend'] = values_df['ex_dividend'].astype('float64')
 
-            if day_scope:  # Cleanup
-                remove_df = values_df[~values_df['Date'].isin(yf_df['Date'])]
-                for index, row in remove_df.iterrows():
-                    Value.objects.filter(investment=self, date=row.Date).delete()
+        values_df = values_df[(~np.isclose(values_df["Close"], values_df["value"], atol=1e-3, rtol=1e-3)) |
+                              (~np.isclose(values_df["Dividends"], values_df["ex_dividend"], atol=1e-3, rtol=1e-3))]
 
-                remove_df = dividends_df[~dividends_df['Date'].isin(yf_df['Date'])]
-                for index, row in remove_df.iterrows():
-                    Dividend.objects.filter(investment=self, date=row.Date).delete()
+        Investment._process_value_diff(values_df, last_update=self.last_updated)
 
-            values_df = df.merge(values_df, on='Date', how='left')
-            dividends_df = df.merge(dividends_df, on='Date', how='left')
-
-            values_df['open_value'] = values_df['open_value'].astype('float64')
-            values_df['close_value'] = values_df['close_value'].astype('float64')
-
-            dividends_df['value'] = dividends_df['value'].astype('float64')
-            dividends_df = dividends_df.loc[dividends_df['Dividends'] != 0]
-
-            values_df = values_df[(~np.isclose(values_df["Close"], values_df["close_value"], atol=1e-3, rtol=1e-3)) |
-                                  (~np.isclose(values_df["Open"], values_df["open_value"], atol=1e-3, rtol=1e-3))]
-            dividends_df = dividends_df[~np.isclose(dividends_df["Dividends"], dividends_df["value"], atol=1e-3, rtol=1e-3)]
-
-            Investment._process_value_diff(day_scope, values_df, last_update=self.last_updated)
-            Investment._process_dividend_diff(day_scope, dividends_df)
 
     @classmethod
     def stale(cls, best_before=60, run_date: date = timezone.now().date()) -> QuerySet:
@@ -652,7 +648,8 @@ class Investment(models.Model):
         cutoff = run_date - timedelta(days=best_before)
 
         active_investments = cls.objects.filter(
-            Q(closed__isnull=True) | Q(closed__gt=run_date),
+            Q(accountinvestment__closed_date__isnull=True)
+            | Q(accountinvestment__closed_date__gt=run_date),
             account__closed__isnull=True,
         )
 
@@ -720,13 +717,11 @@ class Investment(models.Model):
             do_update = False
 
         if self.inv_type == 'Trading':
-            if self.user:  # Funds can not be owned by a user.
-                self.user = None
             if not self.symbol.isupper():
                 self.symbol = self.symbol.upper()
         else:
-            if not self.name:
-                self.name = self.symbol
+            if not self.description:
+                self.description = self.symbol
             self.validated = True   # These type investments can never be searched or validated so just set it on definition
             self.searchable = False
 
@@ -743,20 +738,19 @@ class Value(NormalizedDataModel):
     """
     The value of one share on this date.
     Only used for Trading InvType investments
+
     """
     investment: Investment = models.ForeignKey(Investment, on_delete=models.CASCADE, related_name='values')
-    close_value: Decimal = models.DecimalField(decimal_places=3, max_digits=10)  # Up to $999,999 per share
-    open_value: Decimal = models.DecimalField(decimal_places=3, max_digits=10)
-
-    day_scope: bool = models.BooleanField(default=False)
+    value: Decimal = models.DecimalField(decimal_places=3, max_digits=10)  # Up to $999,999 per share
+    ex_dividend: Decimal = models.DecimalField(decimal_places=3, max_digits=10)
     split_fixed: bool = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ('date', 'investment', 'day_scope')
+        unique_together = ('date', 'investment')
 
     def __str__(self):
         try:
-            return f'{self.investment}:{self.date.strftime("%Y-%m-%d")} {self.close_value}'
+            return f'{self.investment}:{self.date.strftime("%Y-%m-%d")} {self.value}'
         except Value.investment.RelatedObjectDoesNotExist:
             pass
 
@@ -770,7 +764,8 @@ class Value(NormalizedDataModel):
             return 0
 
     @classmethod
-    def create_values(cls, investment: Investment, value_date: pd.Timestamp, value: Decimal, source: int = DataSource.USER.value):
+    def create_values(cls, investment: Investment, value_date: pd.Timestamp, value: Decimal, dividend: Decimal,
+                      source: int = DataSource.USER.value):
         """
         Create the needed value records based on the date and the rules for scope
         """
@@ -781,40 +776,98 @@ class Value(NormalizedDataModel):
         Value.objects.update_or_create(date=value_date.replace(day=1), investment=investment, day_scope=False,
                                        defaults={'source': source, 'close_value': value, 'open_value': value})
 
-    @classmethod
-    def rebuild(cls, investment: Investment, data: List, scope: str):
-        """
-        Rebuild all Value records based on expected data.   Called for Value accounts.
-        data: List of [date, value,  scope, source]
-        """
-        existing = {item.date: item for item in cls.objects.filter(investment=investment, scope=scope)}
-        for item in data:
-            this_date = item[0]
-            if scope == 'minute':
-                this_date = pd.to_datetime(this_date).tz_convert('America/Toronto').replace(hour=9, minute=30).tz_convert('UTC')
-            elif scope == 'month':
-                this_date = this_date.replace(day=1)
-            value = item[1]
-            scope = item[2]
-            source = item[3]
-            if this_date not in existing:
-                logger.info('Creating Value: %s %s %s %s' % (investment, this_date, value, scope))
-                Value.objects.update_or_create(date=this_date, investment=investment, scope=scope, defaults={'source': source, 'value': value})
-            else:
-                if existing[this_date].source <= source and existing[this_date].close_value != value:
-                    existing[this_date].source = source
-                    existing[this_date].close_value = value
-                    existing[this_date].save()
-                del existing[this_date]
-
-            for not_found in existing.keys():
-                existing[not_found].delete()
-
     def save(self, *args, **kwargs):
-        if not self.day_scope:
-            self.date = self.date.replace(day=1)
 
         super().save(*args, **kwargs)
+
+    @classmethod
+    def update_dividends(cls):
+        """
+        Run Daily to update and CASHFLOW records that should have been derived from Dividends
+        - Not optimized for speed
+        """
+
+        div_df = pd.DataFrame(Value.objects.exclude(ex_dividend=0).values())
+        div_df["date"] = pd.to_datetime(div_df["date"])
+        div_df.rename(columns={"id": "dividend_id", "investment_id": "investment"}, inplace=True)
+        div_df = div_df.astype({"ex_dividend": "float64", "dividend_id": "Int64", "investment": "string"})
+
+        pos_df = Position.df()
+        div_amt_df = DividendAmount.df()
+        base_dates = IOOMDates(build=True, force=True, start=div_df['date'].min()).days_df
+        base_dates.rename(columns={'Date': 'date'}, inplace=True)
+
+        accounts = []
+        to_process = []
+        account: Account
+        investment: Investment
+        account_dict = {x.id: x for x in Account.objects.filter(managed=False)}
+        for account in Account.objects.filter(managed=False):
+            dirty = False
+            for acct_investment in account.accountinvestment_set.filter(investment__inv_type='Trading'):
+                
+                # Using standard dates,  fold in any dividend records
+                investment = acct_investment.investment
+                logger.debug("Processing %s - %s" % (account, investment))
+                # 1 clear out any days before we even had any positions
+                df = base_dates.merge(pos_df.loc[(pos_df['account'] == account.pk) &
+                                                 (pos_df['investment'] == investment.symbol)], on=['date'], how='left')
+                df[["investment", "account", "quantity"]] = df[["investment", "account", "quantity"]].ffill()
+                df.dropna(subset=['investment'], inplace=True)
+                df.drop(columns=["price"], inplace=True)
+                # date  account investment  quantity
+
+                # 2 pull in ex_dividend values - when dividends were declared
+                df = df.merge(div_df.loc[div_df['investment'] == investment.symbol], on=['date', 'investment'], how='left')
+
+                # date  account investment  quantity  dividend_id source ex_dividend (per share)
+
+                # 3 calculate the paid date base on one month and the next monday if not a business day
+                df["pay_date"] = df["date"] + pd.DateOffset(months=1)
+                df["pay_date"] = df["pay_date"] + pd.offsets.BusinessDay(0)
+                df["pay_amt"] = df["quantity"] * df["ex_dividend"]
+                # date  account investment  quantity  dividend(id) source ex_dividend (per share) pay_date pay_amt
+
+                # 4 clear out the non-needed columns and rows
+                df.drop(columns=["value", "split_fixed", "source", "date"], inplace=True)
+                df = df.loc[df['pay_amt'] > 0]
+                
+                # 5 pull it what we have at what we already have based on link back to original dividend
+                df = df.merge(div_amt_df[['dividend_id', 'divamt_id', 'amount', 'cash_record', 'altered', 'account']],
+                              on=['dividend_id', 'account'], how='left')
+                
+                # 6 remove anything which is basically the same
+                df = df.loc[~np.isclose(df["pay_amt"], df["amount"])]  # We only need to process changes
+
+                # 6 iterate over the records that are new or differant and update them
+                if not df.empty:
+                    for row in df.itertuples(index=False):
+                        if pd.isna(row.cash_record):
+                            dirty = True
+                            note = f"Dividend Payout:{investment} {row.quantity} units @ ${row.ex_dividend} - {row.pay_amt}"
+                            logger.debug('%s' % note)
+                            cash = CashFlow.objects.create(account=account, investment=account.cash_investment,
+                                                           value=row.pay_amt, date=row.pay_date, note=note,
+                                                           source=DataSource.SYSTEM.value)
+                            DividendAmount.objects.create(cash_record=cash, dividend_id=row.dividend_id).save()
+                        elif not row.altered:
+                            dirty = True
+                            logger.info("Detected a DividendAmount divergence:%s, %s - %s %s old:%s new:%s" % (
+                                row.divamt_id, account, investment, row.pay_date, row.amount, row.pay_amt))
+                            cash = CashFlow.objects.get(pk=row.cash_record)
+                            cash.amount = row.pay_amt
+                            cash.note = f'{cash.note} - System Amended'
+                            cash.save()
+            if dirty:
+
+                CashFlow.build_positions(
+                    account,
+                    account.cash_investment,
+                    CashFlow.objects.filter(
+                        account=account, investment=account.cash_investment
+                    ),
+                )
+                clear_caches(account.user)
 
 
 class Dividend(NormalizedDataModel):
@@ -858,6 +911,21 @@ class Dividend(NormalizedDataModel):
         else:
             investments = cls.investments()
         return Account.objects.filter(id__in=Transaction.objects.filter(investment__in=investments).values_list('account', flat=True).distinct())
+
+    @classmethod
+    def df(cls, scope: str = 'day') -> pd.DataFrame:
+        columns = ('id', 'date', 'investment', 'value')
+        if scope == 'day':
+            df = pd.DataFrame(cls.objects.filter(day_scope=True, date__gte=IOOMDates(build=False).day_start).values(*columns))
+        else:
+            df = pd.DataFrame(
+                cls.objects.filter(day_scope=False).values(*columns)
+            )
+        
+        df['date'] = pd.to_datetime(df['date'])
+        df.rename(columns={"id": "dividend"}, inplace=True)
+        df = df.astype({"value": "float64", "dividend": "Int64", "investment": "string"})
+        return df
 
     @classmethod
     def scoped_df(cls) -> pd.DataFrame:
@@ -908,63 +976,6 @@ class Dividend(NormalizedDataModel):
         except Dividend.DoesNotExist:
             query = Dividend.objects.all()
         return query
-
-    @staticmethod
-    def update_cash():
-        """
-        Run Daily to update and CASHFLOW records that should have been derived from Dividends
-        """
-        today = datetime.now().date()
-        base_dates = IOOMDates(build=True).scoped_df
-        base_dates.rename(columns=({'Date': 'date'}), inplace=True)
-
-        div_df = Dividend.scoped_df()
-        pos_df = Position.scoped_df()
-        div_amt_df = DividendAmount.scoped_df()
-
-        accounts = []
-        to_process = []
-        account: Account
-        investment: Investment
-        account_dict = {x.id: x for x in Account.objects.filter(managed=False)}
-        for account in Account.objects.filter(managed=False):
-            for investment in account.investments().filter(inv_type='Trading'):
-                # Using standard dates,  fold in any dividend records
-                df = base_dates.merge(div_df.loc[div_df['investment'] == investment.symbol], on='date', how='left')
-                df['investment'] = df['investment'].ffill()
-                df.dropna(subset=["investment"], inplace=True)
-
-                # Fold in the positions held by this account for this symbol
-                df = df.merge(pos_df.loc[(pos_df['account'] == account.pk) & (pos_df['investment'] == investment.symbol)], on=['date', 'investment'], how='left')
-                df['quantity'] = df['quantity'].ffill()
-                df['account'] = df['account'].ffill()
-                df.dropna(subset=['quantity', 'dividend'], inplace=True)
-                df = df.loc[df["quantity"] != 0]
-
-                # Fold in current CASHFLOW records
-                df = df.merge(div_amt_df, on='dividend', how='left')
-                df = df.loc[df['altered'] != True]
-                df["pay_date"] = df["date"] + pd.DateOffset(months=1)
-                df = df.loc[df["pay_date"] <= pd.Timestamp('today').normalize()]
-                df["pay_amt"] = df['quantity'] * df['value']
-                df = df.loc[df['pay_amt'] != df['amount']]
-
-                if not df.empty:
-                    accounts.append(account.pk)
-                    for row in df.itertuples(index=False):
-                        note = f'Dividend Payout: {row.quantity} units @ ${row.value} of {row.investment}'
-                        if pd.isna(row.cash_record):
-                            cash = CashFlow.objects.create(account=account, investment=account.cash_investment, value=row.pay_amt, date=row.pay_date, note=note)
-                            DividendAmount.objects.create(cash_record=cash, dividend_id=row.dividend).save()
-                        else:
-                            logger.info("Detected a DividendAmount divergence:  recid %s,  new:%s old:%s" % (row.divamt_id, row.amount, row.pay_amt))
-                            divamt = DividendAmount.objects.get(pk=row.divamt_id)
-                            divamt.amount = row.pay_amt
-                            divamt.save()
-
-        if accounts:
-            for account in Account.objects.filter(pk__in=accounts).distinct():
-                CashFlow.build_positions(account, account.cash_investment, CashFlow.objects.filter(account=account, investment=account.cash_investment))
 
 
 class BaseContainer(models.Model):
@@ -1023,6 +1034,25 @@ class Account(BaseContainer):
 
     def __str__(self):
         return self.name
+
+    def add_investment(self, investment: Investment, opened: Union[date | None] = None):
+        try:
+            existing : AccountInvestment = AccountInvestment.objects.get(account=self, investment=investment)
+            dirty = False
+            if opened:
+                if not existing.open_date or existing.open_date > opened:
+                    existing.open_date = opened
+                    dirty = True
+                if existing.closed_date and opened > existing.closed_date:  # Clear closed but leave original opened
+                    existing.closed_date = None
+                    dirty = True
+                if dirty:
+                    existing.save()
+        except AccountInvestment.DoesNotExist:
+            if opened:
+                AccountInvestment.objects.create(account=self, investment=investment, open_date=opened)
+            else:
+                AccountInvestment.objects.create(account=self, investment=investment)
 
     def can_close(self, this_date: date):
         if self.last_date and this_date < self.last_date:
@@ -1182,22 +1212,35 @@ class Account(BaseContainer):
 
 
         if self.acct_type == 'Value':
-            Investment.objects.update_or_create(inv_type='Value', symbol=self.value_investment_symbol, user=self.user,
+            Investment.objects.update_or_create(inv_type='Value', symbol=self.value_investment_symbol,
                                                 defaults={'country': self.user.profile.country, 'currency': self.user.profile.currency, 'searchable': False, 'validated': True})
+            self.add_investment(Investment.objects.get(symbol=self.value_investment_symbol))
         else:
-            Investment.objects.update_or_create(inv_type='Cash', symbol=self.cash_investment_symbol, user=self.user,
+            Investment.objects.update_or_create(inv_type='Cash', symbol=self.cash_investment_symbol,
                                                 defaults={'country': self.user.profile.country, 'currency': self.user.profile.currency, 'searchable': False, 'validated': True})
+            self.add_investment(Investment.objects.get(symbol=self.cash_investment_symbol))
 
         if self.acct_type != 'Cash':  # Value and Trading accounts have Funding
-            Investment.objects.update_or_create(inv_type='Funding', symbol=self.funding_investment_symbol, user=self.user,
+            Investment.objects.update_or_create(inv_type='Funding', symbol=self.funding_investment_symbol,
                                                 defaults={'country': self.user.profile.country, 'currency': self.user.profile.currency, 'searchable': False, 'validated': True})
-
+            self.add_investment(Investment.objects.get(symbol=self.funding_investment_symbol))
     def delete(self, *args, **kwargs):
         for i in Investment.objects.filter(account=self, inv_type__in=['Cash', 'Value', 'Funding'], symbol__startswith=f'{self.pk}-', user=self.user):
             i.delete()
         for p in Position.objects.filter(account=self):
             p.delete()
         super().delete(*args, **kwargs)
+
+
+class AccountInvestment(models.Model):
+
+    class Meta:
+        unique_together = (('account', 'investment'),)
+
+    account: Account = models.ForeignKey(Account, null=False, blank=False, on_delete=models.CASCADE)
+    investment: Investment = models.ForeignKey(Investment, null=False, blank=False, on_delete=models.CASCADE)
+    open_date: date = models.DateField(null=True, blank=True)
+    closed_date: date = models.DateField(null=True, blank=True)
 
 
 class Position(models.Model):
@@ -1212,7 +1255,6 @@ class Position(models.Model):
     account: Account = models.ForeignKey(Account, on_delete=models.CASCADE, help_text='The account this is linked to', related_name='accounts')
     investment: Investment = models.ForeignKey(Investment, on_delete=models.CASCADE, help_text='The investment this is linked to', related_name='positions')
     date: date = models.DateField(null=False, blank=True, help_text='The date of position')
-    scope: str = models.CharField(max_length=10, blank=False, null=False, default='month')  # other choice is 'day'
     quantity: Decimal = models.DecimalField(decimal_places=3, max_digits=10, help_text='The quantity of units on this date')  # Up to 999,999.000 shares
     price: Decimal = models.DecimalField(decimal_places=3, max_digits=10, help_text='The avg price of each unit on this date')  # Up to $999,999.999 per share
 
@@ -1223,22 +1265,22 @@ class Position(models.Model):
         return f'{super().__str__()} {self.quantity} @ ${self.price}'
 
     class Meta:
-        unique_together = ('date', 'account', 'investment', 'scope')
+        unique_together = ('date', 'account', 'investment')
 
     def __str__(self):
-        return f'{self.__class__.__name__} {self.account}:{self.investment}({self.scope})'
+        return f'{self.__class__.__name__} {self.account}:{self.investment}'
 
     @classmethod
-    def build(cls, account: Account, investment: Investment, data: List, scope: str, running_var='quantity', current_var='price'):
+    def build(cls, account: Account, investment: Investment, data: List, running_var='quantity', current_var='price'):
         """
         data: List of [date, running value, current value]
 
         """
         try:
-            existing = {item.date: item for item in cls.objects.filter(account=account, investment=investment, scope=scope)}
+            existing = {item.date: item for item in cls.objects.filter(account=account, investment=investment)}
         except InvalidOperation as e:  # I am not sure how this can happen
             logger.error('Failed build on %s - %s Reason:%s' % (account, investment, e))
-            cls.objects.filter(account=account, investment=investment, scope=scope).delete()
+            cls.objects.filter(account=account, investment=investment).delete()
             existing = {}
 
         for item in data:  # What if I have 2 items in the same date?  they would be filtered out in build_running_totals
@@ -1248,7 +1290,7 @@ class Position(models.Model):
             if this_date not in existing:
                 # logger.info('Creating Position(%s): %s - %s %s %s@%s' % (scope, account.name, investment, this_date, running, current))
                 try:
-                    cls.objects.create(**{'account': account, 'investment':investment, 'date': this_date, running_var:running, current_var:current, 'scope':scope})
+                    cls.objects.create(**{'account': account, 'investment':investment, 'date': this_date, running_var:running, current_var:current})
                 except TypeError as e:
                     logger.debug('%s' % e)
                 except IntegrityError as e:
@@ -1271,7 +1313,25 @@ class Position(models.Model):
                 existing[not_found].delete()
             except ValueError:
                 pass
-        clear_caches()
+
+        clear_caches(user=account.user)
+
+    @classmethod
+    def df(cls, scope: str = 'day', start: Union[pd.Timestamp | None] = None) -> pd.DataFrame:
+        columns = ('date', 'account', 'investment', 'quantity', 'price')
+        if start:
+            part1 = pd.DataFrame(Position.objects.filter(date__lte=start).values(*columns))
+            part1 = part1.loc[part1.groupby(['account', 'investment']).date.idxmax()]  # Last items only
+            part2 = pd.DataFrame(Position.objects.filter(date__gt=start).values(*columns))
+            df = pd.concat([part1, part2])
+        else:
+            df = pd.DataFrame(Position.objects.values(*columns))
+
+        if df.empty:
+            df = pd.DataFrame(columns=columns)
+        df = df.astype({"quantity": "float64", "price": "float64", "account": "Int64"})
+        df['date'] = pd.to_datetime(df['date'])
+        return df
 
     @classmethod
     def scoped_df(cls):
@@ -1333,7 +1393,7 @@ class BaseCash(NormalizedDataModel):
     investment: Investment = models.ForeignKey(Investment, on_delete=models.CASCADE, null=False, help_text='The investment this is linked to', related_name='cash')
     value: Decimal = models.DecimalField(decimal_places=3, max_digits=10, null=False, help_text='The value on this date')
     balance: bool = models.BooleanField(default=False, help_text='Set when used to force a balance on a particular Day - Used to override deposit values')
-    note = models.TextField(null=True, blank=True, help_text='Arbitrary text to describe where this funding came from/went to')
+    note = models.TextField(null=True, max_length=128, blank=True, help_text='Arbitrary text to describe where this funding came from/went to')
 
     def __str__(self):
         account = self.account.name if self.account else None
@@ -1357,11 +1417,7 @@ class BaseCash(NormalizedDataModel):
 
         Position.build(account, investment, build_running_totals(query_base.annotate(
             this_day=TruncDay('date'), price=DJValue(1, output_field=IntegerField())).order_by('date')
-                                                                 .values('this_day', 'value', 'balance', 'price')), 'day')
-
-        Position.build(account, investment, build_running_totals(query_base.annotate(
-            this_day=TruncMonth('date'), price=DJValue(1, output_field=IntegerField())).order_by('date')
-                                                                 .values('this_day', 'value', 'balance', 'price')), 'month')
+                                                                 .values('this_day', 'value', 'balance', 'price')))
 
     @classmethod
     def set_balance(cls, this_date: date, amount: int, account: Account, note: str = None, rebuild: bool = False, source: int = DataSource.USER):
@@ -1430,6 +1486,15 @@ class Funding(BaseCash):
         fund = cls(date=this_date, value=funding, account=account, note=note, source=source)
         fund.save(rebuild=rebuild)
         return fund
+
+    @property
+    def funding_str(self):
+        if self.balance:
+            return 'Balance'
+        elif self.value >= 0:
+            return 'Deposit'
+        else:
+            return 'Withdraw'
 
     @classmethod
     def withdraw(cls, this_date: date, amount: int, account: Account, note: str = None, rebuild: bool = False, source: int = DataSource.USER):
@@ -1518,20 +1583,20 @@ class Transaction(NormalizedDataModel):
         Call the build function of Position to do the actual work
         """
 
-        Position.build(account, investment, build_running_totals(Transaction.objects.filter(account=account, investment=investment)
-                                                                 .annotate(this_day=TruncDay('date'), value=F("quantity"),
+        Position.build(account,
+                       investment,
+                       build_running_totals(
+                           Transaction.objects.filter(
+                               account=account,
+                               investment=investment)
+                           .annotate(this_day=TruncDay('date'), value=F("quantity"),
                                                                            balance=DJValue(False, output_field=BooleanField())).order_by('date')
-                                                                 .values('this_day', 'value', 'balance', 'price')), 'day')
-
-        Position.build(account, investment, build_running_totals(Transaction.objects.filter(account=account, investment=investment)
-                                                                 .annotate(this_day=TruncMonth('date'), value=F("quantity"),
-                                                                           balance=DJValue(False, output_field=BooleanField())).order_by('date')
-                                                                 .values('this_day', 'value', 'balance', 'price')), 'month')
+                                                                 .values('this_day', 'value', 'balance', 'price')))
 
     @classmethod
     def buy(cls, account: Account, investment: Investment, quantity: int, price: int , this_date: date, note: str = None, rebuild: bool = False, source: int = DataSource.USER.value) -> object:
         if not note:
-            note = f'Purchased {quantity} units @ {price} on {timezone.now().date()}'
+            note = f'Purchased {quantity} units of {investment} @{price} on {timezone.now().date()}'
         quantity = abs(quantity)
         rec = cls(date=this_date, quantity=quantity, price=price, account=account, investment=investment, note=note, source=source)
         rec.save(rebuild=rebuild)
@@ -1557,27 +1622,34 @@ class Transaction(NormalizedDataModel):
         rebuild positions if requested
         """
         rebuild = kwargs.pop('rebuild') if 'rebuild' in kwargs else False
-        self.price = abs(self.price)
+        self.price = abs(self.price)  # for price to be positive,  quantity is negative on .sell positive on .buy
 
         if self.account.acct_type == 'Trading':
-            value = float(self.quantity) * float(self.price)
-            if self.cash_record:
+            value = Decimal(self.quantity) * Decimal(self.price)
+            if self.cash_record:  # This is an update
                 self.cash_record.value = value * -1
                 self.cash_record.save(rebuild=rebuild)
-            else:
+            else:  
                 cf = CashFlow(account=self.account, date=self.date, value=value * -1, note=self.note, source=self.source)
                 cf.save(rebuild=rebuild)
                 self.cash_record = cf
-
         try:
             super().save(*args, **kwargs)
         except Exception as e:
             logger.error('Failed to save')
 
+
         if not self.investment.searchable:  # Create the needed Value records
             if self.price != 0:  # Price is 0 when the transaction was a reinvested
-                Value.create_values(self.investment, self.date, self.price, self.source)
-
+                Value.objects.update_or_create(
+                    date=self.date,
+                    investment=self.investment,
+                    defaults={
+                        "source": self.source,
+                        "value": self.price,
+                        'ex_dividend': 0,
+                    },
+                )
         if rebuild:
             self.build_positions(account=self.account, investment=self.investment)
 
@@ -1607,7 +1679,7 @@ class DividendAmount(models.Model):
         todo: make this configurable on the investment
         todo: make this record editable by the user.   They can records a differant payout if they wish (some of mine of off by a few cents)
     """
-    dividend: Dividend = models.ForeignKey(Dividend, null=False, on_delete=models.CASCADE, help_text="This Dividend record")
+    dividend: Value = models.ForeignKey(Value, null=False, on_delete=models.CASCADE, help_text="This Value/Dividend record")
     cash_record: 'CashFlow' = models.OneToOneField(CashFlow, null=False, blank=False, on_delete=models.CASCADE)
     altered: bool = models.BooleanField(default=False)
 
@@ -1674,12 +1746,18 @@ class DividendAmount(models.Model):
         cashflow.delete()
 
     @classmethod
-    def scoped_df(cls):
-        columns = ('pk', 'dividend', 'cash_record', 'cash_record__value', 'altered')
-        df = pd.DataFrame(DividendAmount.objects.values(*columns))
+    def df(cls, scope: str = 'day'):
+        db_columns = ('pk', 'dividend', 'dividend__investment', 'cash_record__account',
+                   'cash_record', 'cash_record__value', 'altered')
+        df_columns = ['date', 'divamt_id', 'dividend_id', 'amount', 'investment', 'account', 'cash_record', 'altered']
+
+        df = pd.DataFrame(DividendAmount.objects.values(*db_columns))
         if df.empty:
-            df = pd.DataFrame(columns=columns)
-        df.rename(columns=({'pk': 'divamt_id', 'cash_record__value': 'amount'}), inplace=True)
-        df = df.astype({"divamt_id": "Int64", "dividend": "Int64", "amount": "float64", "cash_record": "Int64"})
+            df = pd.DataFrame(columns=df_columns)
+        else:
+            df.rename(columns=({'pk': 'divamt_id', 'dividend': 'dividend_id', 'cash_record__value': 'amount',
+                                'dividend__investment': 'investment', 'cash_record__account': 'account'}), inplace=True)
+
+        df = df.astype({"divamt_id": "Int64", "dividend_id": "Int64", "amount": "float64", "cash_record": "Int64"})
         return df
 
