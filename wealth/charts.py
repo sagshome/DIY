@@ -28,13 +28,10 @@ def generic_wealth_data(request):
     equity - An equity held in the account or portfolio,
         blank just show totals
 
-    scope day for an item for each day,  month for each month
-        blank is select vs date_range
     options:
-        growth - Show the value change over the time
-        dividend - Show the total dividends over time
-        funding - Include a row for funding
-        inflation - show the value of
+        dividend - Total Dividends earned over the time period
+        funding - The funding over the time period
+        inflation - Show the effect of inflation on the funding (if funding selected)
         equities - show the values as stacked lines
 
     compare
@@ -49,16 +46,9 @@ def generic_wealth_data(request):
     object_id = int(object_id) if object_id else object_id
     options = request.GET.getlist('options[]')
     compare = request.GET.get('compare')
-    scope = request.GET.get('scope')
 
-    # scope only make sense when you want day data for a period longer then 1 year So picking a scope of month
-    # and a range of 1 year will produce strange results.
-    if scope:
-        dfo = WealthDF(user, scope=scope)  # Get the DF based on scope - will force by_day or by_month
-    else:
-        dfo = WealthDF(user, date_range=date_range)  # Calculate the DF based on default scope for range
-
-    df = dfo.by_range(date_range)                # Limit dataframe to start date of the selected range (regardless of scope
+    dfo = WealthDF(user, date_range=date_range)  # Calculate the DF based on default scope for range
+    df = dfo.df
 
     # Step 1 - trim the data
     if object_type and object_type == 'Account':
@@ -68,27 +58,27 @@ def generic_wealth_data(request):
     # else we are working with all the data
     
     if df.empty:
-        return JsonResponse({'labels': [], 'datasets': []})
+        return JsonResponse({'labels': [], 'data': {}})
 
+    # Limit dataframe to start date of the selected range (regardless of scope
+    df = df.loc[df['Date'] >= IOOMDates().range_start(date_range)].reset_index()
+
+    data = {}
     ldf = dfo.dated_summary_df(df)
 
     if 'dividends' in options and 'DivTotal' in df.columns:
-        ldf = ldf.merge(df[['Date', 'DivTotal']], on='Date', how='left')
+        ldf = ldf.merge(df[['Date', 'DivAmount']], on='Date', how='left')
+
+    if 'inflation' in options or compare:
+        ldf['NewFunding'] = ldf['Funding'].diff()                     # Calculate Changes in Funding  (first row is total)
+        ldf["NewFunding"] = ldf["NewFunding"].fillna(ldf["Funding"])  # Account for first value
 
     if 'inflation' in options:
-        ldf = ldf.merge(Inflation.as_dataframe(ldf, scope=dfo.scope), on='Date', how='left')
-        # ------------------------------------------------------------
-        # Funding
-        # ------------------------------------------------------------
+        ldf = ldf.merge(Inflation.as_dataframe(ldf, scope=dfo.scope), on='Date', how='left')  # Fold in CPICost
 
-        # Change in cumulative funding from the previous month.
-        # Positive = money added
-        # Negative = money withdrawn
-        ldf['NewFunding'] = ldf['Funding'].diff()
-
-        # Inflation rate for each month
-        ldf['Inflation'] = ldf['CPICost'].pct_change()
-
+        # Inflation rate for each row
+        ldf['Inflation'] = ldf['CPICost'].pct_change()  # Change CPICost to an Inflation percentage
+        ldf["Inflation"] = ldf["Inflation"].fillna(0)   # or 0 if not data available
         # ------------------------------------------------------------
         # Inflation-adjusted funding
         # ------------------------------------------------------------
@@ -100,59 +90,60 @@ def generic_wealth_data(request):
         #   10,000 / 160 = 62.5 CPI units
         #
         # Withdrawals are automatically negative.
-        ldf['FundingCPIUnits'] = ldf['NewFunding'] / ldf['CPICost']
+        ldf['FundingCPIUnits'] = ldf['NewFunding'] / ldf['CPICost']   # Get Funding based on CPI
 
         # Accumulate the CPI units and convert them back into
         # dollars using the current month's CPI.
         #
         # This tells us what all of the deposits/withdrawals since
         # the beginning of the dataframe are worth after inflation.
-        ldf['InflationAdjustedFunding'] = ldf['FundingCPIUnits'].cumsum() * ldf['CPICost']
+        ldf['InflationAdjustedFunding'] = ldf['FundingCPIUnits'].cumsum() * ldf['CPICost']  #
 
-        # ------------------------------------------------------------
-        # Inflation-adjusted portfolio value
-        # ------------------------------------------------------------
-
-        # Convert the actual portfolio value into the purchasing
-        # power of the first month.
-        #
-        # Example:
-        #   $1,000,000 when CPI = 160
-        #   is equivalent to less than $1,000,000 when expressed
-        #   in the purchasing power of the earlier month.
+        # Affect of inflation on the value - Not currently used
         initial_cpi = ldf['CPICost'].iloc[0]
-
         ldf['RealTotalValue'] = ldf['TotalValue'] / ldf['CPICost'] * initial_cpi
-
-        # ------------------------------------------------------------
-        # Investment gain after inflation
-        # ------------------------------------------------------------
-
-        # The difference between the actual portfolio and the
-        # inflation-adjusted funding.
         ldf['RealGain'] = ldf['TotalValue'] - ldf['InflationAdjustedFunding']
 
-        #ldf["ValueChange"] = ldf["TotalValue"].diff()
-        #ldf['Inflation'] = ldf['CPICost'].pct_change()
-        #ldf["NewFunding"] = ldf["Funding"].diff()
+    if compare:
+        ldf = ldf.merge(Value.as_dataframe(ldf, symbol=compare, scope=dfo.scope), on='Date', how='left')  # Fold in CPICost
 
-        #ldf["FundingCPIUnits"] = ldf["NewFunding"] / ldf["CPICost"]
-        #ldf["InflationAdjustedFunding"] = ldf["FundingCPIUnits"].cumsum() * ldf["CPICost"]
+        # Inflation rate for each row
+        ldf['Compare'] = ldf['Close'].pct_change()  # Change CPICost to an Inflation percentage
+        ldf["Compare"] = ldf["Compare"].fillna(0)   # or 0 if not data available
+        # ------------------------------------------------------------
+        # Inflation-adjusted funding
+        # ------------------------------------------------------------
+        ldf["CompareValue"] = 0.0
+        for i in range(len(ldf)):
+            if i == 0:
+                ldf.loc[i, "CompareValue"] = ldf.loc[i, "TotalValue"]
+            else:
+                previous = ldf.loc[i - 1, "CompareValue"]
+                change = ldf.loc[i, "Compare"]
+                funding = ldf.loc[i, "NewFunding"]
 
-        #initial_value = ldf.loc[0, "TotalValue"]
-        #initial_funding = ldf.loc[0, "Funding"]
-        #initial_cpi = ldf.loc[0, "CPICost"]
+                ldf.loc[i, "CompareValue"] = previous * (1 + change) + funding
+        data["Compare"] = ldf["CompareValue"].to_list()
 
-        #ldf["RealGain"] = ldf["TotalValue"] - ldf["InflationAdjustedFunding"]
-        #ldf["RealTotalValue"] = ldf["TotalValue"] / ldf["CPICost"] * ldf["CPICost"].iloc[0]
-        
-    starting = df.iloc[0].InvValue
-    data = df["InvValue"].to_list()
+    # Limit dataframe to start date of the selected range (regardless of scope
+    ldf = ldf.loc[ldf['Date'] >= IOOMDates().range_start(date_range)].reset_index()
+    starting = ldf.iloc[0].TotalValue
+    data['values'] = ldf["TotalValue"].to_list()
 
-    if dfo.scope == 'month' or scope == 'month':
-        labels = [this_date.strftime('%Y-%b') for this_date in df["Date"].to_list()]
+    if 'funding' in options:
+        data["funding"] = ldf["Funding"].to_list()
+
+    if 'inflation' in options:
+        data["InflationValue"] = ldf["RealTotalValue"].to_list()
+        if 'funding' in options:
+            data["InflationFunding"] = ldf["InflationAdjustedFunding"].to_list()
+
+    # data = ldf["TotalValue"].to_list()
+
+    if dfo.scope == 'month':
+        labels = [this_date.strftime('%Y-%b') for this_date in ldf["Date"].to_list()]
     else:
-        labels = [this_date.strftime('%b-%d') for this_date in df["Date"].to_list()]
+        labels = [this_date.strftime('%b-%d') for this_date in ldf["Date"].to_list()]
 
     return JsonResponse({"labels": labels, "data": data, "starting": starting})
 

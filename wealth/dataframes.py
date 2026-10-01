@@ -233,6 +233,7 @@ class WealthDF:
         result["Symbol"] = result["Symbol"].str.split("~").str[-1]  # Cleanup alias names - this is SLOW
         result.to_csv(f'debug_dump_{self.scope}_{self.user}.csv')  # todo: remove this
         logger.debug("Done Set DF for user:%s scope:%s" % (self.user, self.scope))
+
         return result
 
 
@@ -265,7 +266,8 @@ class WealthDF:
         )
         
         if div_df.empty:
-            return pd.DataFrame(columns=columns)
+            return pd.DataFrame(columns=[
+                'Date', 'AccountID', 'DivAmount', 'Paid_Date', 'EX_Date', 'DivValue', 'Note', 'Symbol'])
 
         div_df.rename(columns={"cash_record__date": "Paid_Date", "dividend__date": "EX_Date", "dividend__value": "DivValue",
                            "cash_record__note": "Note", 'cash_record__value': 'DivAmount', 'dividend__investment__symbol': 'Symbol',
@@ -385,6 +387,7 @@ class WealthDF:
                     list(
                         Value.objects.filter(investment__symbol=inv, date__gte=start).
                         values(*db_columns))))
+
         if not results:
             return DataFrame(columns=df_columns)
 
@@ -781,8 +784,21 @@ class WealthDF:
 
         ldf = df.groupby(["Date", "InvType"]).agg({"InvValue": "sum"}).reset_index()
         ldf = ldf.pivot(index='Date', columns='InvType', values='InvValue').reset_index()
-        ldf['Trading'] = ldf['Trading'].fillna(0)
-        ldf['Value'] = ldf['Value'].fillna(0)
+        if 'Cash' in ldf.columns:
+            ldf['Cash'] = ldf['Cash'].fillna(0)
+        else:
+            ldf['Cash'] = 0
+
+        if 'Trading' in ldf.columns:
+            ldf['Trading'] = ldf['Trading'].fillna(0)
+        else:
+            ldf['Trading'] = 0
+
+        if 'Value' in ldf.columns:
+            ldf['Value'] = ldf['Value'].fillna(0)
+        else:
+            ldf['Value'] = 0
+
         ldf['TotalValue'] = ldf['Value'] + ldf['Trading']
 
         return ldf

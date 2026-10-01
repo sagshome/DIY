@@ -19,15 +19,6 @@
             <div class="form-check">
                 <input class="form-check-input chart-option"
                        type="checkbox"
-                       value="growth"
-                       id="option_growth">
-                <label class="form-check-label" for="option_growth">
-                    Growth
-                </label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input chart-option"
-                       type="checkbox"
                        value="dividends"
                        id="option_dividends">
                 <label class="form-check-label" for="option_dividends">
@@ -53,19 +44,10 @@
                 </label>
             </div>
             <div>
-                <select id="chart_scope" class="form-select">
-                    <option value="">- Scope -</option>
-                    <option value="day">Day</option>
-                    <option value="month">Month</option>
-                    <option value="">Default</option>
-                </select>
-            </div>
-
-            <div>
                 <select id="chart_compare" class="form-select">
                     <option value="">- Compare To -</option>
                     <option value="sp500">S&P 500</option>
-                    <option value="tsx">S&P/TSX</option>
+                    <option value="^GSPTSE">S&P/TSX</option>
                     <option value="nasdaq">NASDAQ</option>
                 </select>
             </div>
@@ -120,7 +102,6 @@
                         return {
                             options: settings,
                             compare: '',
-                            scope: ''
                         };
                     }
 
@@ -130,41 +111,28 @@
             }
 
             return {
-                options: ['growth'],
+                options: [''],
                 compare: '',
                 scope: ''
             };
         }
 
-        function enforceRequiredOption(options) {
-            // Growth or Dividends must always be selected
-            if (!options.includes('growth') &&
-                !options.includes('dividends')) {
-                options.push('growth');
-            }
-
-            return options;
-        }
 
         function redrawChart() {
 
             let options = getSelectedOptions();
 
-            // Growth or Dividends must always be selected
-            options = enforceRequiredOption(options);
 
             // Make sure the checkboxes reflect the enforced selection
             setSelectedOptions(options);
 
             // Get Compare selection
             const compare = $('#chart_compare').val();
-            const scope = $('#chart_scope').val();
 
             // Save settings
             localStorage.setItem(storageKey, JSON.stringify({
                 options: options,
                 compare: compare,
-                scope: scope,
             }));
 
             // Redraw chart
@@ -174,20 +142,18 @@
                 "{{container.id}}",
                 options,
                 compare,
-                scope
             );
         }
 
         // Restore previous selections
         const settings = loadChartSettings();
 
-        let options = enforceRequiredOption(settings.options);
+        let options = [];
 
         setSelectedOptions(options);
 
         // Restore picker selection
         $('#chart_compare').val(settings.compare);
-        $('#chart_scope').val(settings.scope);
         // Draw the chart using restored selections
         redrawChart();
 
@@ -200,13 +166,6 @@
         $('#chart_compare').on('change', function () {
             redrawChart();
         });
-
-        // Redraw whenever Scope changes
-        $('#chart_scope').on('change', function () {
-            redrawChart();
-        });
-
-
     });
 </script>
 

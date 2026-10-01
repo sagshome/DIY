@@ -113,7 +113,14 @@ class NormalizedDataManager(models.Manager):
             except ValidationError as e:
                 logger.error('Validation Error:%s:%s - %s' % (kwargs, defaults, e))
                 return None, False, 'Validation Error:%s - %s' % (self, e)
-
+        except cls.MultipleObjectsReturned:
+            self.filter(**kwargs).delete()
+            try:
+                obj, created = super().update_or_create(defaults=defaults, **kwargs)
+                return obj, created, "New instance has been created"
+            except ValidationError as e:
+                logger.error('Validation Error:%s:%s - %s' % (kwargs, defaults, e))
+                return None, False, 'Validation Error:%s - %s' % (self, e)
         # we must have already existed
         if defaults['source'] < obj.source:
             return obj, False, f"Update ignored - Existing Data Source({obj.source}) is not more precise ({defaults['source']})"
@@ -319,6 +326,9 @@ class Inflation(NormalizedDataModel):
             query = query.filter(date__gte=df['Date'].min(), date__lte=df['Date'].max())
 
         idf = pd.DataFrame(list(query.values('date', 'cost')))
+        if idf.empty:
+            return pd.DataFrame(columns=['Date', 'CPICost'])
+
         idf['Date'] = pd.to_datetime(idf['date'])
         idf['CPICost'] = idf["cost"].astype("float64")
         idf = idf.drop(columns=['date', 'cost'])

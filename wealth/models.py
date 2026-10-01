@@ -755,6 +755,39 @@ class Value(NormalizedDataModel):
             pass
 
     @classmethod
+    def as_dataframe(cls, df: pd.DataFrame, symbol: str, scope: str):
+        #1 Get the raw data
+        query = cls.objects.filter(investment__symbol=symbol)
+        if not df.empty:
+            query = query.filter(date__gte=df['Date'].min(), date__lte=df['Date'].max())
+
+        idf = pd.DataFrame(list(query.values('date', 'value')))
+        if idf.empty:
+            return pd.DataFrame(columns=['Date', 'Close'])
+
+        idf['Date'] = pd.to_datetime(idf['date'])
+        idf['Close'] = idf["value"].astype("float64")
+        idf = idf.drop(columns=['date', 'value'])
+
+        if scope == 'month':
+            idf = idf.groupby(pd.Grouper(key="Date", freq="ME")).agg({'Close': 'last'}).reset_index()
+            idf["Date"] = idf["Date"].values.astype("datetime64[M]")  # Normalize date to the 1st
+
+        if df.empty:
+            if scope == 'month':
+                df = IOOMDates(build=True, start=idf['Date'].min()).months_df
+            else:
+                df = IOOMDates(force=True, build=True, start=idf['Date'].min()).days_df
+
+        df = df[['Date']].merge(idf, on='Date', how='left')
+
+        df['Close'] = df['Close'].transform(
+            lambda s: s.interpolate()
+        )
+        df['Close'] = df['Close'].bfill()
+        return df
+
+    @classmethod
     def lookup(cls, lookup_date: date, symbol: str):
         try:
             lookup = Value.objects.filter(investment__symbol=symbol, date__lte=lookup_date).latest('date')

@@ -277,8 +277,8 @@ def import_from_diy():
     df, reinvested = prune_imported(df, ['Reinvested Dividend',])
     df, cash = prune_imported(df, ['Dividends/Interest', 'Fees Paid'])
 
-    #import_funding(funds)
-    #import_xas(xas)
+    import_funding(funds)
+    import_xas(xas)
 
     import_reinvested(reinvested)
     import_cash(cash)

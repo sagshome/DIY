@@ -1,4 +1,3 @@
-
 function cost_value_chart(api, object_id, object_type, equity_id) {
     $(document).ready(function () {
         $.ajax({
@@ -43,213 +42,420 @@ function cost_value_chart(api, object_id, object_type, equity_id) {
 
 function summary_chart(range, object_type, object_id) {
 
-      let url = "/wealth/api/wealth_summary";
-      let data = {};
+    let url = "/wealth/api/wealth_summary";
+    let data = {};
 
-      if (range !== undefined) {
-          data['range'] = range
-      }
-      if (object_type !== undefined) {
-          data['object_type'] = object_type
-          if (object_type === 'Account') {
-              url = url;
-          }
-      }
-      if (object_id !== undefined) {
-          data['object_id'] = object_id
-      }
-      $.ajax({
-            url: url,
-            data: data,
-            success: function (data) {
-                new Chart("lineChart", {
-                    type: "line",
-                    data: {
-                        labels: data['labels'],
-                        datasets: data['datasets'],
+    if (range !== undefined) {
+        data['range'] = range
+    }
+    if (object_type !== undefined) {
+        data['object_type'] = object_type
+        if (object_type === 'Account') {
+            url = url;
+        }
+    }
+    if (object_id !== undefined) {
+        data['object_id'] = object_id
+    }
+    $.ajax({
+        url: url,
+        data: data,
+        success: function (data) {
+            new Chart("lineChart", {
+                type: "line",
+                data: {
+                    labels: data['labels'],
+                    datasets: data['datasets'],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'Account Accumulation Chart'
                     },
-                    options: {
-                        maintainAspectRatio: false,
-                        responsive: true,
-                        title: {
-                            display: true,
-                            text: 'Account Accumulation Chart'
-                        },
-                        legend: {
-                            display: true,
-                            position: 'right',
-                            align: 'center'
-                        },
+                    legend: {
+                        display: true,
+                        position: 'right',
+                        align: 'center'
                     },
-                });
-            },
-            error: function(data) {
-                console.log('Error occurred' + data);
-            }
-      });
+                },
+            });
+        },
+        error: function (data) {
+            console.log('Error occurred' + data);
+        }
+    });
 }
 
+let ioomChart;
 
 function generic_wealth_chart(range, object_type, object_id, options, compare, scope) {
 
-      let url = "/wealth/api/generic_wealth";
-      let data = {};
+    let url = "/wealth/api/generic_wealth";
+    let data = {};
 
-      if (range !== undefined) {
-          data['range'] = range
-      }
-      if (object_type !== undefined) {
-          data['object_type'] = object_type
-          if (object_type === 'Account') {
-              url = url;
-          }
-      }
-      if (object_id !== undefined) {
-          data['object_id'] = object_id
-      }
+    if (range !== undefined) {
+        data['range'] = range
+    }
+    if (object_type !== undefined) {
+        data['object_type'] = object_type
+        if (object_type === 'Account') {
+            url = url;
+        }
+    }
+    if (object_id !== undefined) {
+        data['object_id'] = object_id
+    }
 
-      if (options !== undefined) {
-          data['options'] = options
-      }
+    if (options !== undefined) {
+        data['options'] = options
+    }
 
-      if (compare !== undefined) {
-          data['compare'] = compare
-      }
+    if (compare !== undefined) {
+        data['compare'] = compare
+    }
 
-      if (scope !== undefined) {
-          data['scope'] = scope
-      }
+    const ctx = document.getElementById('lineChart');
 
-      $.ajax({
-            url: url,
-            data: data,
-            success: function (data) {
-                new Chart("lineChart", {
-                    type: "line",
-                    data: {
-                        labels: data['labels'],
-                        datasets: [
-                            {
-                                data: data['data'],
-                                fill: false,
-                                segment: {
-                                    borderColor: (ctx) => {
-                                        const prevValue = ctx.p0.parsed.y;
-                                        const nextValue = ctx.p1.parsed.y;
+    // Destroy the existing chart
+    if (ioomChart) {
+        ioomChart.destroy();
+    }
 
-                                        if (prevValue < data['starting'] || nextValue < data['starting']) {
-                                            return 'red';
-                                        }
-                                         return 'green';
-                                    }
-                                },
-                            },
-                        ],
-                    },
-                    options: {
-                        maintainAspectRatio: false,
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Current Value Chart'
-                            },
-                            legend: {
-                                display: false,
-                            },
+
+    $.ajax({
+        url: url,
+        data: data,
+
+        success: function (response) {
+            var datasets = [];
+
+            labels = response.labels;
+            data = response.data;
+
+
+            if (
+                data.values !== null &&
+                data.values !== undefined &&
+                data.values !== ""
+            ) {
+                datasets.push({
+                    label: 'Value — green = above / red = below',
+                    data: data.values,
+                    fill: false,
+                    pointRadius: 1,
+                    pointHoverRadius: 5,
+                    segment: {
+                        borderColor: (ctx) => {
+                            const prevValue = ctx.p0.parsed.y;
+                            const nextValue = ctx.p1.parsed.y;
+
+                            if (prevValue < response['starting'] || nextValue < response['starting']) {
+                                return 'red';
+                            }
+                            return 'green';
                         }
                     },
+
                 });
-            },
-            error: function(data) {
-                console.log('Error occurred' + data);
             }
-      });
+
+            if (
+                data.InflationValue !== null &&
+                data.InflationValue !== undefined &&
+                data.InflationValue !== ""
+            ) {
+                datasets.push({
+                    label: 'Value (less inflation)',
+                    data: data.InflationValue,
+                    fill: false,
+                    pointRadius: 1,
+                    pointHoverRadius: 5,
+                    borderDash: [6, 4],
+                    segment: {
+                        borderColor: (ctx) => {
+                            const prevValue = ctx.p0.parsed.y;
+                            const nextValue = ctx.p1.parsed.y;
+
+                            if (prevValue < response['starting'] || nextValue < response['starting']) {
+                                return 'red';
+                            }
+                            return 'green';
+                        }
+                    },
+
+                });
+            }
+            if (
+                data.InflationFunding !== null &&
+                data.InflationFunding !== undefined &&
+                data.InflationFunding !== ""
+            ) {
+                datasets.push({
+                    label: 'Funding (matching CPI)',
+                    data: data.InflationFunding,
+                    backgroundColor: 'black',
+                    borderColor: 'black',
+                    pointRadius: 1,
+                    pointHoverRadius: 5,
+                    borderDash: [6, 4],
+                    fill: false,
+
+
+                });
+            }
+
+            if (
+                data.Compare !== null &&
+                data.Compare !== undefined &&
+                data.Comapare !== ""
+            ) {
+                datasets.push({
+                    label: compare,
+                    data: data.Compare,
+                    backgroundColor: 'blue',
+                    borderColor: 'blue',
+                    pointRadius: 1,
+                    pointHoverRadius: 5,
+                    fill: false,
+
+                });
+            }
+
+            if (
+                data.funding !== null &&
+                data.funding !== undefined &&
+                data.funding !== ""
+            ) {
+                datasets.push({
+                    label: 'Funding',
+                    data: data.funding,
+                    backgroundColor: 'black',
+                    borderColor: 'black',
+                    pointRadius: 1,
+                    pointHoverRadius: 5,
+                    fill: false,
+                });
+            }
+
+            ioomChart = new Chart("lineChart", {
+                type: "line",
+
+                data: {
+                    labels: response.labels,
+                    datasets: datasets,
+                },
+
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Value Chart'
+                        },
+                        legend: {
+                            labels: {
+                                generateLabels: function(chart) {
+                                    return chart.data.datasets.map((dataset, index) => ({
+                                        text: dataset.label,
+                                        datasetIndex: index,
+                                        strokeStyle: dataset.borderColor || 'black',
+                                        fillStyle: 'transparent',
+                                        lineWidth: dataset.borderWidth || 2,
+                                        lineDash: dataset.borderDash || [],
+                                        hidden: !chart.isDatasetVisible(index)
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                },
+            });
+        },
+
+        error: function (data) {
+            console.log('Error occurred' + data);
+        }
+    });
+}
+
+function generic_wealth_chart_o1(range, object_type, object_id, options, compare, scope) {
+
+    let url = "/wealth/api/generic_wealth";
+    let data = {};
+
+    if (range !== undefined) {
+        data['range'] = range
+    }
+    if (object_type !== undefined) {
+        data['object_type'] = object_type
+        if (object_type === 'Account') {
+            url = url;
+        }
+    }
+    if (object_id !== undefined) {
+        data['object_id'] = object_id
+    }
+
+    if (options !== undefined) {
+        data['options'] = options
+    }
+
+    if (compare !== undefined) {
+        data['compare'] = compare
+    }
+
+    if (scope !== undefined) {
+        data['scope'] = scope
+    }
+
+    const ctx = document.getElementById('lineChart');
+
+    // Destroy the existing chart
+    if (ioomChart) {
+        ioomChart.destroy();
+    }
+
+
+    $.ajax({
+        url: url,
+        data: data,
+        success: function (response) {
+            var datasets = []
+            labels = response.labels
+            data = response.data
+
+            if (data.values !== null && data.values !== undefined && data.values !== "") {
+                datasets.push(
+                    {
+                        data: data.values,
+                        fill: false,
+                        segment: {
+                            borderColor: (ctx) => {
+                                const prevValue = ctx.p0.parsed.y;
+                                const nextValue = ctx.p1.parsed.y;
+
+                                if (prevValue < data['starting'] || nextValue < data['starting']) {
+                                    return 'red';
+                                }
+                                return 'green';
+                            }
+                        },
+                    },
+                );
+            }
+
+            ioomChart = new Chart("lineChart", {
+                type: "line",
+                data: {
+                    labels: data['labels'],
+                    datasets: datasets,
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Current Value Chart'
+                        },
+                        legend: {
+                            display: true,
+                        },
+                    }
+                },
+            });
+        },
+        error: function (data) {
+            console.log('Error occurred' + data);
+        }
+    });
 }
 
 function zero_summary_chart(range, object_type, object_id, options) {
 
-      let url = "/wealth/api/zero_wealth_summary";
-      let data = {};
+    let url = "/wealth/api/zero_wealth_summary";
+    let data = {};
 
-      if (range !== undefined) {
-          data['range'] = range
-      }
-      if (object_type !== undefined) {
-          data['object_type'] = object_type
-          if (object_type === 'Account') {
-              url = url;
-          }
-      }
-      if (object_id !== undefined) {
-          data['object_id'] = object_id
-      }
+    if (range !== undefined) {
+        data['range'] = range
+    }
+    if (object_type !== undefined) {
+        data['object_type'] = object_type
+        if (object_type === 'Account') {
+            url = url;
+        }
+    }
+    if (object_id !== undefined) {
+        data['object_id'] = object_id
+    }
 
-      if (options !== undefined) {
-          data['options'] = options
-      }
-      $.ajax({
-            url: url,
-            data: data,
-            success: function (data) {
-                new Chart("lineChart", {
-                    type: "line",
-                    data: {
-                        labels: data['labels'],
-                        datasets: [
-                            {
-                                data: data['data'],
-                                fill: false,
-                                segment: {
-                                    borderColor: (ctx) => {
-                                        const prevValue = ctx.p0.parsed.y;
-                                        const nextValue = ctx.p1.parsed.y;
+    if (options !== undefined) {
+        data['options'] = options
+    }
+    $.ajax({
+        url: url,
+        data: data,
+        success: function (data) {
+            new Chart("lineChart", {
+                type: "line",
+                data: {
+                    labels: data['labels'],
+                    datasets: [
+                        {
+                            data: data['data'],
+                            fill: false,
+                            segment: {
+                                borderColor: (ctx) => {
+                                    const prevValue = ctx.p0.parsed.y;
+                                    const nextValue = ctx.p1.parsed.y;
 
-                                        if (prevValue < data['starting'] || nextValue < data['starting']) {
-                                            return 'red';
-                                        }
-                                         return 'green';
+                                    if (prevValue < data['starting'] || nextValue < data['starting']) {
+                                        return 'red';
                                     }
-                                },
+                                    return 'green';
+                                }
                             },
-                        ],
-                    },
-                    options: {
-                        maintainAspectRatio: false,
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Current Value Chart'
-                            },
-                            legend: {
-                                display: false,
-                            },
-                        }
-                    },
-                });
-            },
-            error: function(data) {
-                console.log('Error occurred' + data);
-            }
-      });
+                        },
+                    ],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Current Value Chart'
+                        },
+                        legend: {
+                            display: false,
+                        },
+                    }
+                },
+            });
+        },
+        error: function (data) {
+            console.log('Error occurred' + data);
+        }
+    });
 }
 
 function hideDiv(divId) {
-   var div = document.getElementById(divId);
-   if (div === null) {
-   }
-   else {
-    div.style.display = "none";
+    var div = document.getElementById(divId);
+    if (div === null) {
+    } else {
+        div.style.display = "none";
     }
 }
 
 function showDiv(divId) {
     var div = document.getElementById(divId);
     if (div === null) {
-    }
-    else {
-    div.style.display = "table-row";
+    } else {
+        div.style.display = "table-row";
     }
 }
 
@@ -269,17 +475,17 @@ function show_hide() {
         showDiv('repeatRow')
 
     } else if ((action_value === 'TRANS_IN' || action_value === 'TRANS_OUT')) {  // Transfer In/Out
-       showDiv('equityRow');
-       hideDiv('priceRow');
-       hideDiv('repeatRow');
-       if (equity_value === "") {
+        showDiv('equityRow');
+        hideDiv('priceRow');
+        hideDiv('repeatRow');
+        if (equity_value === "") {
             showDiv('valueRow');
             hideDiv('quantityRow')
-       } else {
+        } else {
             showDiv('quantityRow');
             hideDiv('valueRow')
-       }
-       showDiv('toAccountRow');
+        }
+        showDiv('toAccountRow');
     } else if ((action_value === 'BUY' || action_value === 'SELL' || action_value === 'REDIV')) {
         showDiv('equityRow');
         showDiv('priceRow');
@@ -314,9 +520,9 @@ function show_hide() {
 
 function set_spinner() {
     showDiv("spinner-text")
-    var t = setInterval(function() {
-            var ele = document.getElementById('spinner-text');
-            ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
+    var t = setInterval(function () {
+        var ele = document.getElementById('spinner-text');
+        ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
     }, 1000);
 };
 
@@ -374,7 +580,7 @@ function update_equity() {
                 console.log("Response text: " + jqXHR.responseText);
 
                 // Optionally return an empty results set to prevent Select2 from breaking
-                return { results: [] }
+                return {results: []}
             },
             processResults: function (data) {
                 return {results: data.results};
@@ -442,15 +648,15 @@ function initModalControls(container) {
 
     $(container).find('#id_action').off('mouseup').on('mouseup', show_hide)
     $(container).find('#id_action').off('change')
-            .on('change', update_equity)
-            .on('change', update_values);
+        .on('change', update_equity)
+        .on('change', update_values);
     $(container).find('#id_equity').off('change')
-             .on('change', update_equity)
-             .on('change', update_values);
+        .on('change', update_equity)
+        .on('change', update_values);
     $(container).find('#id_date').off('change').on('change', update_values)
     $(container).find('#id_repeat').off('change').on('change', show_hide)
 
-    document.addEventListener("change", function(event) {
+    document.addEventListener("change", function (event) {
         if (event.target && event.target.type === "checkbox") {
             $.ajax({
                 url: '/wealth/api/search_add',
@@ -464,7 +670,7 @@ function initModalControls(container) {
 
     var slow_btn = document.getElementById("slow-submit-btn")
     if (slow_btn) {
-        slow_btn.addEventListener("click", function() {
+        slow_btn.addEventListener("click", function () {
             set_spinner()
         });
     }
@@ -483,7 +689,7 @@ async function processTransactionResult(form) {
     if (data.redirect) {
         window.location.href = data.redirect;
     } else {
-         Object.entries(data.errors).forEach(([field, messages]) => {
+        Object.entries(data.errors).forEach(([field, messages]) => {
 
             let input = document.querySelector(`[name="${field}"]`);
             if (!input) {
@@ -527,11 +733,11 @@ document.addEventListener('submit', function (e) {
         console.log("modal form submit intercepted");
         input = document.querySelector(`[name="ioom_nonfield_errors"]`)
         if (input) {
-                    input.classList.remove('alert')
-                    input.classList.remove('alert-warning')
-                    input.style.whiteSpace = 'pre-wrap'
-                    input.textContent = ""
-                }
+            input.classList.remove('alert')
+            input.classList.remove('alert-warning')
+            input.style.whiteSpace = 'pre-wrap'
+            input.textContent = ""
+        }
         processTransactionResult(e.target);
     }
 });
