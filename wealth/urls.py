@@ -17,12 +17,8 @@ urlpatterns = [
     # path(r'api/cash_value/', apis.get_cash_value, name='cash_value'),
     # path(r'api/xa_list/', apis.get_transaction_list, name='xa_list'),
     path(r"api/wealth_summary", charts.acc_summary, name="wealth_summary"),
-    path(
-        r"api/zero_wealth_summary", charts.zero_acc_summary, name="zero_wealth_summary"
-    ),
-    path(
-        r"api/generic_wealth", charts.generic_wealth_data, name="generic_wealth"
-    ),
+    path(r"api/wealth_chart", charts.wealth_detail, name="wealth_chart"),
+    path(r"api/wealth_data", charts.wealth_data, name="wealth_compare"),
     # path(r'api/equity_summary', charts.equity_summary, name='equity_summary'),
     # path(r'equity/add', views.add_equity, name='add_equity'),
     # path(r'account/help', views.wealth_help, name='wealth_help'),

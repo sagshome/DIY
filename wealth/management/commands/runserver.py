@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 class Command(StaticFilesRunserverCommand):
     def handle(self, *args, **options):
-        logger.info('Resting all caches')
-        clear_caches()
+        # logger.info('Resting all caches')
+        # clear_caches()
         super().handle(*args, **options)
 
 

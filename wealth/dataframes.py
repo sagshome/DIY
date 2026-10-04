@@ -769,10 +769,11 @@ class WealthDF:
         cache.set(key, new_df, timeout=CACHE_TTL)
 
     @staticmethod
-    def dated_summary_df(df: DataFrame) -> DataFrame:
+    def dated_summary_df(df: DataFrame, include_cash: bool = False) -> DataFrame:
         """
         Prepare a DataFrame what will have the following Columns:
             Date Cash Funding Trading Value TotalValue
+            include_cash = True,  will add the cash value to TotalValue, default is False
         Input DataFrame must have
             Date InvValue InvType
         """
@@ -800,5 +801,24 @@ class WealthDF:
             ldf['Value'] = 0
 
         ldf['TotalValue'] = ldf['Value'] + ldf['Trading']
+        if include_cash:
+            ldf['TotalValue'] = ldf['TotalValue'] + ldf['Cash']
 
+        if 'Funding' in ldf.columns:
+            ldf["NewFunding"] = ldf["Funding"].diff()  # Calculate Changes in Funding  (first row is total)
+            ldf["NewFunding"] = ldf["NewFunding"].fillna(ldf["Funding"]) # Account for first value
+        else:
+            ldf['NewFunding'] = 0
+
+        ldf["ChangePercent"] = 0.0
+        for i in range(len(ldf)):
+            if i != 0:
+                previous = ldf.loc[i - 1, "TotalValue"]
+                # change = ldf.loc[i, "Compare"]
+                funding = ldf.loc[i, "NewFunding"]
+                value = ldf.loc[i, 'TotalValue']
+                if previous == 0:
+                    ldf.loc[i, "ChangePercent"] = 0
+                else:
+                    ldf.loc[i, "ChangePercent"] = (value - funding - previous) / previous
         return ldf

@@ -759,6 +759,7 @@ class Value(NormalizedDataModel):
         #1 Get the raw data
         query = cls.objects.filter(investment__symbol=symbol)
         if not df.empty:
+
             query = query.filter(date__gte=df['Date'].min(), date__lte=df['Date'].max())
 
         idf = pd.DataFrame(list(query.values('date', 'value')))

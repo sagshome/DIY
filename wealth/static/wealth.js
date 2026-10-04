@@ -1,98 +1,18 @@
-function cost_value_chart(api, object_id, object_type, equity_id) {
-    $(document).ready(function () {
-        $.ajax({
-            url: api,
-            data: {
-                'object_id': object_id,
-                'object_type': object_type,
-                'symbol': equity_id,
-            },
-            success: function (data) {
-                let lineChart = new Chart("lineChart", {
-                    type: "line",
-                    data: data,
-                    options: {
-                        scales: {
-                            y: {
-                                beginAtZero: true
-                            },
-                        },
-                        elements: {
-                            point: {
-                                radius: 2
-                            }
-                        },
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        title: {
-                            display: true,
-                            text: "Return vs Cost"
-                        },
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            align: 'center'
-                        },
-                    }
-                });
-            }
-        });
-    });
-}
-
-function summary_chart(range, object_type, object_id) {
-
-    let url = "/wealth/api/wealth_summary";
-    let data = {};
-
-    if (range !== undefined) {
-        data['range'] = range
-    }
-    if (object_type !== undefined) {
-        data['object_type'] = object_type
-        if (object_type === 'Account') {
-            url = url;
-        }
-    }
-    if (object_id !== undefined) {
-        data['object_id'] = object_id
-    }
-    $.ajax({
-        url: url,
-        data: data,
-        success: function (data) {
-            new Chart("lineChart", {
-                type: "line",
-                data: {
-                    labels: data['labels'],
-                    datasets: data['datasets'],
-                },
-                options: {
-                    maintainAspectRatio: false,
-                    responsive: true,
-                    title: {
-                        display: true,
-                        text: 'Account Accumulation Chart'
-                    },
-                    legend: {
-                        display: true,
-                        position: 'right',
-                        align: 'center'
-                    },
-                },
-            });
-        },
-        error: function (data) {
-            console.log('Error occurred' + data);
-        }
-    });
-}
+const colors = [
+    '#4e79a7',
+    '#f28e2b',
+    '#59a14f',
+    '#e15759',
+    '#b07aa1',
+    '#76b7b2',
+    '#edc949',
+];
 
 let ioomChart;
 
-function generic_wealth_chart(range, object_type, object_id, options, compare, scope) {
+function wealth_detail(range, object_type, object_id, options, compare, scope) {
 
-    let url = "/wealth/api/generic_wealth";
+    let url = "/wealth/api/wealth_chart";
     let data = {};
 
     if (range !== undefined) {
@@ -107,11 +27,9 @@ function generic_wealth_chart(range, object_type, object_id, options, compare, s
     if (object_id !== undefined) {
         data['object_id'] = object_id
     }
-
     if (options !== undefined) {
         data['options'] = options
     }
-
     if (compare !== undefined) {
         data['compare'] = compare
     }
@@ -122,7 +40,6 @@ function generic_wealth_chart(range, object_type, object_id, options, compare, s
     if (ioomChart) {
         ioomChart.destroy();
     }
-
 
     $.ajax({
         url: url,
@@ -275,16 +192,15 @@ function generic_wealth_chart(range, object_type, object_id, options, compare, s
                 },
             });
         },
-
         error: function (data) {
             console.log('Error occurred' + data);
         }
     });
 }
 
-function generic_wealth_chart_o1(range, object_type, object_id, options, compare, scope) {
+function wealth_data(range, object_type, object_id, options) {
 
-    let url = "/wealth/api/generic_wealth";
+    let url = "/wealth/api/wealth_data";
     let data = {};
 
     if (range !== undefined) {
@@ -299,19 +215,9 @@ function generic_wealth_chart_o1(range, object_type, object_id, options, compare
     if (object_id !== undefined) {
         data['object_id'] = object_id
     }
-
     if (options !== undefined) {
         data['options'] = options
     }
-
-    if (compare !== undefined) {
-        data['compare'] = compare
-    }
-
-    if (scope !== undefined) {
-        data['scope'] = scope
-    }
-
     const ctx = document.getElementById('lineChart');
 
     // Destroy the existing chart
@@ -319,40 +225,26 @@ function generic_wealth_chart_o1(range, object_type, object_id, options, compare
         ioomChart.destroy();
     }
 
-
     $.ajax({
         url: url,
         data: data,
         success: function (response) {
-            var datasets = []
-            labels = response.labels
-            data = response.data
 
-            if (data.values !== null && data.values !== undefined && data.values !== "") {
-                datasets.push(
-                    {
-                        data: data.values,
-                        fill: false,
-                        segment: {
-                            borderColor: (ctx) => {
-                                const prevValue = ctx.p0.parsed.y;
-                                const nextValue = ctx.p1.parsed.y;
+            const datasets = response.series.map((series, index) => ({
 
-                                if (prevValue < data['starting'] || nextValue < data['starting']) {
-                                    return 'red';
-                                }
-                                return 'green';
-                            }
-                        },
-                    },
-                );
-            }
+                label: series.name,
+                data: series.data,
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length] + '40',
+                fill: false,
+                tension: 0.1
+            }));
 
             ioomChart = new Chart("lineChart", {
-                type: "line",
+                type: 'line',
                 data: {
-                    labels: data['labels'],
-                    datasets: datasets,
+                    labels: response.labels,
+                    datasets: datasets
                 },
                 options: {
                     maintainAspectRatio: false,
@@ -360,24 +252,34 @@ function generic_wealth_chart_o1(range, object_type, object_id, options, compare
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Current Value Chart'
+                            text: response.title
                         },
-                        legend: {
-                            display: true,
+                    },
+                    scales: {
+                        x: {
+                            stacked: response.stacked
                         },
-                    }
-                },
+                        y: {
+                            stacked: response.stacked,
+                            title: {
+                                display: true,
+                                text: response.ytitle
+                            }
+                        }
+                    },
+
+                }
             });
         },
-        error: function (data) {
-            console.log('Error occurred' + data);
+        error: function (response) {
+            console.log('Error occurred', response);
         }
     });
 }
 
-function zero_summary_chart(range, object_type, object_id, options) {
+function summary_chart(range, object_type, object_id) {
 
-    let url = "/wealth/api/zero_wealth_summary";
+    let url = "/wealth/api/wealth_summary";
     let data = {};
 
     if (range !== undefined) {
@@ -391,10 +293,6 @@ function zero_summary_chart(range, object_type, object_id, options) {
     }
     if (object_id !== undefined) {
         data['object_id'] = object_id
-    }
-
-    if (options !== undefined) {
-        data['options'] = options
     }
     $.ajax({
         url: url,
@@ -404,36 +302,20 @@ function zero_summary_chart(range, object_type, object_id, options) {
                 type: "line",
                 data: {
                     labels: data['labels'],
-                    datasets: [
-                        {
-                            data: data['data'],
-                            fill: false,
-                            segment: {
-                                borderColor: (ctx) => {
-                                    const prevValue = ctx.p0.parsed.y;
-                                    const nextValue = ctx.p1.parsed.y;
-
-                                    if (prevValue < data['starting'] || nextValue < data['starting']) {
-                                        return 'red';
-                                    }
-                                    return 'green';
-                                }
-                            },
-                        },
-                    ],
+                    datasets: data['datasets'],
                 },
                 options: {
                     maintainAspectRatio: false,
                     responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Current Value Chart'
-                        },
-                        legend: {
-                            display: false,
-                        },
-                    }
+                    title: {
+                        display: true,
+                        text: 'Account Accumulation Chart'
+                    },
+                    legend: {
+                        display: true,
+                        position: 'right',
+                        align: 'center'
+                    },
                 },
             });
         },
@@ -442,6 +324,8 @@ function zero_summary_chart(range, object_type, object_id, options) {
         }
     });
 }
+
+
 
 function hideDiv(divId) {
     var div = document.getElementById(divId);

@@ -16,11 +16,8 @@
 </div>
     <hr>
 {% include '../includes/account_actions.html' %}
-<div class="w3-row">
-    <canvas id="lineChart" height=300 style="border:1px solid" >
-        A line chart showing Cost vs Value over time in months.
-    </canvas>
-</div>
+foobar
+{% include '../includes/data_chart.html' %}
 <div class="w3-container">
     {% include '../includes/account_summary_list.html' %}
 </div>
@@ -31,11 +28,4 @@
         </div>
     </div>
 {% endif %}
-    <script src="{% static 'wealth.js' %}"></script>
-    <script>
-        $(document).ready(function () {
-            summary_chart("{{ container.container_type }}", "{{ container.id }}")
-        });
-    </script>
-
 {% endblock content %}

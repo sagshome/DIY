@@ -18,8 +18,65 @@ from base.models import COLORS, PALETTE, Inflation
 
 logger = logging.getLogger(__name__)
 
+def calculate_compare(dfo: WealthDF, df: pd.DataFrame, object_type: str, object_id: int):
+    """
+    This is a bit tricky because we are comparing apples to oranges.
+    Accounts -> If Trading compare Closing prices else ??? compare to TSX for lack of anything better
+    Portfolio or Mixed -> Calculate and normalize Value
+    """
+    if df.empty:
+        return JsonResponse({"labels": [], "data": {}})
+
+    # Build DF with Date, InvValue, Name
+    data = []
+    if object_type and object_type == "Account":
+        df = df.loc[df["AccountID"] == object_id] # Limit dataframe to account
+        for symbol in df['Symbol'].unique():
+            if symbol not in ['Cash', 'Funding']:
+                if df.loc[df['Symbol'] == symbol].iloc[0].InvType == 'Value':
+                    sdf = dfo.dated_summary_df(df.loc[df['Symbol'] == symbol])
+                    sdf.drop(columns=['Cash', 'Funding', 'Trading', 'Value', 'TotalValue', 'NewFunding'], inplace=True)
+                else:
+                    sdf = Value.as_dataframe(df, symbol, dfo.scope)
+                    sdf['PercentChange'] = sdf['Close'].pct_change()
+                    sdf["CP"] = sdf["ChangePercent"].cumsum()
+                    sdf["CP"] = sdf["CP"] * 100
+                    sdf.drop(columns=['Close', 'PercentChange'])
+                sdf["Name"] = symbol
+                data.append(sdf)
+    elif object_type and object_type == "Portfolio":
+        df = dfo.set_names(df.loc[df["PortfolioID"] == object_id].copy())  # Limit dataframe to portfolio
+        for account in df['AccountID'].unique():
+            sdf = dfo.dated_summary_df(df.loc[df['AccountID'] == account])
+            sdf['Name'] = df.loc[df['AccountID'] == account].iloc[0].AccountName
+            sdf['CP'] = sdf['ChangePercent'].cumsum()
+            sdf['CP'] = sdf['CP'] * 100
+            data.append(sdf[['Date', 'Name', 'CP']])
+    else:  # we are working with all the data, so build DF based on accounts with portfolios and those with none
+        df = dfo.set_names(df)  # Limit dataframe to portfolio
+        dfg = df.loc[df["PortfolioID"] != 0]
+        if not dfg.empty:
+            for portfolio in dfg["PortfolioID"].unique():
+                sdf = dfo.dated_summary_df(dfg.loc[dfg["PortfolioID"] == portfolio])
+                sdf["Name"] = df.loc[df["PortfolioID"] == portfolio].iloc[0].PortfolioName
+                sdf["CP"] = sdf["ChangePercent"].cumsum()
+                sdf["CP"] = sdf["CP"] * 100
+                data.append(sdf[["Date", "Name", "CP"]])
+        dfa = df.loc[df["PortfolioID"] == 0]
+        if not dfa.empty:
+            for account in dfa["AccountID"].unique():
+                sdf = dfo.dated_summary_df(dfa.loc[dfa["AccountID"] == account])
+                sdf["Name"] = df.loc[df["AccountID"] == account].iloc[0].AccountName
+                sdf["CP"] = sdf["ChangePercent"].cumsum()
+                sdf["CP"] = sdf["CP"] * 100
+                data.append(sdf[["Date", "Name", "CP"]])
+
+    df = data[0] if len(data) == 1 else pd.concat(data)
+    df = df.pivot(index="Date", columns="Name", values="CP")
+    return df
+
 @login_required
-def generic_wealth_data(request):
+def wealth_detail(request):
     '''
     object_type + object_id produces a chart based on Portfolio or Account,
         blank = Portfolios and orphan Accounts
@@ -44,19 +101,22 @@ def generic_wealth_data(request):
     object_type = request.GET.get('object_type')
     date_range = request.GET.get('range', 'year')
     object_id = int(object_id) if object_id else object_id
+    symbol = request.GET.get('symbol')
     options = request.GET.getlist('options[]')
     compare = request.GET.get('compare')
-
     dfo = WealthDF(user, date_range=date_range)  # Calculate the DF based on default scope for range
     df = dfo.df
 
     # Step 1 - trim the data
     if object_type and object_type == 'Account':
-        df = df.loc[df['AccountID'] == object_id]     # Limit dataframe only items matching this account
+        df = df.loc[df['AccountID'] == object_id]  # Limit dataframe only items matching this account
     elif object_type and object_type == 'Portfolio':  # Limit dataframe to only items matching this portfolio
-        df = df.loc[df['PortfolioID'] == object_id]   # expand using AccountID
-    # else we are working with all the data
-    
+        df = df.loc[df['PortfolioID'] == object_id] # expand using AccountID
+    # else: # else we are working with all the data
+
+    if symbol:
+        df = df.loc[df['Symbol'] == symbol]
+
     if df.empty:
         return JsonResponse({'labels': [], 'data': {}})
 
@@ -64,14 +124,12 @@ def generic_wealth_data(request):
     df = df.loc[df['Date'] >= IOOMDates().range_start(date_range)].reset_index()
 
     data = {}
+
+
+
     ldf = dfo.dated_summary_df(df)
-
-    if 'dividends' in options and 'DivTotal' in df.columns:
+    if 'dividends' in options and 'DivAmount' in df.columns:
         ldf = ldf.merge(df[['Date', 'DivAmount']], on='Date', how='left')
-
-    if 'inflation' in options or compare:
-        ldf['NewFunding'] = ldf['Funding'].diff()                     # Calculate Changes in Funding  (first row is total)
-        ldf["NewFunding"] = ldf["NewFunding"].fillna(ldf["Funding"])  # Account for first value
 
     if 'inflation' in options:
         ldf = ldf.merge(Inflation.as_dataframe(ldf, scope=dfo.scope), on='Date', how='left')  # Fold in CPICost
@@ -125,8 +183,6 @@ def generic_wealth_data(request):
                 ldf.loc[i, "CompareValue"] = previous * (1 + change) + funding
         data["Compare"] = ldf["CompareValue"].to_list()
 
-    # Limit dataframe to start date of the selected range (regardless of scope
-    ldf = ldf.loc[ldf['Date'] >= IOOMDates().range_start(date_range)].reset_index()
     starting = ldf.iloc[0].TotalValue
     data['values'] = ldf["TotalValue"].to_list()
 
@@ -146,6 +202,101 @@ def generic_wealth_data(request):
         labels = [this_date.strftime('%b-%d') for this_date in ldf["Date"].to_list()]
 
     return JsonResponse({"labels": labels, "data": data, "starting": starting})
+
+@login_required
+def wealth_data(request):
+    '''
+    object_type + object_id produces a chart based on Portfolio or Account,
+        blank = Portfolios and orphan Accounts
+    date_range for the length of time to chart out
+        default = year
+
+    compare
+        Present data as a comparson vs as values
+
+    '''
+
+    user = request.user
+    try:
+        object_id = int(request.GET.get('object_id'))
+    except ValueError:
+        object_id = None
+    object_type = request.GET.get('object_type')
+    date_range = request.GET.get('range', 'year')
+    options = request.GET.getlist('options[]')
+
+    compare = 'comparison' in options
+
+    dfo = WealthDF(user, date_range=date_range)  # Calculate the DF based on default scope for range
+    df = dfo.df
+    df = df.loc[df['Date'] >= IOOMDates(build=False).range_start(date_range)].reset_index()  # Force out earlier data
+
+    if compare:
+        df = calculate_compare(dfo, df, object_type, object_id)
+        title = 'Comparison Chart'
+        stacked = False
+        ytitle = '% Change'
+    else:
+        df = df.loc[(df['InvType'] == 'Trading') | (df['InvType'] == 'Value')]  # This chart only cars about value
+    
+        if df.empty:
+            return JsonResponse({'labels': [], 'data': {}})
+
+
+        # Build DF with Date, InvValue, Name
+        if object_type and object_type == 'Account':
+            df = df.loc[df['AccountID'] == object_id]                                   # Limit dataframe to account
+            df = df.groupby(['Date', 'Symbol']).agg({'InvValue': 'sum'}).reset_index()  # Group InvValue on Symbol
+            df['Name'] = df['Symbol']                                                   # Set Name
+            df.drop(columns=['Symbol'], inplace=True)
+        elif object_type and object_type == 'Portfolio':
+            df = df.loc[df['PortfolioID'] == object_id]                                 # Limit dataframe to portfolio
+            df = dfo.set_names(df.groupby(['Date', 'AccountID']).agg({'InvValue': 'sum'}).reset_index()) # Group on Acct
+            df['Name'] = df['AccountName']
+            df.drop(columns=['AccountID', 'AccountName'], inplace=True)
+        else: # we are working with all the data, so build DF based on accounts with portfolios and those with none
+            dfg = df.loc[df['PortfolioID'] != 0]
+            if not dfg.empty:
+                dfg = dfo.set_names(dfg.groupby(['Date', 'PortfolioID']).agg({'InvValue': 'sum'}).reset_index())
+                dfg['Name'] = dfg['PortfolioName']
+                dfg.drop(columns=["PortfolioID", "PortfolioName"], inplace=True)
+            dfa = df.loc[df['PortfolioID'] == 0]
+            if not dfa.empty:
+                dfa = dfo.set_names(dfa.groupby(['Date', 'AccountID']).agg({'InvValue': 'sum'}).reset_index())
+                dfa['Name'] = dfa['AccountName']
+                dfa.drop(columns=["AccountID", "AccountName"], inplace=True,)
+    
+            if dfa.empty:
+                df = dfg
+            elif dfg.empty:
+                df = dfa
+            else:
+                df = pd.concat([dfg, dfa])
+
+
+        df = df.pivot(index="Date", columns="Name", values="InvValue")
+        title = 'Growth Chart'
+        ytitle = 'Value'
+        stacked = True
+        
+    df = df.fillna(0)  # Maybe None ?
+
+    if dfo.scope == "month":
+        labels = [this_date.strftime("%Y-%b") for this_date in df.index]
+    else:
+        labels = [this_date.strftime("%b-%d") for this_date in df.index]
+
+    response = {
+        "title": title,
+        "ytitle": ytitle,
+        "stacked": stacked,
+        "labels": labels,
+        "series": [
+            {"name": name, "data": df[name].tolist()} for name in df.columns
+        ],
+    }
+
+    return JsonResponse(response)
 
 
 @login_required
