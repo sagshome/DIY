@@ -114,6 +114,7 @@ def wealth_detail(request):
         df = df.loc[df['PortfolioID'] == object_id] # expand using AccountID
     # else: # else we are working with all the data
 
+
     if symbol:
         df = df.loc[df['Symbol'] == symbol]
 
@@ -201,7 +202,7 @@ def wealth_detail(request):
     else:
         labels = [this_date.strftime('%b-%d') for this_date in ldf["Date"].to_list()]
 
-    return JsonResponse({"labels": labels, "data": data, "starting": starting})
+    return JsonResponse({"labels": labels, "data": data, "starting": int(starting)})
 
 @login_required
 def wealth_data(request):

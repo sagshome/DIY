@@ -800,7 +800,9 @@ class PortfolioTableView(LoginRequiredMixin, WealthSummaryMixin, DetailView):
         detail = dfo.container_values_by_date_df(df)
         fmt_str = "%b-%Y" if dfo.scope == 'month' else "%d-%b"
         detail['DateStr'] = detail['Date'].dt.strftime(fmt_str)
-        context['container_list_data'] = json.loads(detail.to_json(orient='records'))
+        context['container_detail_data'] = json.loads(detail.to_json(orient='records'))
+        summary = dfo.summary_list_by_date(df)
+        context['container_list_data'] = sorted(summary, key=lambda x: x['Value'], reverse=True)
 
         return context
 
@@ -896,12 +898,20 @@ class WealthDataMain(LoginRequiredMixin, WealthSummaryMixin, ListView):
 
         dfo = WealthDF(self.request.user, date_range=context['range'])
         df = dfo.by_range(context['range'])
-
+        summary = dfo.summary_list_by_date(df)
+        context['container_list_data'] = sorted(summary, key=lambda x: x['Value'], reverse=True)
+        # Add in new accounts - they will have no DF data, so they are missed.
+        '''all_accounts = Account.objects.filter(user=self.request.user)
+        if not df.empty:
+            all_accounts = all_accounts.exclude(id__in=df['AccountID'].unique())
+        for a in all_accounts:
+            context['container_list_data'].append({'Value': 0, 'Cash': 0, 'EffectiveCost': 0, 'TotalDividends': 0, 'Id': a.pk, 'Name': a.name})
+'''
         detail = dfo.container_values_by_date_df(df)
         if not detail.empty:
             fmt_str = "%b-%Y" if dfo.scope == 'month' else "%d-%b"
             detail['DateStr'] = detail['Date'].dt.strftime(fmt_str)
-            context['container_list_data'] = json.loads(detail.to_json(orient='records'))
+            context['container_detail_data'] = json.loads(detail.to_json(orient='records'))
             context['stale_warning'] = get_stale_investments(df)
 
         return context

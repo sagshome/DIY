@@ -779,10 +779,13 @@ class WealthDF:
         """
         output_columns = ['Date', 'Cash', 'Funding', 'Trading', 'Value', 'TotalValue']
         input_columns = ['Date', 'InvType', 'InvValue']
+            
         if df.empty or not set(input_columns) & set(df.columns) == set(input_columns):
             logger.error('Invalid dataframe supplied - %s' % df.columns)
             return DataFrame(columns=output_columns)
 
+        # Kludging Cash for Cash only # todo: Make this better
+        include_cash = include_cash | (len(df['InvType'].unique()) == 1 and df['InvType'].unique()[0] == 'Cash')
         ldf = df.groupby(["Date", "InvType"]).agg({"InvValue": "sum"}).reset_index()
         ldf = ldf.pivot(index='Date', columns='InvType', values='InvValue').reset_index()
         if 'Cash' in ldf.columns:
@@ -800,6 +803,7 @@ class WealthDF:
         else:
             ldf['Value'] = 0
 
+        
         ldf['TotalValue'] = ldf['Value'] + ldf['Trading']
         if include_cash:
             ldf['TotalValue'] = ldf['TotalValue'] + ldf['Cash']

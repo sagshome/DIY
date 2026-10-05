@@ -1,5 +1,5 @@
 <div>
-    {% if container_list_data %}
+    {% if container_detail_data %}
         <table id="wealth-data-tbl" class="table table-striped caption-top">
             <caption>Portfolio / Account  Summary</caption>
             <thead style="background:#eee;">
@@ -14,7 +14,7 @@
                     <th>Cash</th>
                 </tr>
             </thead>
-            {% for item in container_list_data %}
+            {% for item in container_detail_data %}
                 <tr>
                     <td>{{item.DateStr}}</td>
                     <td {% if item.Total_est %} class="text-info" {% endif %}>${{ item.Total | floatformat:'0g'}}</td>
