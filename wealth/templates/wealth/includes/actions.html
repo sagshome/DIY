@@ -29,29 +29,28 @@
     {% if container %}
         {% if container.container_type == 'Account' %}
             {% if container.acct_type == 'Cash' %}
-                <a href="{% url 'set_balance' container.id %}" data-modal><button class="btn btn-outline-success btn-sm diy-button-auto diy-green"> Set Balance </button></a>
+                <a href="{% url 'wealth_set_balance' container.id %}" data-modal><button class="btn btn-outline-success btn-sm diy-button-auto diy-green"> Set Balance </button></a>
             {% else %}
                 {% if not account.closed %}
-                  <a href="{% url 'set_fund' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Deposit</button></a>
-                  <a href="{% url 'set_withdraw' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Withdraw</button></a>
+                  <a href="{% url 'wealth_set_fund' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Deposit</button></a>
+                  <a href="{% url 'wealth_set_withdraw' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Withdraw</button></a>
                   {% if account.acct_type == 'Value' %}
-                      <a href="{% url 'set_value' account.id %}" data-modal class="btn btn-outline-success btn-sm">Set Value</a>
+                      <a href="{% url 'wealth_set_value' account.id %}" data-modal class="btn btn-outline-success btn-sm">Set Value</a>
                   {% else %}
-                      <a href="{% url 'transaction_add' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Add Transaction</button></a>
+                      <a href="{% url 'wealth_transaction_add' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Add Transaction</button></a>
                   {% endif %}
                 {% endif %}
             {% endif %}
         {% endif %}
-        <a href="{{ container.edit_url }}" data-modal><button class="btn btn-outline-success btn-sm">Edit</button></a>
+
 
         {% if container.container_type == 'Account' and not account.closed %}
             <a href="{{ container.close_url }}" data-modal> <button class="btn btn-outline-danger btn-sm">Close</button></a>
         {% endif %}
-        <a href="{{ container.delete_url }}" data-modal class="btn btn-outline-danger btn-sm">Delete</a>
 
     {% else %}
-        <a href="{% url 'account_add' %}" data-modal class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">New Account</a>
-        <a href="{% url 'portfolio_add' %}" data-modal class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">New Portfolio</a>
+        <a href="{% url 'wealth_account_add' %}" data-modal class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">New Account</a>
+        <a href="{% url 'wealth_portfolio_add' %}" data-modal class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">New Portfolio</a>
     {% endif %}
 </div>
 

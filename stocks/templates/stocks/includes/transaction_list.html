@@ -22,7 +22,7 @@
     {% for x in xas %}
         {% if x.is_major %}
             <tr>
-                <td class="w3-left-align w3-hide-small"><a href="{% url 'transaction_delete' x.id %}"><span class="fa fa-trash"></span></a>&nbsp;<a href="{% url 'transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
+                <td class="w3-left-align w3-hide-small"><a href="{% url 'stocks_transaction_delete' x.id %}"><span class="fa fa-trash"></span></a>&nbsp;<a href="{% url 'stocks_transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
                 <td class="w3-left-align">
                     {% if x.real_date %}  <!-- Real Date was added after initial data,  until I can clean up fix display -->
                         {{x.real_date}}
@@ -53,8 +53,8 @@
     {% for x in xas %}
         {% if not x.is_major %}
             <tr>
-            <td><a href="{% url 'transaction_delete' x.id %}"><span class="fa fa-trash"></span></a>&nbsp;&nbsp;&nbsp;
-                <a href="{% url 'transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
+            <td><a href="{% url 'stocks_transaction_delete' x.id %}"><span class="fa fa-trash"></span></a>&nbsp;&nbsp;&nbsp;
+                <a href="{% url 'stocks_transaction_edit' x.id %}"><span class="fa fa-pencil"></span></a></td>
             <td>
                 {% if x.real_date %}  <!-- Real Date was added after initial data,  until I can clean up fix display -->
                     {{x.real_date}}

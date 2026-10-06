@@ -53,9 +53,9 @@
                 <tr>
                     <td class="w3-left-align w3-small ">
                         {% if item.Type == 'Portfolio' %}
-                            Portfolio <a class='d1y-blue' href="{% url 'stock_portfolio_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                            Portfolio <a class='d1y-blue' href="{% url 'stocks_portfolio_details' item.Id %}"><b>{{ item.Name }}</b></a>
                         {% else %}
-                            Account <a class="d1y-blue" href="{% url 'stock_account_details' item.Id %}"><b>{{ item.Name }}</b></a>
+                            Account <a class="d1y-blue" href="{% url 'stocks_account_details' item.Id %}"><b>{{ item.Name }}</b></a>
                             {% if item.Closed == 'Closed' %}
                                  (<em>{{item.End}}</em>)
                             {% endif %}
@@ -105,7 +105,7 @@
                     <td class="w3-right-align w3-small ">
                         {% if item.Type == 'Portfolio' %}
                             {% if item.OneAccountType == 'Investment' %}
-                                <a class="w3-hide-small" href="{% url 'portfolio_update' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
+                                <a class="w3-hide-small" href="{% url 'stocks_portfolio_update' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
                             {% elif item.OneActive %}
                                 {% if item.OneAccountType == 'Cash' %}
                                     <a class="w3-hide-small" href="{% url 'set_balance' item.OneId %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
@@ -115,10 +115,10 @@
                                    <a class="w3-hide-small" href="{% url 'update_account_date' item.OneId item.LiteralDate %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
                                 {% endif %}
                             {% else %}
-                                <a class="w3-hide-small" href="{% url 'portfolio_table' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-green"> Update </button></a>
+                                <a class="w3-hide-small" href="{% url 'stocks_portfolio_table' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-green"> Update </button></a>
                             {% endif %}
-                            <a class="w3-hide-small" href="{% url 'portfolio_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
-                            <a class="w3-hide-small" href="{% url 'portfolio_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
+                            <a class="w3-hide-small" href="{% url 'stocks_portfolio_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
+                            <a class="w3-hide-small" href="{% url 'stocks_portfolio_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% else %}
                             {% if item.AccountType == 'Cash' %}
                                 <a class="w3-hide-small" href="{% url 'set_balance' item.Id %}"> <button class="w3-button-small w3-round-large diy-button diy-green"> Update</button></a>
@@ -127,8 +127,8 @@
                             {% else %}
                                 <button onclick="fetchDataWithTimeout('{% url 'account_update' item.Id %}')"class="w3-button-small w3-round-large diy-button diy-green"> Update</button>
                             {% endif %}
-                            <a class="w3-hide-small" href="{% url 'account_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
-                            <a class="w3-hide-small" href="{% url 'account_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
+                            <a class="w3-hide-small" href="{% url 'stocks_account_edit' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-yellow"> Edit </button></a>
+                            <a class="w3-hide-small" href="{% url 'stocks_account_delete' item.Id %}"><button class="w3-button-small w3-round-large diy-button diy-red">Delete</button></a>
                         {% endif %}
                     </td>
                 </tr>

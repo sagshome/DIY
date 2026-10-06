@@ -398,12 +398,12 @@ def wealth_summary_pie(request):
     for account in Account.objects.filter(user=request.user, portfolio__isnull=True, _end__isnull=True):
         value = account.value if account.value and account.value > 0 else 0
         data.append(value)
-        option_links.append(reverse('account_details', kwargs={'pk': account.id}))
+        option_links.append(reverse('stocks_account_details', kwargs={'pk': account.id}))
         labels.append(account.name)
     for portfolio in Portfolio.objects.filter(user=request.user):
         value = portfolio.value if portfolio.value and portfolio.value > 0 else 0
         data.append(value)
-        option_links.append(reverse('portfolio_details', kwargs={'pk': portfolio.id}))
+        option_links.append(reverse('stocks_portfolio_details', kwargs={'pk': portfolio.id}))
         labels.append(portfolio.name)
     return JsonResponse({'data': data, 'labels': labels, 'options_links': option_links, 'colors': COLORS})
 

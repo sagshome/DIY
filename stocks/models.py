@@ -1276,19 +1276,19 @@ class Portfolio(BaseContainer):
         unique_together = (('name', 'user'),)
 
     def get_absolute_url(self):
-        return reverse('portfolio_details', kwargs={'pk': self.id})
+        return reverse('stocks_portfolio_details', kwargs={'pk': self.id})
 
-    def get_data_url(self):
-        return reverse('portfolio_table', kwargs={'pk': self.id})
+    def get_account_data_url(self):
+        return reverse('stocks_portfolio_table', kwargs={'pk': self.id})
 
     def delete_url(self):
-        return reverse('portfolio_delete', kwargs={'pk': self.id})
+        return reverse('stocks_portfolio_delete', kwargs={'pk': self.id})
 
     def edit_url(self):
-        return reverse('portfolio_edit', kwargs={'pk': self.id})
+        return reverse('stocks_portfolio_edit', kwargs={'pk': self.id})
 
     def data_url(self):
-        return reverse('portfolio_table', kwargs={'pk': self.id})
+        return reverse('stocks_portfolio_table', kwargs={'pk': self.id})
 
     @property
     def start(self):
@@ -1458,19 +1458,19 @@ class Account(BaseContainer):
         self._last_import = self.last_import
 
     def get_absolute_url(self):
-        return reverse('account_details', kwargs={'pk': self.id})
+        return reverse('stocks_account_details', kwargs={'pk': self.id})
 
-    def get_data_url(self):
+    def get_account_data_url(self):
         return self.child.get_data_url()
 
     def close_url(self):
-        return reverse('account_close', kwargs={'pk': self.id})
+        return reverse('stocks_account_close', kwargs={'pk': self.id})
 
     def delete_url(self):
-        return reverse('account_delete', kwargs={'pk': self.id})
+        return reverse('stocks_account_delete', kwargs={'pk': self.id})
 
     def edit_url(self):
-        return reverse('account_edit', kwargs={'pk': self.id})
+        return reverse('stocks_account_edit', kwargs={'pk': self.id})
 
     @cached_property
     def child(self):
@@ -1834,7 +1834,7 @@ class InvestmentAccount(Account):
         super().save(*args, **kwargs)
 
     def get_data_url(self):
-        return reverse('account_table', kwargs={'pk': self.id})
+        return reverse('stocks_account_table', kwargs={'pk': self.id})
 
     @property
     def account_df(self) -> pd.DataFrame:
@@ -2040,7 +2040,7 @@ class ValueAccount(Account):
             Equity.objects.create(name=self.name, symbol=self.f_key, currency=self.currency, equity_type='Value', searchable=False, validated=True)
 
     def get_data_url(self):
-        return reverse('value_account_reconcile', kwargs={'pk': self.id})
+        return reverse('stocks_value_account_reconcile', kwargs={'pk': self.id})
 
     @property
     def account_df(self) -> pd.DataFrame:
@@ -2133,7 +2133,7 @@ class CashAccount(Account):
             Equity.objects.create(name=self.name, symbol=self.f_key, currency=self.currency, equity_type='Cash', searchable=False, validated=True)
 
     def get_data_url(self):
-        return reverse('cash_account_reconcile', kwargs={'pk': self.id})
+        return reverse('stocks_cash_account_reconcile', kwargs={'pk': self.id})
 
     @property
     def account_df(self) -> pd.DataFrame:

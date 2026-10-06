@@ -545,6 +545,8 @@ class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinB
             updated = False
             for form in formset.forms:
                 if form.has_changed():
+                    #if form.cleaned_data['Date'] == datetime(2025,6,1).date():
+                    #    pass
                     for field in form.changed_data:
                         if field in ['Cash', 'Total', 'Funding']:  # fix up None vs 0
                             form.cleaned_data[field] = 0 if not form.cleaned_data[field] else form.cleaned_data[field]
@@ -556,8 +558,8 @@ class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinB
                     if 'Funding' in form.changed_data and form.cleaned_data['Funding'] != form.initial['Funding']:
                         Funding.set_balance(form.initial['Date'], amount=form.cleaned_data['Funding'], account=self.object)
                         updated = True
-                    if 'Value' in form.changed_data and self.object.acct_type == 'Value' and form.cleaned_data['Value'] != form.initial['Value']:
-                        ValueBalance.set_balance(form.initial['Date'], amount=form.cleaned_data['Value'], account=self.object)
+                    if 'Total' in form.changed_data and self.object.acct_type == 'Value' and form.cleaned_data['Total'] != form.initial['Total']:
+                        ValueBalance.set_balance(form.initial['Date'], amount=form.cleaned_data['Total'], account=self.object)
                         updated = True
             if updated:
                 self.object.rebuild()

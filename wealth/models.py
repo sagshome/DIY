@@ -1033,16 +1033,16 @@ class Portfolio(BaseContainer):
         return 'Portfolio'
 
     def get_absolute_url(self):
-        return reverse('portfolio_details', kwargs={'pk': self.id})
+        return reverse('wealth_portfolio_details', kwargs={'pk': self.id})
 
     def get_data_url(self):
-        return reverse('portfolio_table', kwargs={'pk': self.id})
+        return reverse('wealth_portfolio_table', kwargs={'pk': self.id})
 
     def delete_url(self):
-        return reverse('portfolio_delete', kwargs={'pk': self.id})
+        return reverse('wealth_portfolio_delete', kwargs={'pk': self.id})
 
     def edit_url(self):
-        return reverse('portfolio_edit', kwargs={'pk': self.id})
+        return reverse('wealth_portfolio_edit', kwargs={'pk': self.id})
 
     @property
     def transactions(self):
@@ -1143,19 +1143,19 @@ class Account(BaseContainer):
         return 'Account'
 
     def get_absolute_url(self):
-        return reverse('account_details', kwargs={'pk': self.pk})
+        return reverse('wealth_account_details', kwargs={'pk': self.pk})
 
     def get_data_url(self):
-        return reverse('account_table', kwargs={'pk': self.pk})
+        return reverse('wealth_account_table', kwargs={'pk': self.pk})
 
     def close_url(self):
-        return reverse('account_close', kwargs={'pk': self.id})
+        return reverse('wealth_account_close', kwargs={'pk': self.id})
 
     def delete_url(self):
-        return reverse('account_delete', kwargs={'pk': self.id})
+        return reverse('wealth_account_delete', kwargs={'pk': self.id})
 
     def edit_url(self):
-        return reverse('account_edit', kwargs={'pk': self.id})
+        return reverse('wealth_account_edit', kwargs={'pk': self.id})
 
     @property
     def last_date(self) -> date:

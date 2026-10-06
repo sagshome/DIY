@@ -59,7 +59,7 @@
                                         <td>
                                             {{ field }}
                                             {% if account.acct_type == 'Trading' %}
-                                                <a href="{% url 'reconciliation' account.id  form.Date.value %}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
+                                                <a href="{% url 'wealth_reconciliation' account.id  form.Date.value %}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
                                             {% endif %}
 
                                         </td>

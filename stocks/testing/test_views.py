@@ -44,7 +44,7 @@ class AuthorizedTest(BasicSetup):
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.url.startswith('/accounts/login/'))
 
-        result = self.client.get(reverse('value_account_reconcile', kwargs={'pk': self.investment_account.id}))
+        result = self.client.get(reverse('stocks_value_account_reconcile', kwargs={'pk': self.investment_account.id}))
         self.assertEqual(result.status_code, 302)
         self.assertTrue(result.url.startswith('/accounts/login/'))
 
@@ -84,7 +84,7 @@ class AuthorizedTest(BasicSetup):
         result = self.client.get(reverse('account_delete', kwargs={'pk': self.investment_account.id}))
         self.assertEqual(result.status_code, 404)
 
-        result = self.client.get(reverse('value_account_reconcile', kwargs={'pk': self.investment_account.id}))
+        result = self.client.get(reverse('stocks_value_account_reconcile', kwargs={'pk': self.investment_account.id}))
         self.assertEqual(result.status_code, 404)
 
 class ViewTest(BasicSetup):

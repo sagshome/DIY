@@ -38,7 +38,7 @@
                     <tr class="{% if item.row_type == 'Dividend' and item.source.altered %}altered-row{% endif %}">
                         <td>
                             {% if item.row_type == 'Dividend' %}
-                                <a href="{% url 'adjust_dividend' item.source.pk %}" data-modal><span class="bi bi-pencil"></span></a>
+                                <a href="{% url 'wealth_adjust_dividend' item.source.pk %}" data-modal><span class="bi bi-pencil"></span></a>
                             {% endif %}
                         </td>
                         <td>{{ item.date }}</td>
