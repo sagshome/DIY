@@ -1210,7 +1210,7 @@ class Account(BaseContainer):
 
         return Investment.objects.filter(query).distinct()
 
-    def rebuild(self, values=False, positions=True, recreate=False):
+    def rebuild(self, values=False, positions=True, recreate=False, include_cash=True, include_funding=True):
         """
         Perhaps only for debugging but update all the Value's for this account and rebuild all the positions
         """
@@ -1223,10 +1223,10 @@ class Account(BaseContainer):
             if positions:
                 if investment.inv_type == 'Trading':
                     Transaction.build_positions(account=self, investment=investment)
-        if self.cash_investment:
+        if self.cash_investment and include_cash:
             query_base = CashFlow.objects.filter(account=self, investment=self.cash_investment)
             BaseCash.build_positions(self, self.cash_investment, query_base)
-        if self.funding_investment:
+        if self.funding_investment and include_funding:
             query_base = Funding.objects.filter(account=self, investment=self.funding_investment)
             BaseCash.build_positions(self, self.funding_investment, query_base)
         if self.value_investment:
@@ -1546,7 +1546,8 @@ class Funding(BaseCash):
         """
         rebuild = kwargs['rebuild'] if 'rebuild' in kwargs else False
 
-        if self.account.acct_type == 'Trading':
+
+        if self.account.acct_type == 'Trading' and not self.balance:   # Balance records skip cash, we are fixing it.
             # todo: wrap this in atomic
             if self.cash_record:
                 self.cash_record.value = self.value

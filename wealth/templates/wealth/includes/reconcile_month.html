@@ -1,0 +1,105 @@
+
+
+<div>
+    <div class="row">
+        <form id='reconcile-form' action="{% url 'reconcile_month' account.id run_date %}" method="post" novalidate>
+            {% csrf_token %}
+            {{ formset.management_form }}
+
+            <table class="table caption-top">
+                <caption class="w3-wide w3-padding-16">Month Summary</caption>
+                <thead class="w3-margin-bottom" style="background:#eee;">
+
+                    <tr>
+                        <th>Date</th>
+                        {% if account.acct_type != 'Cash' %}<th>Value</th>{% endif %}
+                        {% if account.acct_type != 'Cash' %}<th>Funding</th>{% endif %}
+                        {% if account.acct_type != 'Value' %}<th>Cash</th>{% endif %}
+                    </tr>
+                </thead>
+                <tr>
+                    <td>{{ run_date | date:'M-Y'}}</td>
+                    {% if account.acct_type != 'Cash' %}
+                        <td>
+                            ${{ form.Total }}
+                            {% if account.acct_type == 'Trading' %}
+                                <a href="{% url 'wealth_reconciliation' account.id  run_date %}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
+                            {% else %}
+                                <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                    {% if account.acct_type != 'Cash' %}
+                        <td>
+                            ${{ form.Funding }}
+                            <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+                        </td>
+                    {% endif %}
+                    {% if account.acct_type != 'Value' %}
+                        <td>$
+                            {{ form.Cash }}
+                            <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
+                        </td>
+                    {% endif %}
+                </tr>
+                {% if start_data %}
+                    <tr>
+                        <td>{{ start_data.Date | date:'M-Y'}}</td>
+                        {% if account.acct_type != 'Cash' %}<td>${{ start_data.Total | floatformat:'0g' }}</td>{% endif %}
+                        {% if account.acct_type != 'Cash' %}<td>${{ start_data.Funding | floatformat:'0g' }}</td>{% endif %}
+                        {% if account.acct_type != 'Value' %}<td>${{ start_data.Cash | floatformat:'0g' }}</td>{% endif %}
+                    </tr>
+                {% endif %}
+            </table>
+        </form>
+    </div>
+    <div id="navi_buttons" class="pt-1 pb-1 btn-group" role="group" aria-label="Navigation List">
+         <button disabled class=".text-nowrap btn btn-sm btn-light">Go To:</button>
+         <button id="jump-previous" class="btn btn-outline-primary btn-sm" data-date="{{ previous_date | date:'Y-m-d' }}" tabindex="-1" role="button">Previous Month</button>
+         <button id="jump-next" class="btn btn-outline-primary btn-sm" data-date="{{ next_date | date:'Y-m-d' }}" tabindex="-1" role="button">Next Month</button>
+    </div>
+    {% if activity_log %}
+        <hr>
+        <div class="row">
+            <table class="table table-striped caption_top">
+                <caption class="w3-wide w3-padding-16">Activities List</caption>
+                <thead class="w3-margin-bottom" style="background:#eee;">
+                    <tr>
+                        <th></th>
+                        <th>Date</th>
+                        <th>Activity</th>
+                        <th>Investment</th>
+                        <th>Cash</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                {% for item in activity_log %}
+                    <tr id="row-XA-{{ item.id }}" data-id="{{item.id}}" data-key="{{item.row_type}}"
+                        class="ioom-action-row {% if item.row_type == 'Dividend' and item.source.altered %}altered-row{% endif %}">
+                        <td>
+                            {% if item.row_type == 'Dividend' %}
+                                <a href="{% url 'wealth_adjust_dividend' item.id %}" data-modal><span class="bi bi-pencil"></span></a>
+                            {% elif item.row_type == 'Buy' or item.row_type == 'Sell' %}
+                                <i class="bi bi-trash ioom-delete-action"></i>
+                                <a href="{% url 'wealth_transaction_edit' item.id 'XA' %}" data-modal><span class="bi bi-pencil"></span></a>
+                            {% elif item.row_type == 'Withdraw' or item.row_type == 'Deposit' %}
+                                <i class="bi bi-trash ioom-delete-action"></i>
+                                <a href="{% url 'wealth_transaction_edit' item.id 'FUND' %}" data-modal><span class="bi bi-pencil"></span></a>
+                            {% elif item.row_type == 'Balance' %}
+                                <i class="bi bi-trash ioom-delete-action"></i>
+                                <a href="{% url 'wealth_transaction_edit' item.id 'CASH' %}" data-modal><span class="bi bi-pencil"></span></a>
+
+                            {% endif %}
+                        </td>
+                        <td>{{ item.date }}</td>
+                        <td>{{ item.row_type }}</td>
+                        <td>{% if item.investment %}{{ item.investment }} {% endif %}</td>
+                        <td>{{ item.value }}</td>
+                        <td>{{ item.note }}</td>
+
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+</div>

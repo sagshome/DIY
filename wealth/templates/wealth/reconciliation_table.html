@@ -33,7 +33,7 @@
                      </div>
 
                     <table class="table table-striped caption-top">
-                        <caption>Account Data and Reconcilation Table</caption>
+                        <caption>Account Data by Month</caption>
                         <thead style="background:#eee;">
                             <tr>
                                 <th>Date</th>
@@ -47,32 +47,28 @@
                                 <th>Estimated Data</th>
                             </tr>
                         </thead>
-                        {% for form in formset %}
-                            <tr class="reconciliation-row" data-date="{{ form.Date.value | date:'Y-m-d' }}" role="button">
-                                {% for field in form.visible_fields %}
-                                    {% if field.name == 'Date' %}
-                                        <td>
-                                            {{ field }}
-                                        </td>
+                        {% for item in month_data %}
+                            <tr class="reconciliation-row" data-date="{{ item.Date | date:'Y-m-d' }}" role="button">
+                                <td>{{item.Date | date:'M-Y'}}</td>
+                                {% if account.acct_type != 'Cash' %}
+                                <!--todo: make the columns class = 'bg-warning' if estimated -->
+                                    <td> {% if item.Total != 0 %}${{ item.Total | floatformat:'0g'}}{% endif %}</td>
                                 {% endif %}
-                                    {% if account.acct_type != 'Cash' and field.name == 'Total' %}
-                                        <td>
-                                            {{ field }}
-                                            {% if account.acct_type == 'Trading' %}
-                                                <a href="{% url 'wealth_reconciliation' account.id  form.Date.value %}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
-                                            {% endif %}
-
-                                        </td>
+                                {% if account.acct_type != 'Cash' %}
+                                    <td>{% if item.Funding != 0 %}${{ item.Funding | floatformat:'0g'}}{% endif %}</td>
+                                {% endif %}
+                                {% if account.acct_type != 'Value'%}
+                                    <td>{% if item.Cash != 0 %}${{ item.Cash | floatformat:'0g'}}{% endif %}</td>
+                                {% endif %}
+                                <td>
+                                    {% if account.acct_type == 'Cash' %}
+                                        {{ QuantityEstimated | yesno:"Yes,No" }}
+                                    {% elif account.acct_type == 'Trading' %}
+                                        {{ TotalEstimated | yesno:"Yes,No" }}
+                                    {% elif account.acct_type == 'Value' %}
+                                        {{ ValueEstimated | yesno:"Yes,No"}}
                                     {% endif %}
-                                    {% if account.acct_type != 'Cash' and field.name == 'Funding' %}
-                                        <td>{{ field }}</td>
-                                    {% endif %}
-                                    {% if account.acct_type != 'Value' and field.name == 'Cash' %}
-                                        <td>{{ field }}</td>
-                                    {% endif %}
-                                    {% if field.name == 'Total_est' %}<td>{{ field | yesno:"Yes,No" }} </td>{% endif %}
-                                {% endfor %}
-                                {% if form.errors %}<td class="w3-red">{{form.errors}}</td>{% endif %}
+                                </td>
                             </tr>
                         {% endfor %}
                     </table>
@@ -95,10 +91,35 @@
     </div>
 
     <script>
+        function populate_monthly_data(this_date, this_account) {
+            const reconcileDate = this_date;
+            const reconcileAcct = this_account;
+            const url = `/wealth/account/${reconcileAcct}/reconcile_month/${reconcileDate}/`;
+
+            sessionStorage.setItem('selectedReconciliationDate', reconcileDate);
+            sessionStorage.setItem('selectedReconciliationAcct', reconcileAcct);
+
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById("right-table").innerHTML = html;
+                })
+                .catch(error => console.error(error));
+        }
+
+        function getCSRFToken() {
+            const name = "csrftoken=";
+            return document.cookie
+                .split(";")
+                .map(c => c.trim())
+                .find(c => c.startsWith(name))
+                ?.substring(name.length) || null;
+        }
+
         $(document).ready(function () {
             const selectedDate = sessionStorage.getItem('selectedReconciliationDate');
             const selectedAcct = sessionStorage.getItem('selectedReconciliationAcct');
-            if (selectedDate) {
+            if (selectedDate && selectedDate !== "null") {
                 const row = document.querySelector(`.reconciliation-row[data-date="${CSS.escape(selectedDate)}"]`);
                 if (!row) return;
 
@@ -106,36 +127,114 @@
                     behavior: 'instant',
                     block: 'center'
                 });
-
+                populate_monthly_data(selectedDate, selectedAcct)
                 // Re-load the right panel for this row
-                fetch(`/wealth/account/${selectedAcct}/reconcile/${selectedDate}/month/`)
-                        .then(response => response.text())
-                        .then(html => {
-                            document.getElementById("right-table").innerHTML = html;
-                        });
-
-                sessionStorage.removeItem('selectedReconciliationDate');
             }
+
+            document.addEventListener('click', async function (event) {
+
+                if (event.target.matches('#jump-previous')) {
+                    event.preventDefault();
+                    const date = event.target.dataset.date;
+                    const selectedAcct = sessionStorage.getItem('selectedReconciliationAcct');
+                    //console.log("selectAcct")
+                    populate_monthly_data(date, selectedAcct);
+                }
+                if (event.target.matches('#jump-next')) {
+                    event.preventDefault();
+                    const date = event.target.dataset.date;
+                    const selectedAcct = sessionStorage.getItem('selectedReconciliationAcct');
+                    //console.log("selectAcct")
+                    populate_monthly_data(date, selectedAcct);
+
+                    console.log('next');
+                    return;
+                }
+                 // Delete action (works for dynamically loaded HTML)
+                const icon = event.target.closest('.ioom-delete-action');
+
+                if (icon) {
+                    event.preventDefault();
+
+                    const row = icon.closest('tr');
+                    if (!row) return;
+
+                    row.classList.add('deleting-row');
+
+                    try {
+                        const response = await fetch(
+                            `/wealth/api/quick_delete?action_id=${row.dataset.id}&action_type=${row.dataset.key}`,
+                            {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRFToken': getCSRFToken(),
+                                    'Content-Type': 'application/json'
+                                }
+                            }
+                        );
+
+                        if (!response.ok) {
+                            console.error('Delete failed' + response.status);
+                            row.classList.remove('deleting-row');
+                            return;
+                        }
+
+                        row.classList.add('deleted-row');
+                        icon.style.display = 'none';
+
+                    } catch (err) {
+                        console.error('Request error', err);
+                        row.classList.remove('deleting-row');
+                    }
+                }
+                        })
+            document.addEventListener('submit', function (event) {
+                            if (!event.target.matches('#reconcile-form')) {
+                                return;
+                            }
+
+                            event.preventDefault();
+
+                            const form = event.target;
+
+                            fetch(form.action, {
+                                method: 'POST',
+                                body: new FormData(form)
+                            })
+                                .then(response => {
+                                    if (!response.ok) {
+                                        throw new Error('POST failed');
+                                    }
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    if (data.ok) {
+                                        // POST succeeded
+                                        //populate_monthly_data(
+                                        //    sessionStorage.getItem('selectedReconciliationDate'),
+                                        //    sessionStorage.getItem('selectedReconciliationAcct')
+                                        //);
+                                    } else {
+                                        // Django rejected the POST
+                                        console.log(data);
+                                    }
+                                })
+                                .catch(error => console.error(error));
+                        });
             document.querySelectorAll(".reconciliation-row").forEach(function (row) {
-
                 row.addEventListener("click", function () {
-
                     //const reconcileDate = this.dataset.date;
-                    const reconcileDate = this.querySelector('input[name$="-Date"]').value;
+                    const reconcileDate = this.dataset.date;
                     const reconcileAcct = "{{ account.id }}";
                     sessionStorage.setItem('selectedReconciliationDate', reconcileDate);
                     sessionStorage.setItem('selectedReconciliationAcct', reconcileAcct);
-
-                    fetch(`/wealth/account/${reconcileAcct}/reconcile/${reconcileDate}/month/`)
-                        .then(response => response.text())
-                        .then(html => {
-                            document.getElementById("right-table").innerHTML = html;
-                        });
-
+                    populate_monthly_data(reconcileDate, reconcileAcct)
                 });
 
             });
 
-        });
+        })
+
+
     </script>
 {% endblock content %}

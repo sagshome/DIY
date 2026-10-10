@@ -192,15 +192,16 @@ class TransactionForm(forms.Form):
     user = forms.CharField(required=True, widget=forms.HiddenInput())
     account = forms.ModelChoiceField(Account.objects.all(), widget=forms.HiddenInput())
     to_account = forms.ModelChoiceField(Account.objects.all(), required=False, widget=forms.HiddenInput())
-    success_url = forms.URLField(widget=forms.HiddenInput())
+    success_url = forms.URLField(required=False, widget=forms.HiddenInput())
+    object_id = forms.IntegerField(required=False, widget=forms.HiddenInput())  # needed for Edits
 
     repeat = forms.ChoiceField(choices=[('no', 'No'), ('yes', 'Yes'),])
     number = forms.IntegerField(label='Num. of Repeats', max_value=11, min_value=1, required=False)
     investment = forms.ModelChoiceField(required=False, queryset=Investment.objects.filter(inv_type='trading'), widget=forms.Select(attrs={'class': 'select2-field'}))
     date: date = forms.DateField(required=True, widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}), input_formats=["%Y-%m-%d"])
-    price = forms.DecimalField(required=False, validators=[MinValueValidator(Decimal('0.01'))])
-    quantity = forms.DecimalField(required=False, validators=[MinValueValidator(Decimal('0.01'))])
-    value = forms.DecimalField(required=False, validators=[MinValueValidator(Decimal('0'))])
+    price = forms.DecimalField(required=False)
+    quantity = forms.DecimalField(required=False)
+    value = forms.DecimalField(required=False)
     action = forms.ChoiceField(choices=TRANSACTION_TYPE)
     action2 = models.IntegerField(choices=TransactionChoices.choices, default=TransactionChoices.NONE)
 
@@ -397,6 +398,34 @@ class SimpleCashReconcileForm(forms.Form):
 
 
 SimpleCashReconcileFormSet = formset_factory(SimpleCashReconcileForm, extra=0)
+
+class MonthReconcileForm(forms.Form):
+    '''
+    Simple form to update funding, redeeming and values for non-investment accounts.
+    limiting number to 9 for 9,999,999.99  - if you got 10m,  just call me and we can work something out.
+    '''
+    Total = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )# validators=[MinValueValidator(Decimal('0.00'))])
+    Funding = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )# validators=[MinValueValidator(Decimal('0.00'))])
+    Cash = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )#  validators=[MinValueValidator(Decimal('0.00'))])
+
+    def __init__(self, *args, account=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.account = account
+
+        for field in ['Total', 'Funding', 'Cash']:
+            if field not in self.initial or not self.initial[field]:
+                self.initial[field] = Decimal(0)
+            else:
+                self.initial[field] = Decimal(str(self.initial[field])).quantize(Decimal('0.01'))
+
+        if self.account.acct_type == 'Trading':
+            self.fields["Total"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
+            self.fields["Total"].widget.attrs['readonly'] = True
+        elif self.account.acct_type == 'Value':
+            self.fields["Total"].widget.attrs['style'] = 'width:110px'
+
+        self.fields["Funding"].widget.attrs['style'] = 'width:110px'
+        self.fields["Cash"].widget.attrs['style'] = 'width:110px'
 
 
 class SimpleReconcileForm(forms.Form):

@@ -7,8 +7,9 @@ urlpatterns = [
     path(r"", views.WealthDetailMain.as_view(), name="wealth_home"),
     path("debug_import/", views.debug_import),
     path("debug/", views.debug),
+    path("debug_clear/", views.debug_clear),
     path(r"data/", views.WealthDataMain.as_view(), name="wealth_data"),
-    # path(r'api/quick_delete', apis.delete_action, name="quick_delete"),
+    path(r"api/quick_delete", apis.delete_action, name="quick_delete"),
     # path(r'api/search/', apis.search_equity, name='equity_search'),
     # path(r'api/search_add/', apis.search_equity_add, name='equity_search_add'),
     path(r"api/equity_list/", apis.get_equity_list, name="wealth_equity_list"),
@@ -24,14 +25,28 @@ urlpatterns = [
     # path(r'account/help', views.wealth_help, name='wealth_help'),
     path(r"account/add/", views.AccountAddView.as_view(), name="wealth_account_add"),
     path(
-        r"account/<pk>/close/", views.AccountCloseView.as_view(), name="wealth_account_close"
+        r"account/<pk>/close/",
+        views.AccountCloseView.as_view(),
+        name="wealth_account_close",
     ),
-    path(r"account/<pk>/edit/", views.AccountEdit.as_view(), name="wealth_account_edit"),
-    path(r"account/<pk>/delete/",views.AccountDeleteView.as_view(),name="wealth_account_delete",),
-    # path(r'account/<pk>/reconcile_value/', views.reconcile_value, name='value_account_reconcile'),
-    path(r"account/<pk>/table/", views.AccountReconcileView.as_view(), name="wealth_account_table"),
     path(
-        r"account/<pk>/equity/<symbol>/", views.EquityView.as_view(), name="wealth_equity_view"
+        r"account/<pk>/edit/", views.AccountEdit.as_view(), name="wealth_account_edit"
+    ),
+    path(
+        r"account/<pk>/delete/",
+        views.AccountDeleteView.as_view(),
+        name="wealth_account_delete",
+    ),
+    # path(r'account/<pk>/reconcile_value/', views.reconcile_value, name='value_account_reconcile'),
+    path(
+        r"account/<pk>/table/",
+        views.AccountReconcileView.as_view(),
+        name="wealth_account_table",
+    ),
+    path(
+        r"account/<pk>/equity/<symbol>/",
+        views.EquityView.as_view(),
+        name="wealth_equity_view",
     ),
     # path(r'account/<pk>/<date_str>/reconcile/', views.reconciliation, name='reconciliation'),
     path(
@@ -40,13 +55,21 @@ urlpatterns = [
         name="wealth_reconciliation",
     ),
     path(
-        r"account/<pk>/reconcile/<date_str>/<scope_str>/",
-        views.accountDateDetailReconcileView.as_view(),
-        name="wealth_date_reconcile",
+        r"account/<pk>/reconcile_month/<date_str>/",
+        views.reconcileMonth.as_view(),
+        name="reconcile_month",
     ),
-    path(r"account/<pk>/", views.AccountDetailView.as_view(), name="wealth_account_details"),
+    path(
+        r"account/<pk>/",
+        views.AccountDetailView.as_view(),
+        name="wealth_account_details",
+    ),
     path(r"portfolio/add/", views.PortfolioAdd.as_view(), name="wealth_portfolio_add"),
-    path(r"portfolio/<pk>/edit/", views.PortfolioEdit.as_view(), name="wealth_portfolio_edit"),
+    path(
+        r"portfolio/<pk>/edit/",
+        views.PortfolioEdit.as_view(),
+        name="wealth_portfolio_edit",
+    ),
     path(
         r"portfolio/<pk>/delete/",
         views.PortfolioDeleteView.as_view(),
@@ -64,7 +87,9 @@ urlpatterns = [
         name="wealth_portfolio_details",
     ),
     path(
-        r"transaction/<account_id>/add/", views.add_transaction, name="wealth_transaction_add"
+        r"transaction/<account_id>/add/",
+        views.add_transaction,
+        name="wealth_transaction_add",
     ),
     path(
         r"transaction/<div_amount_id>/adjdiv/",

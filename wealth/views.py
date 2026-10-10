@@ -45,7 +45,7 @@ from .dataframes import WealthDF
 from .models import Account, Dividend, DividendAmount, Portfolio, Position, Investment, Value, Transaction, BaseContainer, Funding, CashFlow, DataSource, ValueBalance, clear_caches
 
 #from .tasks import equity_new_estimates
-from .forms import ModalBase, DividendAmountFormSet, TransactionForm, ModalBaseForm, SimpleReconcileFormSet, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountEditForm, UploadFileForm, AccountForm, TransactionSetValueForm, ManualUpdateEquityForm, AddEquityForm, ReconciliationFormSet, DividendAmountForm
+from .forms import ModalBase, DividendAmountFormSet, TransactionForm, ModalBaseForm, MonthReconcileForm, SimpleReconcileFormSet, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountEditForm, UploadFileForm, AccountForm, TransactionSetValueForm, SimpleReconcileForm, AddEquityForm, ReconciliationFormSet, DividendAmountForm
 from .importers import BaseImporter
 logger = logging.getLogger(__name__)
 
@@ -54,25 +54,32 @@ logger = logging.getLogger(__name__)
 class ReconciliationRow:
     date: date
     row_type: str
-    cash_flow: CashFlow
-    source: object
+    value: int
+    investment: str
+    note: str
+    id: int
 
     @classmethod
     def sort(cls, sort_input: List) -> List:
         TYPE_ORDER = {
-            "Deposit": 1,
-            "Dividend": 2,
-            "Sell": 3,
-            "Buy": 4,
-            "Withdraw": 5,
+            "Balance": 1,
+            "Deposit": 5,
+            "Dividend": 10,
+            "Sell": 15,
+            "Buy": 20,
+            "Withdraw": 25,
             "Other": 100,
         }
 
+        #sort_input.sort(
+        #    key=lambda sort_input: (
+        #        sort_input.date,
+        #        TYPE_ORDER[sort_input.row_type]
+        #    )
+        #)
+
         sort_input.sort(
-            key=lambda sort_input: (
-                sort_input.date,
-                TYPE_ORDER[sort_input.row_type]
-            )
+            key=lambda item: (-item.date.toordinal(), TYPE_ORDER[item.row_type])
         )
         return sort_input
 
@@ -138,6 +145,9 @@ def debug(request):
     #vb.save(rebuild=True)
     return HttpResponse(status=404)
 
+def debug_clear(request):
+    clear_caches()
+    return HttpResponse(status=404)
 
 def get_stale_investments(df) -> list[str]:
     """
@@ -225,9 +235,9 @@ class AccountCloseView(LoginRequiredMixin, ModalBaseMixin, UpdateView):
         return response
 
 
-class accountDateDetailReconcileView(ModalBaseMixin, LoginRequiredMixin, ContextMixinBase, View):
+class reconcileMonth(ModalBaseMixin, LoginRequiredMixin, ContextMixinBase, View):
 
-    template_name = "wealth/includes/activity_log.html"
+    template_name = "wealth/includes/reconcile_month.html"
 
     def setup(self, request, *args, **kwargs):
         super().setup(request, *args, **kwargs)
@@ -237,13 +247,9 @@ class accountDateDetailReconcileView(ModalBaseMixin, LoginRequiredMixin, Context
         except ValueError:
             raise Http404('Invalid Date')
 
-        self.scope = self.kwargs['scope_str']
-        if self.scope == 'month':
-            self.view_date = self.view_date.replace(day=1)
-            self.view_end = self.view_date + relativedelta(months=1)
-        else:
-            raise Http404('Only month scope is permitted')
-
+        self.view_date = self.view_date.replace(day=1)  # used to queryDB
+        self.dfo = WealthDF(user=request.user, scope='month')
+        self.df = self.dfo.df
 
 
     def get_context_data(self, **kwargs):
@@ -254,8 +260,7 @@ class accountDateDetailReconcileView(ModalBaseMixin, LoginRequiredMixin, Context
         context['form'] = ModalBaseForm(initial=self.get_modal_data())
         context['help_file'] = 'stocks/help/account_close.html'
 
-        df = self.dfo = WealthDF(user=self.request.user, scope=self.scope).df
-        df = df.loc[df['AccountID'] == self.account.id]
+        df = self.df.loc[self.df['AccountID'] == self.account.id]
         df = WealthDF.container_values_by_date_df(df)[columns]
 
         context['end_data'] = df.loc[df['Date'] == pd.to_datetime(self.view_date)].iloc[0].to_dict()
@@ -268,55 +273,141 @@ class accountDateDetailReconcileView(ModalBaseMixin, LoginRequiredMixin, Context
 
         data = []
 
+        view_end = self.view_date + relativedelta(months=1) - relativedelta(days=1)  # used to queryDB
+
         for transaction in Transaction.objects.filter(
             account=self.account,
             date__gte=self.view_date,
-            date__lt=self.view_end,
+            date__lte=view_end,
         ).select_related("cash_record"):
             data.append(
                 ReconciliationRow(
                     date=transaction.date,
                     row_type=transaction.action_str,
-                    cash_flow=transaction.cash_record,
-                    source=transaction,
+                    value=transaction.cash_record.value,
+                    investment=transaction.investment,
+                    note=transaction.note,
+                    id=transaction.pk,
                 )
             )
 
         for funding in Funding.objects.filter(
             account=self.account,
             date__gte=self.view_date,
-            date__lt=self.view_end,
+            date__lte=view_end,
         ).select_related("cash_record"):
+            if not funding.cash_record:
+                value = funding.value
+                if self.account.acct_type == 'Trading':
+                    value = f'{value} - Error'
+            else:
+                value = funding.cash_record.value
             data.append(
                 ReconciliationRow(
                     date=funding.date,
                     row_type=funding.funding_str,
-                    cash_flow=funding.cash_record,
-                    source=funding,
+                    value=value,
+                    investment=None,
+                    note=funding.note,
+                    id=funding.pk,
                 )
             )
+
+        for cf in CashFlow.objects.filter(
+            balance=True,
+            account=self.account,
+            date__gte=self.view_date,
+            date__lte=view_end,
+        ):
+            data.append(
+                ReconciliationRow(
+                    date=cf.date,
+                    row_type='Balance',
+                    value=cf.value,
+                    investment=None,
+                    note=cf.note,
+                    id=cf.pk,
+                )
+            )
+
+        for values in ValueBalance.objects.filter(
+            account=self.account,
+            date__gte=self.view_date,
+            date__lte=view_end,
+        ):
+            data.append(
+                ReconciliationRow(
+                    date=values.date,
+                    row_type='Balance',
+                    value=values.value,
+                    investment=None,
+                    note=values.note,
+                    id=values.pk,
+                )
+            )
+
 
         for divamount in (DividendAmount.objects.filter(
                 cash_record__in=CashFlow.objects.filter(dividendamount__isnull=False,
                                                         account=self.account,
                                                         date__gte=self.view_date,
-                                                        date__lt=self.view_end))
+                                                        date__lte=view_end))
         ).select_related("cash_record"):
             data.append(
                 ReconciliationRow(
                     date=divamount.cash_record.date,
-                    row_type='Dividend',
-                    cash_flow=divamount.cash_record,
-                    source=divamount,
+                    row_type="Dividend",
+                    value=divamount.cash_record.value,
+                    investment=divamount.cash_record.investment,
+                    note=divamount.cash_record.note,
+                    id=divamount.pk
+
                 )
             )
+
         ReconciliationRow.sort(data)
         context['activity_log'] = data
+        context['run_date'] = self.view_date
+        context['next_date'] = self.view_date + relativedelta(months=1)
+        context['previous_date'] = self.view_date - relativedelta(months=1)
         return context
 
     def get(self, request, *args, **kwargs):
         context = self.get_context_data()
+        context['form'] = MonthReconcileForm(initial=context['end_data'], account=self.account)
         return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        context = self.get_context_data()
+        form = MonthReconcileForm(request.POST, initial=context['end_data'], account=self.account)
+        if form.is_valid():
+
+            if context['run_date'].month == datetime.today().month:
+                last_day = IOOMDates.align_day(datetime.today(), keep_month=True)
+            else:
+                last_day = IOOMDates.align_day(context['next_date'] - relativedelta(days=1), keep_month=True)
+
+            changed = False
+            classmap = {'Cash': CashFlow, 'Total': ValueBalance, 'Funding': Funding}
+            for field in form.changed_data:
+                if ((form.cleaned_data[field] and form.cleaned_data[field] != context['end_data'][field]) and
+                    ((field == 'Cash' and self.account.acct_type != 'Value') or
+                     (field == 'Total' and self.account.acct_type == 'Value') or
+                     (field == 'Funding' and self.account.acct_type != 'Cash')
+                    )):
+
+                    try:
+                        cr = classmap[field].objects.get(date=last_day, account=self.account, balance=True)
+                    except classmap[field].DoesNotExist:
+                        cr = classmap[field](date=last_day, account=self.account, balance=True)
+                    cr.source = DataSource.RECONCILED.value
+                    cr.value = value=form.cleaned_data[field]
+                    cr.note = f"Reconciled on {datetime.today().strftime('%b-%d-%Y')} - {cr.note}"
+                    cr.save(rebuild=True)
+                    changed = True
+            if changed:  # todo,  put rebuild and clear_caches into some redis task
+                clear_caches(request.user)
+            return JsonResponse({'ok': True})
 
 
 class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, WealthRangeMixin, ContextMixinBase, View):
@@ -330,18 +421,15 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, WealthRangeMi
         except ValueError:
             raise Http404('Invalid request')
 
-        self.dfo = WealthDF(user=request.user, date_range=self.wealth_range)
-        self.formset_errors = 'Reconciliation for this date requires a range of less then 1 Year' if self.dfo.scope == 'month' and self.view_date > IOOMDates.max_day_scope() else None
-
+        self.dfo = WealthDF(user=request.user, scope='month')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['account'] = self.account
         context['form'] = ModalBaseForm(initial=self.get_modal_data())
         context['help_file'] = 'stocks/help/account_close.html'
+        context['date'] = self.view_date
         return context
-
-
 
     def get(self, request, *args, **kwargs):
         context = self.get_context_data()
@@ -362,9 +450,15 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, WealthRangeMi
     def post(self, request, *args, **kwargs):
         context = self.get_context_data()
         formset = self.get_formset(data=request.POST)
-        baseform = ModalBase(request.POST)
+        baseform = ModalBaseForm(request.POST)
         if formset.is_valid() and baseform.is_valid():
+            if self.view_date.month == datetime.today().month:
+                last_day = IOOMDates.align_day(datetime.today(), keep_month=True)
+            else:
+                last_day = IOOMDates.align_day((self.view_date + relativedelta(months=1)) - relativedelta(days=1), keep_month=True)
             source = DataSource.RECONCILED.value
+            note = f"Reconciled on {datetime.today().strftime('%b-%d-%Y')}"
+
             updated_quantity = updated_price = False
             for form in formset.forms:
                 if form.has_changed():
@@ -377,30 +471,32 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, WealthRangeMi
                     price = form.initial['Price'] if not investment.searchable else form.cleaned_data['Price']
                     if price != form.initial['Price']:
                         updated_price = True
-                        Value.objects.update_or_create(date=self.view_date, investment=investment, scope=self.dfo.scope, defaults={'source': source, 'value': price})
+                        Value.objects.update_or_create(date=last_day, investment=investment, defaults={'source': source, 'value': price})
 
                     if 'Quantity' in form.changed_data and form.cleaned_data['Quantity'] != form.initial['Quantity']:
                         updated_quantity = True
                         diff = form.cleaned_data['Quantity'] - form.initial['Quantity']
+                        note = f'{diff} units at {price} - {note}'
                         if diff < 0:
-                            Transaction.sell(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), price, self.view_date,
-                                             note=f'Reconciled on {datetime.now().date()}', source=source, rebuild=False)
+                            Transaction.sell(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), price, last_day,
+                                             note=note, source=source, rebuild=False)
                         elif diff > 0:
-                            Transaction.buy(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), price, self.view_date,
-                                            note=f'Reconciled on {datetime.now().date()}', source=source, rebuild=False)
+                            Transaction.buy(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), price, last_day,
+                                            note=note, source=source, rebuild=False)
 
                     if 'DivValue' in form.changed_data and form.cleaned_data['DivValue'] != form.initial['DivValue']:
-                        Dividend.objects.update_or_create(date=self.view_date, investment=investment, day_scope=(self.dfo.scope == 'day'),
+                        Dividend.objects.update_or_create(date=last_day, investment=investment,
                                                           defaults={'source': source, 'value': form.cleaned_data['DivValue']})
 
             if updated_price or updated_quantity:
-                self.account.rebuild(values=updated_price, positions=updated_quantity)
+                self.account.rebuild(values=updated_price, positions=updated_quantity, include_cash=False, include_funding=False)
                 clear_caches(user=request.user)
+
 
             if 'success_url' in baseform.cleaned_data:
                 return JsonResponse({"ok": True, "redirect": baseform.cleaned_data['success_url']})
             else:
-                return JsonResponse({"ok": True, "redirect": reverse('wealth_main', kwargs={})})
+                return JsonResponse({"ok": True, "redirect": reverse('wealth_account_table', kwargs={'pk': self.account.pk})})
         else:
             formset_errors = formset.errors
         return render(request, self.template_name, context)
@@ -493,6 +589,7 @@ class AccountEdit(LoginRequiredMixin, ModalBaseMixin, UpdateView, DateMixin):
         context['help_file'] = 'stocks/help/add_account.html'
         return context
 
+
 class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinBase, View):
     template_name = "wealth/reconciliation_table.html"
 
@@ -502,8 +599,9 @@ class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinB
     def get_context_data(self):
 
         context = super().get_context_data(**self.kwargs)
-        self.dfo = WealthDF(self.request.user, date_range=context['range'])  # Build and cache the proper scoped dataframe based on range
-        context['full_summary'] = self.dfo.container_summary_by_date(self.dfo.df)
+        self.dfo = WealthDF(self.request.user, scope='month')
+        df = self.dfo.df
+        context['full_summary'] = self.dfo.container_summary_by_date(df)
         try:
             context['last_updated'] = Investment.objects.filter(account__in=Account.objects.filter(user=self.request.user)).latest('last_updated').last_updated
         except Investment.DoesNotExist:
@@ -516,7 +614,7 @@ class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinB
         self.object = Account.objects.get(pk=self.kwargs['pk'], user=self.request.user)
         context = self.get_context_data()
         context['account'] = self.object
-        context["formset"] = self.get_formset()
+        context['month_data'] = self.get_initial_data()
         return render(request, self.template_name, context)
 
     def get_formset(self, data=None):
@@ -528,7 +626,7 @@ class AccountReconcileView(LoginRequiredMixin, WealthSummaryMixin, ContextMixinB
 
     def get_initial_data(self):
         wealth_range = self.request.session['wealth_range'] if 'wealth_range' in self.request.session else 'year'
-        dfo = WealthDF(self.request.user, date_range=wealth_range)
+        dfo = WealthDF(self.request.user, 'month')
         df = dfo.df
         if not df.empty:
             df = df.loc[df.AccountID == self.object.pk]
@@ -1096,15 +1194,63 @@ def edit_transaction2(request, pk, rec_type):
         investment = None
         value = transaction.value
 
-    initial = {'user': request.user, 'account': transaction.account, 'date': datetime.now().date(), 'investment': investment, 'action': action, 'quantity': quantity, 'price': price, 'value': value}
+    initial = {'user': request.user, 'account': transaction.account, 'date': datetime.now().date(),
+               'investment': investment, 'action': action, 'quantity': quantity, 'price': price, 'value': value,
+               'object_id': transaction.id, 'success_url': request.META.get('HTTP_REFERER', '/')}
+
     if request.method == 'POST':
         form = TransactionEditForm(request.POST, initial=initial)
         if form.is_valid():
-            clear_caches(request.user)
-            if 'success_url' in form.cleaned_data:
-                return JsonResponse({"ok": True, "redirect": form.cleaned_data['success_url']})
-            else:
-                return JsonResponse({"ok": True, "redirect": reverse('stocks_main', kwargs={})})
+            success = False
+            if form.cleaned_data['action'] in ['BUY', 'SELL']:
+                try:
+                    xa = Transaction.objects.get(pk=form.cleaned_data['object_id'])
+                    xa.price = abs(form.cleaned_data['price'])
+                    xa.quantity = abs(form.cleaned_data['quantity'])
+                    if form.cleaned_data['action'] == 'SELL':
+                        xa.quantity *= -1
+
+                    xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                    xa.save(rebuild=True)
+                    success = True
+                except Transaction.DoesNotExist:
+                    pass  # todo: add an error
+            elif form.cleaned_data['action'] in ['FUND', 'REDEEM']:
+                try:
+                    xa = Funding.objects.get(pk=form.cleaned_data["object_id"])
+                    xa.value = abs(form.cleaned_data["value"])
+                    if form.cleaned_data['action'] == 'REDEEM':
+                        xa.value *= -1
+                    xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                    xa.save(rebuild=True)
+                    success = True
+                except Funding.DoesNotExist:
+                    pass # todo: add an error
+            elif form.cleaned_data['action'] == 'BALANCE':
+                if rec_type == 'VALUE':
+                    try:
+                        xa = ValueBalance.objects.get(pk=form.cleaned_data['object_id'])
+                        xa.value = form.cleaned_data['value']
+                        xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                        xa.save(rebuild=True)
+                        success = True
+                    except ValueBalance.DoesNotExist:
+                        pass # todo: add an error
+                elif rec_type == 'CASH':
+                    try:
+                        xa = CashFlow.objects.get(pk=form.cleaned_data['object_id'])
+                        xa.value = form.cleaned_data['value']
+                        xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                        xa.save(rebuild=True)
+                        success = True
+                    except ValueBalance.DoesNotExist:
+                        pass # todo: add an error
+            if success:
+                clear_caches(request.user)
+                if 'success_url' in form.cleaned_data:
+                    return JsonResponse({"ok": True, "redirect": form.cleaned_data['success_url']})
+                else:
+                    return JsonResponse({"ok": True, "redirect": reverse('stocks_main', kwargs={})})
         else:
             return JsonResponse({"ok": True, "errors": form.errors})
     else:
@@ -1154,7 +1300,9 @@ def set_transaction(request, account_id, action):
                     Funding.withdraw(amount=abs(value), account=account, this_date=repmonth)
                     repmonth = repmonth + relativedelta(months=1)
 
-            elif action == 'BALANCE' or action == 'VALUE':
+            elif action == 'BALANCE':
+                CashFlow.set_balance(this_date, value, account, rebuild=True, source=DataSource.USER.value)
+            elif action == 'VALUE':
                 ValueBalance.set(account, value, this_date)
             else:
                 raise Http404('Action %s is not supported' % action)

@@ -27,17 +27,18 @@ def delete_action(request):
     action_type = request.GET.get("action_type", None)
     if action_id and action_type:
         action = Transaction.objects.none
-        if action_type == 'XA':
+        if action_type in ['XA', 'Buy', 'Sell']:
             action = Transaction.objects.filter(id=action_id, account__user=request.user)
-        elif action_type == 'FUND':
+        elif action_type in ['FUND', 'Withdraw', 'Deposit']:
             action = Funding.objects.filter(id=action_id, account__user=request.user)
-        elif action_type == 'CASH':
+        elif action_type in ['CASH', 'Balance']:
             action = CashFlow.objects.filter(id=action_id, account__user=request.user)
         elif action_type == 'VALUE':
             action = ValueBalance.objects.filter(id=action_id, account__user=request.user)
-        if action.count() == 1:
+        if action.count() == 1:  # It could be 0 I guess
             action.delete()
             if request.POST.get("refresh", True):
+
                 clear_caches(user=request.user)
             return HttpResponse(status=200)
     return HttpResponse(status=404)

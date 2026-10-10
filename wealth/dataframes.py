@@ -347,6 +347,13 @@ class WealthDF:
             .ffill()
         )
 
+        # Cash should also be Forward Filled
+        mask = merged['InvType'] == 'Cash'
+        merged.loc[mask, 'Quantity'] = (
+            merged.loc[mask, 'Quantity']
+            .ffill()
+        )
+
         # Remove the 0 values to prevent interpolate from moving quantities down to 0 - previous trading fills mean they are excluded already
         mask = merged['Quantity'] != 0
         merged['QuantityEstimated'] = False
