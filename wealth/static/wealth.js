@@ -10,6 +10,15 @@ const colors = [
 
 let ioomChart;
 
+function getCSRFToken() {
+    const name = "csrftoken=";
+    return document.cookie
+        .split(";")
+        .map(c => c.trim())
+        .find(c => c.startsWith(name))
+        ?.substring(name.length) || null;
+}
+
 function wealth_detail(range, object_type, object_id, options, compare, scope) {
 
     let url = "/wealth/api/wealth_chart";
@@ -18,11 +27,16 @@ function wealth_detail(range, object_type, object_id, options, compare, scope) {
     if (range !== undefined) {
         data['range'] = range
     }
-    if (object_type !== undefined) {
+    if (object_type !== undefined && object_type !== "") {
         data['object_type'] = object_type
         if (object_type === 'Account') {
             url = url;
+            click_detail_url = '/wealth/account/' + object_id + '/table/'
+        } else {
+            click_detail_url = '/wealth/wealth_portfolio/' + object_id + '/table/'
         }
+    } else {
+        click_detail_url = '/wealth/data/'
     }
     if (object_id !== undefined) {
         data['object_id'] = object_id
@@ -165,6 +179,23 @@ function wealth_detail(range, object_type, object_id, options, compare, scope) {
                 },
 
                 options: {
+                    onClick: function(event, elements, chart) {
+                        if (elements.length === 0) {
+                            return;  // Clicked somewhere other than a point
+                        }
+
+                        const element = elements[0];
+                        const index = element.index;
+                        const date = response.labels[index];
+
+                        const url = new URL(click_detail_url, window.location.origin);
+
+                        url.searchParams.set('range', range);
+                        url.searchParams.set('explicit_date', date)
+                        window.location.href = url.toString();
+
+                    },
+
                     maintainAspectRatio: false,
                     responsive: true,
 
@@ -325,8 +356,6 @@ function summary_chart(range, object_type, object_id) {
     });
 }
 
-
-
 function hideDiv(divId) {
     var div = document.getElementById(divId);
     if (div === null) {
@@ -413,7 +442,6 @@ function set_spinner() {
 function clear_spinner() {
     hideDiv("spinner-text")
 }
-
 
 function update_cash(call_api) {
     if (call_api) {
@@ -614,7 +642,6 @@ document.addEventListener('submit', function (e) {
 
         e.preventDefault();
 
-        console.log("modal form submit intercepted");
         input = document.querySelector(`[name="ioom_nonfield_errors"]`)
         if (input) {
             input.classList.remove('alert')
@@ -627,3 +654,125 @@ document.addEventListener('submit', function (e) {
 });
 
 
+/// Stuff for data pages  (used, main-data,  account, and portfolio
+
+function populate_monthly_data(this_date, this_object, this_object_type) {
+    const reconcileDate = this_date;
+    const reconcileAcct = this_object;
+    const reconcileType = this_object_type;
+
+    let url;
+    if (reconcileType === "Account") {
+        url = `/wealth/account/${reconcileAcct}/reconcile_month/${reconcileDate}/`;
+    } else if (reconcileType === "Portfolio") {
+        url = `/wealth/portfolio/${reconcileAcct}/reconcile_month/${reconcileDate}/`;
+    } else {
+        url = `/wealth/reconcile_month/${reconcileDate}/`;
+    }
+
+    sessionStorage.setItem('selectedReconciliationDate', reconcileDate);
+    sessionStorage.setItem('selectedReconciliationAcct', reconcileAcct);
+    sessionStorage.setItem('selectedReconciliationType', reconcileType);
+
+    fetch(url)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById("reconcile-pane").innerHTML = html;
+        })
+        .catch(error => console.error(error));
+}
+
+document.addEventListener('click', async function (event) {
+
+    if (event.target.matches('#jump-previous')) {
+        event.preventDefault();
+        const date = event.target.dataset.date;
+        if (date !== "") {
+            const selectedAcct = sessionStorage.getItem('selectedReconciliationAcct');
+            const selectedType = sessionStorage.getItem('selectedReconciliationType');
+            if (selectedAcct !== null & selectedType !== null) {
+                populate_monthly_data(date, selectedAcct, selectedType);
+            }
+        }
+    }
+    if (event.target.matches('#jump-next')) {
+        event.preventDefault();
+        const date = event.target.dataset.date;
+        if (date !== "") {
+            const selectedAcct = sessionStorage.getItem('selectedReconciliationAcct');
+            const selectedType = sessionStorage.getItem('selectedReconciliationType');
+            if (selectedAcct !== null & selectedType !== null) {
+                populate_monthly_data(date, selectedAcct, selectedType);
+            }
+        }
+    }
+});
+
+/// Stuff for reconcile_month.html
+document.addEventListener('submit', function (event) {
+    if (event.target.matches('#reconcile-form')) {
+        event.preventDefault();
+
+        const form = event.target;
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('POST failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.ok) {
+                    // POST succeeded
+                } else {
+                    // Django rejected the POST
+                    console.log(data);
+                }
+            })
+            .catch(error => console.error(error));
+    }
+});
+
+/// Styff for Transaction List
+
+document.addEventListener('click', async function (event) {
+    const icon = event.target.closest('.ioom-delete-action');
+
+    if (icon) {
+        event.preventDefault();
+
+        const row = icon.closest('tr');
+        if (!row) return;
+
+        row.classList.add('deleting-row');
+
+        try {
+            const response = await fetch(
+                `/wealth/api/quick_delete?action_id=${row.dataset.id}&action_type=${row.dataset.key}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCSRFToken(),
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                console.error('Delete failed' + response.status);
+                row.classList.remove('deleting-row');
+                return;
+            }
+
+            row.classList.add('deleted-row');
+            icon.style.display = 'none';
+
+        } catch (err) {
+            console.error('Request error', err);
+            row.classList.remove('deleting-row');
+        }
+    }
+})

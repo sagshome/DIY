@@ -400,10 +400,12 @@ class SimpleCashReconcileForm(forms.Form):
 SimpleCashReconcileFormSet = formset_factory(SimpleCashReconcileForm, extra=0)
 
 class MonthReconcileForm(forms.Form):
-    '''
-    Simple form to update funding, redeeming and values for non-investment accounts.
+    """
+    Simple form to update funding, redeeming and values for investment accounts.
     limiting number to 9 for 9,999,999.99  - if you got 10m,  just call me and we can work something out.
-    '''
+
+    When account is None,  all fields become R/O
+    """
     Total = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )# validators=[MinValueValidator(Decimal('0.00'))])
     Funding = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )# validators=[MinValueValidator(Decimal('0.00'))])
     Cash = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )#  validators=[MinValueValidator(Decimal('0.00'))])
@@ -418,20 +420,26 @@ class MonthReconcileForm(forms.Form):
             else:
                 self.initial[field] = Decimal(str(self.initial[field])).quantize(Decimal('0.01'))
 
-        if self.account.acct_type == 'Trading':
+        if not self.account or self.account.acct_type == 'Trading':
             self.fields["Total"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
             self.fields["Total"].widget.attrs['readonly'] = True
         elif self.account.acct_type == 'Value':
             self.fields["Total"].widget.attrs['style'] = 'width:110px'
 
-        self.fields["Funding"].widget.attrs['style'] = 'width:110px'
-        self.fields["Cash"].widget.attrs['style'] = 'width:110px'
-
+        if self.account:
+            self.fields["Funding"].widget.attrs['style'] = 'width:110px'
+            self.fields["Cash"].widget.attrs['style'] = 'width:110px'
+        else:
+            self.fields["Funding"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
+            self.fields["Funding"].widget.attrs['readonly'] = True
+            self.fields["Cash"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
+            self.fields["Cash"].widget.attrs['readonly'] = True
 
 class SimpleReconcileForm(forms.Form):
     '''
     Simple form to update funding, redeeming and values for non-investment accounts.
     limiting number to 9 for 9,999,999.99  - if you got 10m,  just call me and we can work something out.
+    When account is None,  all fields become R/O
     '''
     Date = forms.DateField()
     Total = forms.DecimalField(required=False, max_digits=9, decimal_places=2, )# validators=[MinValueValidator(Decimal('0.00'))])
@@ -457,17 +465,19 @@ class SimpleReconcileForm(forms.Form):
         self.fields["Date"].widget.attrs['style'] = 'width:110px;background-color:Wheat'
         self.fields["Date"].widget.attrs['readonly'] = True
 
-        if self.account.acct_type == 'Trading':
+        if not self.account or self.account.acct_type == 'Trading':
             self.fields["Total"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
             self.fields["Total"].widget.attrs['readonly'] = True
         elif self.account.acct_type == 'Value':
             self.fields["Total"].widget.attrs['style'] = 'width:110px'
 
-        self.fields["Funding"].widget.attrs['style'] = 'width:110px'
-        self.fields["Cash"].widget.attrs['style'] = 'width:110px'
+        if self.account:
+            self.fields["Funding"].widget.attrs['style'] = 'width:110px'
+            self.fields["Cash"].widget.attrs['style'] = 'width:110px'
+        else:
+            self.fields["Funding"].widget.attrs['style'] = 'width:100px;background-color:Wheat'
+            self.fields["Cash"].widget.attrs['readonly'] = True
 
-        self.fields["Total_est"].widget.attrs['style'] = 'width:110px;background-color:Wheat'
-        self.fields["Total_est"].widget.attrs['readonly'] = True
 
 
 class BaseSimpleReconcileFormSet(BaseFormSet):

@@ -38,12 +38,14 @@ def calculate_compare(dfo: WealthDF, df: pd.DataFrame, object_type: str, object_
                     sdf.drop(columns=['Cash', 'Funding', 'Trading', 'Value', 'TotalValue', 'NewFunding'], inplace=True)
                 else:
                     sdf = Value.as_dataframe(df, symbol, dfo.scope)
-                    sdf['PercentChange'] = sdf['Close'].pct_change()
-                    sdf["CP"] = sdf["ChangePercent"].cumsum()
-                    sdf["CP"] = sdf["CP"] * 100
-                    sdf.drop(columns=['Close', 'PercentChange'])
+                    if not sdf.empty:
+                        sdf['ChangePercent'] = sdf['Close'].pct_change()
+                        sdf["CP"] = sdf["ChangePercent"].cumsum()
+                        sdf["CP"] = sdf["CP"] * 100
+                        sdf.drop(columns=['Close', 'ChangePercent'])
                 sdf["Name"] = symbol
-                data.append(sdf)
+                if not sdf.empty:
+                    data.append(sdf)
     elif object_type and object_type == "Portfolio":
         df = dfo.set_names(df.loc[df["PortfolioID"] == object_id].copy())  # Limit dataframe to portfolio
         for account in df['AccountID'].unique():

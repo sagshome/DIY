@@ -24,46 +24,18 @@ urlpatterns = [
     # path(r'equity/add', views.add_equity, name='add_equity'),
     # path(r'account/help', views.wealth_help, name='wealth_help'),
     path(r"account/add/", views.AccountAddView.as_view(), name="wealth_account_add"),
-    path(
-        r"account/<pk>/close/",
-        views.AccountCloseView.as_view(),
-        name="wealth_account_close",
-    ),
-    path(
-        r"account/<pk>/edit/", views.AccountEdit.as_view(), name="wealth_account_edit"
-    ),
-    path(
-        r"account/<pk>/delete/",
-        views.AccountDeleteView.as_view(),
-        name="wealth_account_delete",
-    ),
+    path(r"account/<pk>/close/", views.AccountCloseView.as_view(),name="wealth_account_close",),
+    path(r"account/<pk>/edit/", views.AccountEdit.as_view(), name="wealth_account_edit"),
+    path(r"account/<pk>/delete/",views.AccountDeleteView.as_view(),name="wealth_account_delete",),
     # path(r'account/<pk>/reconcile_value/', views.reconcile_value, name='value_account_reconcile'),
-    path(
-        r"account/<pk>/table/",
-        views.AccountReconcileView.as_view(),
-        name="wealth_account_table",
-    ),
-    path(
-        r"account/<pk>/equity/<symbol>/",
-        views.EquityView.as_view(),
-        name="wealth_equity_view",
-    ),
-    # path(r'account/<pk>/<date_str>/reconcile/', views.reconciliation, name='reconciliation'),
-    path(
-        r"account/<pk>/<date_str>/reconcile/",
-        views.AccountDateReconcileView.as_view(),
-        name="wealth_reconciliation",
-    ),
-    path(
-        r"account/<pk>/reconcile_month/<date_str>/",
-        views.reconcileMonth.as_view(),
-        name="reconcile_month",
-    ),
-    path(
-        r"account/<pk>/",
-        views.AccountDetailView.as_view(),
-        name="wealth_account_details",
-    ),
+    #path(r"account/<pk>/table/",views.AccountReconcileView.as_view(),name="wealth_account_table",),
+    path(r"account/<pk>/table/",views.AccountTableView.as_view(),name="wealth_account_table",),
+    path(r"account/<pk>/equity/<symbol>/",views.EquityView.as_view(),name="wealth_equity_view",),
+    path(r'account/<pk>/<date_str>/reconcile/', views.AccountDateReconcileView.as_view(), name='wealth_reconciliation'),
+    path(r"account/<pk>/reconcile_month/<date_str>/", views.ReconcileAccountMonth.as_view(), name="account_reconcile_month"),
+    path(r"portfolio/<pk>/reconcile_month/<date_str>/", views.ReconcilePortfolioMonth.as_view(), name='portfolio_reconcile_month'),
+    path(r"reconcile_month/<date_str>/", views.ReconcileMonth.as_view(), name="wealth_reconcile_month"),
+    path(r"account/<pk>/",views.AccountDetailView.as_view(),name="wealth_account_details",),
     path(r"portfolio/add/", views.PortfolioAdd.as_view(), name="wealth_portfolio_add"),
     path(
         r"portfolio/<pk>/edit/",

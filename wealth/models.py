@@ -779,6 +779,9 @@ class Value(NormalizedDataModel):
                 df = IOOMDates(build=True, start=idf['Date'].min()).months_df
             else:
                 df = IOOMDates(force=True, build=True, start=idf['Date'].min()).days_df
+        else:
+            if 'Symbol' in df.columns:  # This is full df not a summary df,  so limite the df to this symbol vs ^TSX
+                df = df.loc[df['Symbol'] == symbol]
 
         df = df[['Date']].merge(idf, on='Date', how='left')
 

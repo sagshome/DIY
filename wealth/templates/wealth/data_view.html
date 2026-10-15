@@ -3,28 +3,94 @@
 
 {% block content %}
     {% include 'wealth/includes/wealth_summary_header.html' %}
-    <div>
-        {% include 'wealth/includes/actions.html' %}
-    </div>
+    {% include 'wealth/includes/actions.html' %}
     {% include 'wealth/includes/data_chart.html' %}
-    <div>
-        {% include 'wealth/includes/range.html' %}
-    </div>
+    {% include 'wealth/includes/range.html' %}
     {% if not container or container.container_type == 'Portfolio' %}
-        {% include './includes/wealth_summary_list.html' %}
+        {% include './includes/wealth_summary_list.html' %}  <!-- List o' stuff -->
     {% endif %}
-    {% if positions_list %}
-        <div class="container-fluid">
-            <div class="row">
-                <div class="col">
-                    {% include 'wealth/includes/wealth_data_list.html' %}
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="left-scroll">
+                    {% if data %}
+                        <table class="table table-striped caption-top">
+                            <caption>Account Data</caption>
+                            <thead style="background:#eee;">
+                                <tr>
+                                    <th>Date</th>
+                                    {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Cash' %}
+                                        <th>Value</th>
+                                        <th>Funding</th>
+                                    {% endif %}
+                                    {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Value' %}
+                                        <th>Cash</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            {% for item in data %}
+                                <tr class="reconciliation-row"
+                                    data-date="{{ item.DateStr }}"
+                                    data-container="{{ container.id }}"
+                                    data-type="{{ container.container_type }}" role="button">
+                                    <td>{{item.Date}}</td>
+                                    {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Cash' %}
+                                        <!--todo: make the columns class = 'bg-warning' if estimated -->
+                                        <td> {% if item.Total != 0 %}${{ item.Total | floatformat:'0g'}}{% endif %}</td>
+                                    {% endif %}
+                                    {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Cash' %}
+                                        <td>{% if item.Funding != 0 %}${{ item.Funding | floatformat:'0g'}}{% endif %}</td>
+                                    {% endif %}
+                                    {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Value' %}
+                                        <td>{% if item.Cash != 0 %}${{ item.Cash | floatformat:'0g'}}{% endif %}</td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </table>
+                    {% endif %}
                 </div>
-                <div class="col">
-                    {% include 'wealth/includes/positions_list.html' %}
+            </div>
+            <div class="col-md-9">
+                <div id="reconcile-pane">
+                    <div id="transaction-table">
+                    </div>
                 </div>
             </div>
         </div>
-    {% else %}
-        {% include 'wealth/includes/wealth_data_list.html' %}
-    {% endif %}
+    </div>
+    <script>
+        $(document).ready(function () {
+            document.querySelectorAll(".reconciliation-row").forEach(function (row) {
+                row.addEventListener("click", function () {
+                    //const reconcileDate = this.dataset.date;
+                    const reconcileDate = this.dataset.date;
+                    const reconcileAcct = this.dataset.container;
+                    const reconcileType = this.dataset.type;
+                    sessionStorage.setItem('selectedReconciliationDate', reconcileDate);
+                    sessionStorage.setItem('selectedReconciliationAcct', reconcileAcct);
+                    sessionStorage.setItem('selectedReconciliationType', reconcileType);
+
+                    populate_monthly_data(reconcileDate, reconcileAcct, reconcileType)
+                });
+            });
+            // On refresh page load see if we already have some values.
+            const selectedDate = sessionStorage.getItem('selectedReconciliationDate');
+            const selectedAcct = sessionStorage.getItem('selectedReconciliationAcct');
+            const selectedType = sessionStorage.getItem('selectedReconciliationType');
+            if (selectedAcct === "{{container.id}}" &&  selectedType === "{{container.container_type}}") {
+                if (selectedDate && selectedDate !== "null") {
+                    const row = document.querySelector(`.reconciliation-row[data-date="${CSS.escape(selectedDate)}"]`);
+                    if (row) {
+                        row.scrollIntoView({
+                            behavior: 'instant',
+                            block: 'center'
+                        });
+                        populate_monthly_data(selectedDate, selectedAcct, selectedType)
+                        // Re-load the right panel for this row
+                    }
+                }
+            }
+        })
+    </script>
+
 {% endblock content %}

@@ -6,9 +6,17 @@
     <button disabled class=".text-nowrap btn btn-sm btn-light">Go To:</button>
     {% if container %}
         {%  if container.container_type == 'Portfolio' or not container.portfolio %}
-            <a href="{% url 'wealth_home' %}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Wealth</a>
+            {% if view_type == 'Chart' %}
+                <a href="{% url 'wealth_home' %}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Wealth</a>
+            {% else %}
+                <a href="{% url 'wealth_data' %}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Wealth</a>
+            {% endif %}
         {% else %}
-            <a href="{{ container.portfolio.get_absolute_url }}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Portfolio</a>
+            {% if view_type == 'Chart' %}
+                <a href="{{ container.portfolio.get_absolute_url }}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Portfolio</a>
+            {% else %}
+                <a href="{{ container.portfolio.get_data_url }}" class="btn btn-outline-primary btn-sm" tabindex="-1" role="button">Portfolio</a>
+            {% endif %}
         {% endif %}
 
         {% if view_type == 'Data' %}
@@ -31,20 +39,20 @@
             {% if container.acct_type == 'Cash' %}
                 <a href="{% url 'wealth_set_balance' container.id %}" data-modal><button class="btn btn-outline-success btn-sm diy-button-auto diy-green"> Set Balance </button></a>
             {% else %}
-                {% if not account.closed %}
-                  <a href="{% url 'wealth_set_fund' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Deposit</button></a>
-                  <a href="{% url 'wealth_set_withdraw' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Withdraw</button></a>
-                  {% if account.acct_type == 'Value' %}
-                      <a href="{% url 'wealth_set_value' account.id %}" data-modal class="btn btn-outline-success btn-sm">Set Value</a>
+                {% if not container.closed %}
+                  <a href="{% url 'wealth_set_fund' container.id %}" data-modal><button class="btn btn-outline-success btn-sm">Deposit</button></a>
+                  <a href="{% url 'wealth_set_withdraw' container.id %}" data-modal><button class="btn btn-outline-success btn-sm">Withdraw</button></a>
+                  {% if container.acct_type == 'Value' %}
+                      <a href="{% url 'wealth_set_value' container.id %}" data-modal class="btn btn-outline-success btn-sm">Set Value</a>
                   {% else %}
-                      <a href="{% url 'wealth_transaction_add' account.id %}" data-modal><button class="btn btn-outline-success btn-sm">Add Transaction</button></a>
+                      <a href="{% url 'wealth_transaction_add' container.id %}" data-modal><button class="btn btn-outline-success btn-sm">Add Transaction</button></a>
                   {% endif %}
                 {% endif %}
             {% endif %}
         {% endif %}
 
 
-        {% if container.container_type == 'Account' and not account.closed %}
+        {% if container.container_type == 'Account' and not container.closed %}
             <a href="{{ container.close_url }}" data-modal> <button class="btn btn-outline-danger btn-sm">Close</button></a>
         {% endif %}
 

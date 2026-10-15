@@ -499,12 +499,21 @@ class WealthDF:
 
         return odf.loc[odf['Date'] == run_date].reset_index()
 
-    def by_range(self, value: str):
+    def by_range(self, value: str, explict_range: Union[date, None] = None) -> DataFrame:
         if self.df.empty:
             return self.df
-        else:
-            start = IOOMDates().range_start(value)
-            return self.df.loc[self.df['Date'] >= start].reset_index()
+        start = IOOMDates().range_start(value)
+        df = self.df.loc[self.df['Date'] >= start].reset_index()
+        if explict_range:
+            if self.scope == 'month':
+                mindate = explict_range - relativedelta(months=2)
+                maxdate = explict_range + relativedelta(months=2)
+            else:
+                mindate = IOOMDates.align_day(explict_range - relativedelta(days=2), keep_month=False)
+                maxdate = IOOMDates.align_day(explict_range + relativedelta(days=2), keep_month=False)
+            df = df.loc[(df['Date'] >= mindate) & (df['Date'] <= maxdate)]
+        return df
+
 
     def set_names(self, df: DataFrame):
         """
@@ -684,14 +693,15 @@ class WealthDF:
 
         balance_df = self.df.loc[(self.df['AccountID'] == account_id) & (self.df['InvType'] == 'Cash')]
 
-    def container_summary_values(self, idf: DataFrame, run_date: Timestamp, is_portfolio=False) -> dict:
+    def container_summary_values(self, idf: DataFrame, is_portfolio=False) -> dict:
         """
         Return the summary dictionary based on the run_date with a value for:
         Value, Cash, EffectiveCost, TotalDividends, ID, Type, Name
         """
         if 'AccountName' not in idf.columns:
             idf = self.set_names(idf)  # Set AccountName and PortfolioName columns
-        ldf = idf.loc[idf['Date'] == run_date]
+
+        ldf = idf.loc[idf['Date'] == idf['Date'].max()]
 
         results = {'Value': ldf.loc[(ldf['InvType'] == 'Trading') | (ldf['InvType'] == 'Value')].agg({'InvValue': 'sum'}).item(),
                    'Cash': ldf.loc[ldf['InvType'] == 'Cash'].agg({'InvValue': 'sum'}).item(),
@@ -726,12 +736,12 @@ class WealthDF:
         if len(df['PortfolioID'].unique()) > 1:
             for p in df['PortfolioID'].unique():
                 if p != 0:  # 0 Is used to indicate a non-portfolio
-                    results.append(self.container_summary_values(df.loc[df['PortfolioID'] == p], run_date=this_date, is_portfolio=True))
+                    results.append(self.container_summary_values(df.loc[df['PortfolioID'] == p], is_portfolio=True))
 
             df = df.loc[df['PortfolioID'] == 0]
 
         for a in df['AccountID'].unique():
-            results.append(self.container_summary_values(df.loc[df['AccountID'] == a], run_date=this_date, is_portfolio=False))
+            results.append(self.container_summary_values(df.loc[df['AccountID'] == a], is_portfolio=False))
         return results
 
     def today_summary(self, parsed_df: Union[DataFrame, None] = None):

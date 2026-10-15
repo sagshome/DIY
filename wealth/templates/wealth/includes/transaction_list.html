@@ -1,0 +1,44 @@
+<div class="row">
+    <table class="table table-striped caption_top">
+        <caption class="w3-wide w3-padding-16">Activities List</caption>
+        <thead class="w3-margin-bottom" style="background:#eee;">
+            <tr>
+                <th></th>
+                <th>Date</th>
+                <th>Account</th>
+                <th>Activity</th>
+                <th>Investment</th>
+                <th>Value</th>
+                <th>Cash</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        {% for item in transaction_list %}
+            <tr id="row-XA-{{ item.id }}" data-id="{{item.id}}" data-key="{{item.row_type}}"
+                class="ioom-action-row {% if item.row_type == 'Dividend' and item.source.altered %}altered-row{% endif %}">
+                <td>
+                    {% if item.row_type == 'Dividend' %}
+                        <a href="{% url 'wealth_adjust_dividend' item.id %}" data-modal><span class="bi bi-pencil"></span></a>
+                    {% elif item.row_type == 'Buy' or item.row_type == 'Sell' %}
+                        <i class="bi bi-trash ioom-delete-action"></i>
+                        <a href="{% url 'wealth_transaction_edit' item.id 'XA' %}" data-modal><span class="bi bi-pencil"></span></a>
+                    {% elif item.row_type == 'Withdraw' or item.row_type == 'Deposit' %}
+                        <i class="bi bi-trash ioom-delete-action"></i>
+                        <a href="{% url 'wealth_transaction_edit' item.id 'FUND' %}" data-modal><span class="bi bi-pencil"></span></a>
+                    {% elif item.row_type == 'Balance' %}
+                        <i class="bi bi-trash ioom-delete-action"></i>
+                        <a href="{% url 'wealth_transaction_edit' item.id 'CASH' %}" data-modal><span class="bi bi-pencil"></span></a>
+
+                    {% endif %}
+                </td>
+                <td>{{ item.date }}</td>
+                <td>{{ item.container_name }}</td>
+                <td>{{ item.row_type }}</td>
+                <td>{% if item.investment %}{{ item.investment }} {% endif %}</td>
+                <td>{{ item.value | floatformat:'2g'}}</td>
+                <td>{{ item.cash | floatformat:'2g'}}</td>
+                <td>{{ item.note }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
