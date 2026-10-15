@@ -5,10 +5,13 @@ from . import views, apis, charts
 # Base is wealth/
 urlpatterns = [
     path(r"", views.WealthDetailMain.as_view(), name="wealth_home"),
+    path(r"data/", views.WealthDataMain.as_view(), name="wealth_data"),
+    path(r"reconcile_month/<date_str>/", views.ReconcileMonth.as_view(), name="wealth_reconcile_month"),
+
     path("debug_import/", views.debug_import),
     path("debug/", views.debug),
     path("debug_clear/", views.debug_clear),
-    path(r"data/", views.WealthDataMain.as_view(), name="wealth_data"),
+
     path(r"api/quick_delete", apis.delete_action, name="quick_delete"),
     # path(r'api/search/', apis.search_equity, name='equity_search'),
     # path(r'api/search_add/', apis.search_equity_add, name='equity_search_add'),
@@ -21,7 +24,9 @@ urlpatterns = [
     path(r"api/wealth_chart", charts.wealth_detail, name="wealth_chart"),
     path(r"api/wealth_data", charts.wealth_data, name="wealth_compare"),
     # path(r'api/equity_summary', charts.equity_summary, name='equity_summary'),
+
     # path(r'equity/add', views.add_equity, name='add_equity'),
+
     # path(r'account/help', views.wealth_help, name='wealth_help'),
     path(r"account/add/", views.AccountAddView.as_view(), name="wealth_account_add"),
     path(r"account/<pk>/close/", views.AccountCloseView.as_view(),name="wealth_account_close",),
@@ -33,74 +38,29 @@ urlpatterns = [
     path(r"account/<pk>/equity/<symbol>/",views.EquityView.as_view(),name="wealth_equity_view",),
     path(r'account/<pk>/<date_str>/reconcile/', views.AccountDateReconcileView.as_view(), name='wealth_reconciliation'),
     path(r"account/<pk>/reconcile_month/<date_str>/", views.ReconcileAccountMonth.as_view(), name="account_reconcile_month"),
-    path(r"portfolio/<pk>/reconcile_month/<date_str>/", views.ReconcilePortfolioMonth.as_view(), name='portfolio_reconcile_month'),
-    path(r"reconcile_month/<date_str>/", views.ReconcileMonth.as_view(), name="wealth_reconcile_month"),
     path(r"account/<pk>/",views.AccountDetailView.as_view(),name="wealth_account_details",),
+
+    path(r"portfolio/<pk>/reconcile_month/<date_str>/", views.ReconcilePortfolioMonth.as_view(), name='portfolio_reconcile_month'),
     path(r"portfolio/add/", views.PortfolioAdd.as_view(), name="wealth_portfolio_add"),
-    path(
-        r"portfolio/<pk>/edit/",
-        views.PortfolioEdit.as_view(),
-        name="wealth_portfolio_edit",
-    ),
-    path(
-        r"portfolio/<pk>/delete/",
-        views.PortfolioDeleteView.as_view(),
-        name="wealth_portfolio_delete",
-    ),
-    path(
-        r"wealth_portfolio/<pk>/table/",
-        views.PortfolioTableView.as_view(),
-        name="wealth_portfolio_table",
-    ),
+    path( r"portfolio/<pk>/edit/", views.PortfolioEdit.as_view(), name="wealth_portfolio_edit",),
+    path( r"portfolio/<pk>/delete/", views.PortfolioDeleteView.as_view(), name="wealth_portfolio_delete",),
+    path( r"wealth_portfolio/<pk>/table/", views.PortfolioTableView.as_view(), name="wealth_portfolio_table",),
     # path(r'portfolio/<pk>/update/', views.portfolio_update, name='portfolio_update'),
-    path(
-        r"portfolio/<pk>/",
-        views.PortfolioDetailView.as_view(),
-        name="wealth_portfolio_details",
-    ),
-    path(
-        r"transaction/<account_id>/add/",
-        views.add_transaction,
-        name="wealth_transaction_add",
-    ),
-    path(
-        r"transaction/<div_amount_id>/adjdiv/",
-        views.update_dividend_amount,
-        name="wealth_adjust_dividend",
-    ),
-    path(
-        r"transaction/<account_id>/fund/",
-        views.set_transaction,
-        {"action": "FUND"},
-        name="wealth_set_fund",
-    ),
-    path(
-        r"transaction/<account_id>/withdraw/",
-        views.set_transaction,
-        {"action": "REDEEM"},
-        name="wealth_set_withdraw",
-    ),
-    path(
-        r"transaction/<account_id>/balance/",
-        views.set_transaction,
-        {"action": "BALANCE"},
-        name="wealth_set_balance",
-    ),
-    path(
-        r"transaction/<account_id>/value/",
-        views.set_transaction,
-        {"action": "VALUE"},
-        name="wealth_set_value",
-    ),
+    path( r"portfolio/<pk>/", views.PortfolioDetailView.as_view(), name="wealth_portfolio_details",),
+
+    path( r"transaction/<account_id>/add/", views.add_transaction, name="wealth_transaction_add",),
+    path( r"transaction/<div_amount_id>/adjdiv/", views.update_dividend_amount, name="wealth_adjust_dividend",),
+    path( r"transaction/<account_id>/fund/", views.set_transaction, {"action": "FUND"}, name="wealth_set_fund",),
+    path( r"transaction/<account_id>/withdraw/", views.set_transaction, {"action": "REDEEM"}, name="wealth_set_withdraw",),
+    path( r"transaction/<account_id>/balance/", views.set_transaction, {"action": "BALANCE"}, name="wealth_set_balance",),
+    path( r"transaction/<account_id>/value/", views.set_transaction, {"action": "VALUE"}, name="wealth_set_value",),
     # path(r'transaction/<account_id>/buy/', views.set_transaction,  {'action': 'BUY'}, name='set_buy'),
     # path(r'transaction/<account_id>/sell/', views.set_transaction,  {'action': 'SELL'}, name='set_sell'),
-    path(
-        r"transaction/<pk>/<rec_type>/edit/",
-        views.edit_transaction2,
-        name="wealth_transaction_edit",
-    ),
+    path( r"transaction/<pk>/<rec_type>/edit/", views.edit_transaction2, name="wealth_transaction_edit",),
     # path(r'transaction/<pk>/delete/', views.TransactionDeleteView.as_view(), name='transaction_delete'),
+
     # path(r'funding/<account_id>/add/', views.add_fund, name='fund_add'),
+
     path(r"upload/", views.upload_file, name="wealth_upload"),  # Used in base.html
     # path(r'export/', views.export_stocks, name='stocks_export'),
     # path(r'export/download/', views.export_stocks_download, name='stocks_download')
