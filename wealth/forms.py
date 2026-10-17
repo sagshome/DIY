@@ -29,6 +29,7 @@ class ModalBase:
 class ModalBaseForm(ModalBase, forms.Form):
     pass
 
+
 class TransactionChoices(models.IntegerChoices):
     NONE = 0, "----------"
     FUND = 1, "Deposit"
@@ -71,7 +72,6 @@ class AccountForm(ReadonlyFieldsMixin, forms.ModelForm):
         append_styles(self.fields["account_name"].widget, width='200px', height='28.5px')
         append_styles(self.fields["currency"].widget, width='200px', height='28.5px')
         append_styles(self.fields["managed"].widget, width='200px', height='28.5px')
-
 
 
 class AccountEditForm(AccountForm):
@@ -194,6 +194,7 @@ class TransactionForm(forms.Form):
     to_account = forms.ModelChoiceField(Account.objects.all(), required=False, widget=forms.HiddenInput())
     success_url = forms.URLField(required=False, widget=forms.HiddenInput())
     object_id = forms.IntegerField(required=False, widget=forms.HiddenInput())  # needed for Edits
+    note = forms.CharField(required=False, max_length=128, help_text='An optional short description of the event')
 
     repeat = forms.ChoiceField(choices=[('no', 'No'), ('yes', 'Yes'),])
     number = forms.IntegerField(label='Num. of Repeats', max_value=11, min_value=1, required=False)
@@ -207,7 +208,6 @@ class TransactionForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['investment'].queryset = Investment.objects.filter(inv_type='Trading')
 
         account = user = None
         if 'initial' in kwargs:
@@ -217,11 +217,17 @@ class TransactionForm(forms.Form):
                 user = kwargs['initial']['user']
             if 'success_url' in kwargs:
                 success_url = kwargs['initial']['success_url']
+            if "investment" in kwargs["initial"]:
+                self.fields["investment"].queryset = Investment.objects.filter(symbol=kwargs["initial"]["investment"])
+        else:
+            self.fields["investment"].queryset = Investment.objects.filter(inv_type="Trading")
 
         if account:
             self.fields['to_account'].queryset = Account.objects.filter(user=user).exclude(id=account.id)
         else:
             self.fields['to_account'].queryset = Account.objects.none()
+
+        self.fields["note"].widget.attrs['style'] = 'text-align:left;width:650;'
 
 
 class TransactionSetValueForm(TransactionForm):
@@ -246,7 +252,6 @@ class TransactionEditForm(TransactionForm):
         self.fields['action'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["action"].widget.attrs['readonly'] = True
         self.fields['action'].choices = [(self.initial['action'], dict(self.TRANSACTION_TYPE)[self.initial['action']])]
-
 
 class ManualUpdateEquityForm(forms.Form):
 

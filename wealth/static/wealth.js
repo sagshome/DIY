@@ -437,7 +437,19 @@ function set_spinner() {
         var ele = document.getElementById('spinner-text');
         ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
     }, 1000);
-};
+}
+
+function set_class_spinner(spinner_id) {
+    that_id = spinner_id + '-spinner'
+    showDiv(that_id)
+        var t = setInterval(function () {
+        var ele = document.getElementById(that_id);
+        ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
+    }, 1000);
+
+}
+
+
 
 function clear_spinner() {
     hideDiv("spinner-text")
@@ -580,6 +592,13 @@ function initModalControls(container) {
         }
     });
 
+    for (const el of document.getElementsByClassName("slow-submit-btn")) {
+        el.addEventListener("click", function () {
+            set_class_spinner(el.id)
+        })
+    }
+
+    // old style
     var slow_btn = document.getElementById("slow-submit-btn")
     if (slow_btn) {
         slow_btn.addEventListener("click", function () {
@@ -590,7 +609,6 @@ function initModalControls(container) {
 
 
 async function processTransactionResult(form) {
-    clear_spinner()
     const res = await fetch(form.getAttribute('action'), {
         method: "POST",
         body: new FormData(form),
@@ -601,6 +619,7 @@ async function processTransactionResult(form) {
     if (data.redirect) {
         window.location.href = data.redirect;
     } else {
+        clear_spinner()
         Object.entries(data.errors).forEach(([field, messages]) => {
 
             let input = document.querySelector(`[name="${field}"]`);

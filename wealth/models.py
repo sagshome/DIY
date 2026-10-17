@@ -795,7 +795,7 @@ class Value(NormalizedDataModel):
     def lookup(cls, lookup_date: date, symbol: str):
         try:
             lookup = Value.objects.filter(investment__symbol=symbol, date__lte=lookup_date).latest('date')
-            return lookup.close_value if lookup.close_value != 0 else lookup.open_value
+            return lookup.value
         except cls.DoesNotExist:
             logger.error('Attempt to lookup %s on date:%s = No Value' % (symbol, lookup_date))
             return 0
@@ -1073,6 +1073,7 @@ class Account(BaseContainer):
         return self.name
 
     def add_investment(self, investment: Investment, opened: Union[date | None] = None):
+        opened = IOOMDates.align_day(opened) if opened else opened  # Ensure we are a valid day or None
         try:
             existing : AccountInvestment = AccountInvestment.objects.get(account=self, investment=investment)
             dirty = False

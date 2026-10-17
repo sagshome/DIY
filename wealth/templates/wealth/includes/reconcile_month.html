@@ -12,7 +12,7 @@
                             <th>Funding</th>
                         {% endif %}
                         {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Value' %}
-                            <th>Funding</th>
+                            <th>Cash</th>
                         {% endif %}
                     </tr>
                 </thead>
@@ -22,7 +22,6 @@
                         <td>
                             ${{ reconcile_month_form.Total }}
                             {% if not container or container.container_type == 'Account' or container.acct_type == 'Trading' %}
-                                {{container}} {{container.container_type}} {{container.acct_type}}
                                 <a href="{{equity_reconcile_url}}" data-modal class="btn btn-outline-success btn-sm">Reconcile</a>
                             {% else %}
                                 <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
@@ -45,9 +44,15 @@
                 {% if start_data %}
                     <tr>
                         <td>{{ start_data.Date | date:'M-Y'}}</td>
-                        {% if account.acct_type != 'Cash' %}<td>${{ start_data.Total | floatformat:'0g' }}</td>{% endif %}
-                        {% if account.acct_type != 'Cash' %}<td>${{ start_data.Funding | floatformat:'0g' }}</td>{% endif %}
-                        {% if account.acct_type != 'Value' %}<td>${{ start_data.Cash | floatformat:'0g' }}</td>{% endif %}
+                        {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Cash' %}
+                            <td>${{ start_data.Total | floatformat:'0g' }}</td>
+                        {% endif %}
+                        {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Cash' %}
+                            <td>${{ start_data.Funding | floatformat:'0g' }}</td>
+                        {% endif %}
+                        {% if not container or container.container_type == 'Portfolio' or container.acct_type != 'Value' %}
+                            <td>${{ start_data.Cash | floatformat:'0g' }}</td>
+                        {% endif %}
                     </tr>
                 {% endif %}
             </table>

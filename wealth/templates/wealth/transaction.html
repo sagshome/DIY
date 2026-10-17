@@ -47,11 +47,15 @@
                 </tr>
                 <tr id=equityRow>
                     <td class="diy-label">{{ form.investment.label_tag }}</td>
-                    <td><select id="id_equity" name="investment" style="width: 100%;">
-                            <option value="">Select an option...</option>
-                        </select>
-                    </td>
-                    <td>{{ form.investment.errors }}</td>
+                    {% if view_verb == 'Edit' %}
+                        <td>{{investment}}</td>
+                    {% else %}
+                        <td><select id="id_equity" name="investment" style="width: 100%;">
+                                <option value="">Select an option...</option>
+                            </select>
+                        </td>
+                        <td>{{ form.investment.errors }}</td>
+                    {% endif %}
                 </tr>
                 <tr id=priceRow>
                     <td class="diy-label">{{ form.price.label_tag }}</td>
@@ -83,11 +87,22 @@
                     <td>{{ form.number }}</td>
                     <td>{{ form.number.errors }}</td>
                 </tr>
+                <tr id=noteRow>
+                    <td class="diy-label">{{ form.note.label_tag }}</td>
+                    <td>{{ form.note }}</td>
+                    <td>{{ form.note.errors }}</td>
+                </tr>
+
                 </tbody>
             </table>
             <div>
-                <button class="btn btn-outline-success btn-sm" type="submit">Save</button>
-                <a class="btn btn-outline-warning btn-sm" href="{{success_url}}">Cancel</a>
+                <p>
+                    <button id='xa-submit' class="slow-submit-btn btn btn-outline-success btn-sm" type="submit">Save</button>
+                    <span id="xa-submit-spinner" style="display: none;" class="spinner">...Recalculating Wealth...</span>
+                </p>
+                <p><a id='xa-cancel' class="slow-submit-btn btn btn-outline-warning btn-sm" href="{{success_url}}">Cancel</a>
+                     <span id="xa-cancel-spinner" style="display: none;" class="spinner">...ReLoading Data...</span>
+                </p>
                 {% if view_verb == 'Add' %}
                     <button class="btn btn-outline-primary btn-sm" name="submit-type" value="Add Another" type="submit">Add Another</button>
                 {% endif %}

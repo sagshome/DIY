@@ -191,7 +191,7 @@ class ReconciliationRow:
         """
         Call sort first or this make little sense
         """
-        value: Decimal = Decimal(initial_value)
+        value: Decimal = Decimal(float(initial_value))
         for item in reversed(sorted_input):
             item.cash = item.value + value
             value = item.cash

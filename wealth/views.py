@@ -1216,32 +1216,38 @@ def edit_transaction2(request, pk, rec_type):
     This is a bootstrap modal form.   POST must return JSON,  with redirect key for redirection
     """
 
-    quantity = price = value = None
+    investment = note = quantity = price = value = None
     if rec_type == 'XA':
         transaction = get_object_or_404(Transaction, pk=pk, account__user=request.user)
+        account = transaction.account
         action = 'BUY' if transaction.quantity > 0 else 'SELL'
         investment = transaction.investment
         quantity=transaction.quantity
         price=transaction.price
+        note = transaction.note
     elif rec_type == 'FUND':
         transaction = get_object_or_404(Funding, pk=pk, account__user=request.user)
+        account = transaction.account
         action = 'FUND' if transaction.value > 0 else 'REDEEM'
-        investment = None
         value = transaction.value
-
+        note = transaction.note
     elif rec_type == 'CASH':
         transaction = get_object_or_404(CashFlow, pk=pk, account__user=request.user)
+        account = transaction.account
         action = 'BALANCE'
-        investment = None
         value = transaction.value
-
+        note = transaction.note
     elif rec_type == 'VALUE':
         transaction = get_object_or_404(ValueBalance, pk=pk, account__user=request.user)
+        account = transaction.account
         action = 'BALANCE'
-        investment = None
         value = transaction.value
+        note = transaction.note
+    else:
+        action = 'unknown'
 
-    initial = {'user': request.user, 'account': transaction.account, 'date': datetime.now().date(),
+
+    initial = {'user': request.user, 'account': account, 'date': datetime.now().date(), 'note': note,
                'investment': investment, 'action': action, 'quantity': quantity, 'price': price, 'value': value,
                'object_id': transaction.id, 'success_url': request.META.get('HTTP_REFERER', '/')}
 
@@ -1257,7 +1263,7 @@ def edit_transaction2(request, pk, rec_type):
                     if form.cleaned_data['action'] == 'SELL':
                         xa.quantity *= -1
 
-                    xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                    xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                     xa.save(rebuild=True)
                     success = True
                 except Transaction.DoesNotExist:
@@ -1268,7 +1274,7 @@ def edit_transaction2(request, pk, rec_type):
                     xa.value = abs(form.cleaned_data["value"])
                     if form.cleaned_data['action'] == 'REDEEM':
                         xa.value *= -1
-                    xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                    xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                     xa.save(rebuild=True)
                     success = True
                 except Funding.DoesNotExist:
@@ -1278,7 +1284,7 @@ def edit_transaction2(request, pk, rec_type):
                     try:
                         xa = ValueBalance.objects.get(pk=form.cleaned_data['object_id'])
                         xa.value = form.cleaned_data['value']
-                        xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                        xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                         xa.save(rebuild=True)
                         success = True
                     except ValueBalance.DoesNotExist:
@@ -1287,7 +1293,7 @@ def edit_transaction2(request, pk, rec_type):
                     try:
                         xa = CashFlow.objects.get(pk=form.cleaned_data['object_id'])
                         xa.value = form.cleaned_data['value']
-                        xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {xa.note}"
+                        xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                         xa.save(rebuild=True)
                         success = True
                     except ValueBalance.DoesNotExist:
@@ -1304,6 +1310,7 @@ def edit_transaction2(request, pk, rec_type):
         form = TransactionEditForm(initial=initial)
     return render(request, 'wealth/transaction.html', {
         'success_url': request.META.get('HTTP_REFERER', '/'),
+        'investment': investment,
         'transaction': transaction,
         'form': form,
         'view_verb': 'Edit',

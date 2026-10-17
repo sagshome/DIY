@@ -431,7 +431,7 @@ class BaseImporter:
         for _, row in merged.loc[merged['_merge'] == 'left_only'].iterrows():
             investment = get_or_add_investment(row['Symbol'], row['Symbol'])
             self.account_cache[row['AccountKey']].add_investment(investment, row['Date'])
-            account = get_or_add_account(row['AccountID'])
+            #account = get_or_add_account(row['AccountID'])
             quantity = row['Quantity'] / 100
             logger.debug('Transaction:%s:%s %s: %s@%s Note:%s' % (row['Date'], row['AccountKey'], row['Symbol'], quantity, row['Price'], row['Description']))
             if quantity > 0:
@@ -837,7 +837,7 @@ class NewManLife(BaseImporter):
         for idx, row in df.loc[df['Transaction Type'] == 'Dividend'].iterrows():
             # We have a case where quantity is less than 0 it is a sell (makes no sense buy I see it in the exports (buy/sell) combo
             investment = get_or_add_investment(row['Symbol'], region=self.region_key(row['Market']))
-            self.account_cache[row['AccountKey']].add_investment(investment, row['Date'])
+            # self.account_cache[row['AccountKey']].add_investment(investment, row['Date'])
             if investment.searchable:
                 df.loc[idx, 'Transaction Type'] = 'skipped DIV'
         return df
