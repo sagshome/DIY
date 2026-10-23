@@ -23,7 +23,7 @@ from django.utils import timezone
 from functools import cached_property
 from itertools import groupby
 from operator import itemgetter
-from yfinance.exceptions import YFRateLimitError
+from pandas import Timestamp
 
 from typing import List, Union, Dict
 
@@ -704,7 +704,7 @@ class Investment(models.Model):
         try:
             self.region = data['country'] if 'country' in data else data['region']  # What do you expect with free data
             self.currency = data['currency']
-            self.name = data['shortName']
+            self.description = data['shortName']
         except KeyError:
             logger.error('Lookup data error on %s: %s' % (self.symbol, data))
             return
@@ -792,13 +792,48 @@ class Value(NormalizedDataModel):
         return df
 
     @classmethod
-    def lookup(cls, lookup_date: date, symbol: str):
+    def lookup(cls, lookup_date: Union[Timestamp, datetime, date], symbol: str):
+        today = datetime.today()
+        lookup_date = lookup_date if  lookup_date.month != today.month else today
+        lookup_date = IOOMDates.align_day(lookup_date)
+
         try:
             lookup = Value.objects.filter(investment__symbol=symbol, date__lte=lookup_date).latest('date')
             return lookup.value
         except cls.DoesNotExist:
             logger.error('Attempt to lookup %s on date:%s = No Value' % (symbol, lookup_date))
             return 0
+
+    @classmethod
+    def lookup_exdiv(cls, lookup_date: Union[Timestamp, datetime, date], symbol: str):
+        lookup_date = IOOMDates.align_day(lookup_date)
+
+        try:
+            lookup = Value.objects.filter(investment__symbol=symbol, date=lookup_date).latest('date')
+            return lookup.ex_dividend
+        except cls.DoesNotExist:
+            return 0
+
+    @classmethod
+    def lookup_list_df(cls, lookup_date: Union[Timestamp, datetime, date], symbols: list):
+        """
+        todo: below
+        quickdf = pd.DataFrame(cls.objects.filter(investment__symbol__in=symbols, date=lookup_date).values("value", "investment"))
+        if not quickdf.empty:
+            quickdf.rename(columns={'value': 'Cost', 'investment': 'Symbol'}, inplace=True)
+        and then do the lookups...
+        """
+        lookup_date = IOOMDates.align_day(lookup_date)
+
+        data = []
+        for symbol in symbols:
+            value = cls.lookup(lookup_date, symbol)
+            data.append({'Close': value, 'Symbol': symbol})
+        df = pd.DataFrame(data)
+        if df.empty:
+            return pd.DataFrame(columns=['Close', 'Symbol'])  # For merging
+        return df
+
 
     @classmethod
     def create_values(cls, investment: Investment, value_date: pd.Timestamp, value: Decimal, dividend: Decimal,
@@ -1205,7 +1240,7 @@ class Account(BaseContainer):
         query = Q(symbol__in=(Transaction.objects.filter(account=self).values_list('investment', flat=True)))
         if include_cash or self.acct_type == 'Cash':
             query |= Q(symbol=self.cash_investment_symbol)
-        if self.acct_type == 'Value':
+        if self.acct_type == 'Value':  # Since they do not have Transactions
             query |= Q(symbol=self.value_investment_symbol)
         if include_funding and not self.acct_type == 'Cash':
             query |= Q(symbol=self.funding_investment_symbol)
@@ -1220,7 +1255,15 @@ class Account(BaseContainer):
         """
         if recreate:
             Position.objects.filter(account=self).delete()
+
         pd_now = pd.to_datetime('now', utc=True)
+        # Hard-core cleanup of things I don't need
+        (Position.objects.filter(account=self).               # My positions
+         exclude(investment__in=self.investments()).          # Less my Investments
+         exclude(investment__symbol__endswith="~Cash").       # Less my Cash Account
+         exclude(investment__symbol__endswith="~Funding").    # Less my Funding
+         delete())                                            # Only true if I deleted the last Transaction
+
         for investment in self.investments(include_funding=False, include_cash=False):
             if values and investment.searchable:
                 investment.limited_update()
@@ -1408,7 +1451,7 @@ class Position(models.Model):
         Force price and quantity to be the correct case
         """
         if self.quantity < 0:
-            logger.error('%s:Negative quantity detected:%s -> %s' % (self.date, self, self.quantity))
+            logger.warning('%s:Negative quantity detected:%s -> %s' % (self.date, self, self.quantity))
             # self.quantity = Decimal(0)
         self.quantity = force_decimal(self.quantity)
         self.price = force_decimal(self.price)
@@ -1608,6 +1651,9 @@ class Transaction(NormalizedDataModel):
     note = models.TextField(null=True, blank=True, help_text='Arbitrary text to describe where this Transaction came from/went to')
     cash_record: CashFlow = models.ForeignKey(CashFlow, null=True, blank=True, on_delete=models.CASCADE, help_text='Cash Flow Record')
 
+
+    def __str__(self):
+        return f"{self.id} - Account:{self.account}({self.account_id} Investment:{self.investment} {self.quantity}@{self.price}"
     @property
     def action_str(self):
         if self.quantity > 0:

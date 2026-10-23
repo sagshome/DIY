@@ -17,6 +17,7 @@ urlpatterns = [
 
     path(r'expense/add/', views.ItemAdd.as_view(), name='expense_add'),
     path(r'expense/listdup/', views.ItemDups.as_view(), name='expense_dups'),
+    path(r'split', views.expense_split, name='expense_split'),
     path(r'expense/help', views.cash_help, name='cash_help'),
     path('subcategory/add/', views.SubCategoryAdd.as_view(), name='subcategory_add'),
     path(r'subcategory/<pk>/delete/', views.SubCategoryDelete.as_view(), name='subcategory_delete'),

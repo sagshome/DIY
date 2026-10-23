@@ -74,14 +74,14 @@ class TransactionAdmin(admin.ModelAdmin):
     list_display = ("account", "date", "investment", "quantity", "price", "source", "note")
     list_filter = ("source", "investment__symbol", "account__name")
 
-
+@admin.register(Funding)
 class FundingAdmin(admin.ModelAdmin):
     list_display = ("account", "date", "investment", "value", "balance", "source", "note")
     list_filter = ("account__user", "account__name",  "source", "investment")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "investment":
-            kwargs["queryset"] = Investment.objects.filter(name__endswith='~Funding')
+            kwargs["queryset"] = Investment.objects.filter(symbol__endswith='~Funding')
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
@@ -120,5 +120,4 @@ admin.site.register(Portfolio, PortfolioAdmin)
 admin.site.register(Value, ValueAdmin)
 admin.site.register(Dividend, DividendAdmin)
 admin.site.register(Transaction, TransactionAdmin)
-admin.site.register(Funding, FundingAdmin)
 

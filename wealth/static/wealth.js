@@ -449,8 +449,6 @@ function set_class_spinner(spinner_id) {
 
 }
 
-
-
 function clear_spinner() {
     hideDiv("spinner-text")
 }
@@ -672,6 +670,35 @@ document.addEventListener('submit', function (e) {
     }
 });
 
+// Generic form error handler (for formsets)
+function displayFormErrors(errors) {
+    // Clear errors from the previous attempt
+    document.querySelectorAll('.is-invalid').forEach(el => {
+        el.classList.remove('is-invalid');
+    });
+
+    document.querySelectorAll('.invalid-feedback').forEach(el => {
+        el.textContent = '';
+    });
+
+    errors.forEach(error => {
+        // Django formset field name, e.g. form-0-quantity
+        const inputName = `form-${error.index}-${error.field}`;
+        const input = document.querySelector(
+            `[name="${inputName}"]`
+        );
+
+        if (!input) return;
+
+        input.classList.add('is-invalid');
+        input.textContext = error.messages.join(' ');
+        const feedback = input.parentElement.querySelector('.invalid-feedback');
+
+        if (feedback) {
+            feedback.textContent = error.messages.join(' ');
+        }
+    });
+}
 
 /// Stuff for data pages  (used, main-data,  account, and portfolio
 
@@ -729,7 +756,7 @@ document.addEventListener('click', async function (event) {
 
 /// Stuff for reconcile_month.html
 document.addEventListener('submit', function (event) {
-    if (event.target.matches('#reconcile-form')) {
+    if (event.target.matches('#reconcile-form') || event.target.matches('#equity-reconciliation')) {
         event.preventDefault();
 
         const form = event.target;
@@ -749,10 +776,12 @@ document.addEventListener('submit', function (event) {
                 } else {
                     // Django rejected the POST
                     console.log(data);
+                    displayFormErrors(data.errors);
                 }
             })
             .catch(error => console.error(error));
     }
+
 });
 
 /// Styff for Transaction List

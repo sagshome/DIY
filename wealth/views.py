@@ -157,13 +157,14 @@ def debug(request):
     # df = Portfolio.objects.all()[2].as_dataframe(scope='minute')
     # Investment.objects.get(symbol='TSLA').limited_update()
     # Investment.in_day_update()
-
+    a = Account.objects.get(id=161)
+    a.rebuild(positions=False, include_cash=True)
     from wealth.importers import BaseImporter
     #BaseImporter.set_importer('/home/scott/Downloads/NewML.FullFromApr2023.csv', AppUser.objects.get(username='sparky')).process()
     #BaseImporter.set_importer('/home/scott/Downloads/QT_gail.xlsx', AppUser.objects.get(username='sparky')).process()
     #
     # hisBaseImporter.set_importer('/home/scott/Downloads/QT_scott.xlsx', AppUser.objects.get(username='sparky')).process()
-    Value.update_dividends()
+    # Value.update_dividends()
     #account = Account.objects.get(id=16)
     #vb = ValueBalance.objects.filter(account=account, investment=account.value_investment)[6]
     #vb.save(rebuild=True)
@@ -293,7 +294,7 @@ class ReconcileAccountMonth(LoginRequiredMixin, Transaction2Mixin, ReconcileMont
 
     def post(self, request, *args, **kwargs):
         context = self.get_context_data()
-        form = MonthReconcileForm(request.POST, initial=context['end_data'], account=self.account)
+        form = MonthReconcileForm(request.POST, initial=context['end_data'], account=self.container)
         if form.is_valid():
             if context['run_date'].month == datetime.today().month:
                 last_day = IOOMDates.align_day(datetime.today(), keep_month=True)
@@ -302,16 +303,16 @@ class ReconcileAccountMonth(LoginRequiredMixin, Transaction2Mixin, ReconcileMont
             changed = False
             classmap = {'Cash': CashFlow, 'Total': ValueBalance, 'Funding': Funding}
             for field in form.changed_data:
-                if ((form.cleaned_data[field] and form.cleaned_data[field] != context['end_data'][field]) and
-                    ((field == 'Cash' and self.account.acct_type != 'Value') or
-                     (field == 'Total' and self.account.acct_type == 'Value') or
-                     (field == 'Funding' and self.account.acct_type != 'Cash')
+                if ((form.cleaned_data[field] != context['end_data'][field]) and
+                    ((field == 'Cash' and self.container.acct_type != 'Value') or
+                     (field == 'Total' and self.container.acct_type == 'Value') or
+                     (field == 'Funding' and self.container.acct_type != 'Cash')
                     )):
 
                     try:
-                        cr = classmap[field].objects.get(date=last_day, account=self.account, balance=True)
+                        cr = classmap[field].objects.get(date=last_day, account=self.container, balance=True)
                     except classmap[field].DoesNotExist:
-                        cr = classmap[field](date=last_day, account=self.account, balance=True)
+                        cr = classmap[field](date=last_day, account=self.container, balance=True)
                     cr.source = DataSource.RECONCILED.value
                     cr.value = value=form.cleaned_data[field]
                     cr.note = f"Reconciled on {datetime.today().strftime('%b-%d-%Y')} - {cr.note}"
@@ -430,8 +431,9 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, ContextMixinB
 
     def get_formset(self, data=None):
         df = self.dfo.df
-        df = self.dfo.on_datetime(df, self.view_date)[['Symbol', 'Quantity', 'Price', 'DivAmount', 'InvType', 'AccountID', 'ValueEstimated']]
-        df = df.loc[(df['InvType'] == 'Trading') & (df['AccountID'] == self.account.pk) & (df['Quantity'] != 0)].sort_values('Symbol')
+        df = self.dfo.on_datetime(df, self.view_date)[['Symbol', 'Quantity', 'Price', 'EX_Div', 'InvType', 'AccountID', 'ValueEstimated']]
+        df = df.loc[(df['InvType'] == 'Trading') & (df['AccountID'] == self.account.pk) & (df['Quantity'] > 0)].sort_values('Symbol')
+        df = df.merge(Value.lookup_list_df(self.view_date, df['Symbol'].to_list()), how='left', on='Symbol')  # Adds Close
         initial = df.to_dict(orient='records')
 
         if data:
@@ -451,47 +453,57 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, ContextMixinB
             source = DataSource.RECONCILED.value
             note = f"Reconciled on {datetime.today().strftime('%b-%d-%Y')}"
 
-            updated_quantity = updated_price = False
+            updated_quantity = updated_price = updated_ex_div = False
             for form in formset.forms:
                 if form.has_changed():
                     for field in form.changed_data:
-                        if field in ['Quantity', 'Price', 'DivValue']:  # fix up None vs 0
+                        if field in ['Quantity', 'Close', 'DivValue']:  # fix up None vs 0
                             form.cleaned_data[field] = 0 if not form.cleaned_data[field] else form.cleaned_data[field]
                             form.initial[field] = 0 if not form.initial[field] else form.initial[field]
 
                     investment = Investment.objects.get(symbol=form.initial['Symbol'])
-                    price = form.initial['Price'] if not investment.searchable else form.cleaned_data['Price']
-                    if price != form.initial['Price']:
-                        updated_price = True
-                        Value.objects.update_or_create(date=last_day, investment=investment, defaults={'source': source, 'value': price})
+                    close = form.initial['Close'] if investment.searchable else form.cleaned_data['Close']
+                    ex_dividend = form.initial['EX_Div'] if investment.searchable else form.cleaned_data['EX_Div']
+                    if close != form.initial['Close'] or ex_dividend != form.initial['EX_Div']:
+                        updated_price = True if close != form.cleaned_data['Close'] else False
+                        updated_ex_div = True if ex_dividend != form.cleaned_data["EX_Div"] else False
+                        Value.objects.update_or_create(date=last_day, investment=investment, defaults={'source': source, 'ex_dividend': ex_dividend, 'value': close})
 
                     if 'Quantity' in form.changed_data and form.cleaned_data['Quantity'] != form.initial['Quantity']:
                         updated_quantity = True
                         diff = form.cleaned_data['Quantity'] - form.initial['Quantity']
-                        note = f'{diff} units at {price} - {note}'
+                        note = f'{diff} units at {close} - {note}'
                         if diff < 0:
-                            Transaction.sell(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), price, last_day,
+                            Transaction.sell(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), close, last_day,
                                              note=note, source=source, rebuild=False)
                         elif diff > 0:
-                            Transaction.buy(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), price, last_day,
+                            Transaction.buy(self.account, Investment.objects.get(symbol=form.initial['Symbol']), abs(diff), close, last_day,
                                             note=note, source=source, rebuild=False)
 
-                    if 'DivValue' in form.changed_data and form.cleaned_data['DivValue'] != form.initial['DivValue']:
-                        Dividend.objects.update_or_create(date=last_day, investment=investment,
-                                                          defaults={'source': source, 'value': form.cleaned_data['DivValue']})
-
+            if updated_ex_div:
+                Value.update_dividends()
             if updated_price or updated_quantity:
                 self.account.rebuild(values=updated_price, positions=updated_quantity, include_cash=False, include_funding=False)
+            if updated_ex_div or updated_price or updated_quantity:
                 clear_caches(user=request.user)
-
 
             if 'success_url' in baseform.cleaned_data:
                 return JsonResponse({"ok": True, "redirect": baseform.cleaned_data['success_url']})
             else:
                 return JsonResponse({"ok": True, "redirect": reverse('wealth_account_table', kwargs={'pk': self.account.pk})})
-        else:
-            formset_errors = formset.errors
-        return render(request, self.template_name, context)
+
+        errors = []
+        for i, form in enumerate(formset):
+            for field, messages in form.errors.items():
+                errors.append(
+                    {
+                        "field": field,
+                        "index": i,
+                        "messages": messages,
+                    }
+                )
+
+        return JsonResponse({"ok": False, "errors": errors})
 
 
 class AccountDeleteView(LoginRequiredMixin, DeleteView):
@@ -1184,6 +1196,7 @@ def add_transaction(request, account_id):
                 assert True, 'Action not support'
 
             if 'submit-type' in form.data and form.data['submit-type'] == 'Add Another':
+                # todo: This just plain does not work in the modal form.  maybe merge this event with js code.
                 return JsonResponse({"ok": True})
             else:
                 account.rebuild()
@@ -1216,39 +1229,36 @@ def edit_transaction2(request, pk, rec_type):
     This is a bootstrap modal form.   POST must return JSON,  with redirect key for redirection
     """
 
-    investment = note = quantity = price = value = None
+    quantity = price = value = None
     if rec_type == 'XA':
         transaction = get_object_or_404(Transaction, pk=pk, account__user=request.user)
-        account = transaction.account
         action = 'BUY' if transaction.quantity > 0 else 'SELL'
-        investment = transaction.investment
         quantity=transaction.quantity
         price=transaction.price
-        note = transaction.note
+
     elif rec_type == 'FUND':
         transaction = get_object_or_404(Funding, pk=pk, account__user=request.user)
-        account = transaction.account
         action = 'FUND' if transaction.value > 0 else 'REDEEM'
         value = transaction.value
-        note = transaction.note
+
     elif rec_type == 'CASH':
         transaction = get_object_or_404(CashFlow, pk=pk, account__user=request.user)
-        account = transaction.account
         action = 'BALANCE'
         value = transaction.value
-        note = transaction.note
+
     elif rec_type == 'VALUE':
         transaction = get_object_or_404(ValueBalance, pk=pk, account__user=request.user)
-        account = transaction.account
         action = 'BALANCE'
         value = transaction.value
-        note = transaction.note
     else:
-        action = 'unknown'
+        assert True, "Action not support"
 
+    investment = transaction.investment
+    note = transaction.note
+    this_date = transaction.date
 
-    initial = {'user': request.user, 'account': account, 'date': datetime.now().date(), 'note': note,
-               'investment': investment, 'action': action, 'quantity': quantity, 'price': price, 'value': value,
+    initial = {'user': request.user, 'account': transaction.account, 'date': this_date, 'note': note,
+               'investment': transaction.investment, 'action': action, 'quantity': quantity, 'price': price, 'value': value,
                'object_id': transaction.id, 'success_url': request.META.get('HTTP_REFERER', '/')}
 
     if request.method == 'POST':
@@ -1262,7 +1272,7 @@ def edit_transaction2(request, pk, rec_type):
                     xa.quantity = abs(form.cleaned_data['quantity'])
                     if form.cleaned_data['action'] == 'SELL':
                         xa.quantity *= -1
-
+                    xa.date = form.cleaned_data['date']
                     xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                     xa.save(rebuild=True)
                     success = True
@@ -1274,6 +1284,7 @@ def edit_transaction2(request, pk, rec_type):
                     xa.value = abs(form.cleaned_data["value"])
                     if form.cleaned_data['action'] == 'REDEEM':
                         xa.value *= -1
+                    xa.date = form.cleaned_data['date']
                     xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                     xa.save(rebuild=True)
                     success = True
@@ -1284,6 +1295,7 @@ def edit_transaction2(request, pk, rec_type):
                     try:
                         xa = ValueBalance.objects.get(pk=form.cleaned_data['object_id'])
                         xa.value = form.cleaned_data['value']
+                        xa.date = form.cleaned_data["date"]
                         xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                         xa.save(rebuild=True)
                         success = True
@@ -1293,6 +1305,7 @@ def edit_transaction2(request, pk, rec_type):
                     try:
                         xa = CashFlow.objects.get(pk=form.cleaned_data['object_id'])
                         xa.value = form.cleaned_data['value']
+                        xa.date = form.cleaned_data["date"]
                         xa.note = f"Updated on {datetime.today().strftime('%b-%d-%Y')} + {form.cleaned_data['note']}"
                         xa.save(rebuild=True)
                         success = True

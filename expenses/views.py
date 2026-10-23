@@ -231,6 +231,7 @@ class ItemDups(LoginRequiredMixin, ListView):
         df = df[df.duplicated(subset=['description', 'date', 'amount'], keep=False)].sort_values(['date', 'description'])
         return Item.objects.filter(id__in=df['id']).order_by('date', 'description')
 
+
 class AddTemplateView(LoginRequiredMixin, CreateView):
     model = Template
     form_class = TemplateForm
@@ -371,6 +372,90 @@ def expense_main(request):
 
         super_set = Item.objects.filter(
             ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date').prefetch_related('tags')
+        if search_for:
+            super_set = super_set.filter(category=search_for)
+            total = super_set.aggregate(Sum('amount'))['amount__sum']
+            formset = ItemFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+        else:
+            total = super_set.aggregate(Sum('amount'))['amount__sum']
+            formset = ItemFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+
+    unassigned = Item.unassigned(user=request.user)
+    if unassigned.count() != 0:
+        warnings = f'{unassigned.count()} Expense Items have not been processed.'
+
+    return render(request, "expenses/main.html", {
+        'warnings': warnings,
+        'formset': formset,
+        'search_form': search_form,
+        'total': total,
+        'tags': ItemTag.objects.all().order_by('value'),
+        'help_file': 'expenses/help/main.html'
+    })
+
+
+
+@login_required
+def expense_split(request):
+    """
+    This view support both a search to refresh the data and pagination.   If I change the critera,   I need to
+    reset the pagintor to page 1.
+    """
+    search_for = False
+    default_end = datetime.now().date()
+    default_start = datetime.now().replace(year=datetime.now().year - 7).date().replace(day=1)
+
+    try:
+        page_size = int(request.GET.get('pagesize', 200))
+    except ValueError:
+        page_size = 50
+
+    if request.GET:
+        if 'span' in request.GET:
+            new_start, new_end = label_to_values(request.GET['span'])
+            if new_start:  # Just incase the data was ill formatted ?
+                default_start = new_start
+                default_end = new_end
+
+        if 'category' in request.GET:
+            try:
+                search_for = Category.objects.get(name=request.GET['category'])
+            except Category.DoesNotExist:
+                logger.error('Intial Category does not exist:%s' % request.GET['category'])
+
+    initial = {'search_ignore': 'No',
+               'search_start_date': default_start,
+               'search_end_date': default_end,
+               'show_list': 'Hide'}
+
+    if search_for:
+        initial['search_category'] = search_for.name
+
+    warnings = {}
+    search_form = SearchForm(initial=initial)
+
+    total = 0
+    if request.method == "POST":
+        search_form = SearchForm(request.POST)
+        formset = ItemFormSet(request.POST)
+        if search_form.is_valid() and formset.is_valid():
+            search_dict = search_form.cleaned_data
+            search_dict['income'] = 'true' if search_dict['search_category'] == 'Income' else 'false'
+            super_set = Item.filter_search(Item.objects.filter(user_id=request.user.id), search_form.cleaned_data).order_by('-date').prefetch_related('tags')
+
+            total = super_set.aggregate(Sum('amount'))['amount__sum']
+            formset.save()
+            formset = ItemFormSet(queryset=Item.objects.filter(
+                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+        else:
+            pass
+
+    else:
+
+        super_set = Item.objects.filter(
+            user=request.user, split_id__isnull=False).order_by('-date').prefetch_related('tags')
         if search_for:
             super_set = super_set.filter(category=search_for)
             total = super_set.aggregate(Sum('amount'))['amount__sum']

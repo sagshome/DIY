@@ -247,8 +247,8 @@ class TransactionSetValueForm(TransactionForm):
 class TransactionEditForm(TransactionForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['date'].widget.attrs['style'] = 'background-color:Wheat'
-        self.fields["date"].widget.attrs['readonly'] = True
+        #self.fields['date'].widget.attrs['style'] = 'background-color:Wheat'
+        #self.fields["date"].widget.attrs['readonly'] = True
         self.fields['action'].widget.attrs['style'] = 'background-color:Wheat'
         self.fields["action"].widget.attrs['readonly'] = True
         self.fields['action'].choices = [(self.initial['action'], dict(self.TRANSACTION_TYPE)[self.initial['action']])]
@@ -322,8 +322,8 @@ class ReconciliationForm(forms.Form):
 
     Symbol = forms.CharField(required=True)
     Quantity = forms.DecimalField(required=True, validators=[MinValueValidator(0)])
-    Price = forms.DecimalField(required=True, validators=[MinValueValidator(0)])
-    DivValue = forms.DecimalField(required=False, validators=[MinValueValidator(0)])
+    Close = forms.DecimalField(required=True, validators=[MinValueValidator(0)])
+    EX_Div = forms.DecimalField(required=False, validators=[MinValueValidator(0)])
 
     def data_changed(self, initial, key1,  key2=None):
         new_key1 = 0 if key1 not in self.cleaned_data or not self.cleaned_data[key1] else self.cleaned_data[key1]
@@ -346,24 +346,24 @@ class ReconciliationForm(forms.Form):
         super().__init__(*args, **kwargs)
         investment = Investment.objects.get(symbol=self.initial['Symbol'])
         if not investment.searchable:
-            self.fields["Price"].widget.attrs['style'] = 'width:95px;text-align: right;'
-            self.fields["DivValue"].widget.attrs['style'] = 'width:95px;text-align: right;'
+            self.fields["Close"].widget.attrs['style'] = 'width:95px;text-align: right;'
+            self.fields["EX_Div"].widget.attrs['style'] = 'width:95px;text-align: right;'
         else:
-            self.fields["Price"].widget.attrs['style'] = 'background-color:Wheat;width:95px;text-align: right;'
-            self.fields["Price"].widget.attrs['readonly'] = True
+            self.fields["Close"].widget.attrs['style'] = 'background-color:Wheat;width:95px;text-align: right;'
+            self.fields["Close"].widget.attrs['readonly'] = True
 
-            self.fields["DivValue"].widget.attrs['style'] = 'background-color:Wheat;width:95px;text-align: right;'
-            self.fields["DivValue"].widget.attrs['readonly'] = True
+            self.fields["EX_Div"].widget.attrs['style'] = 'background-color:Wheat;width:95px;text-align: right;'
+            self.fields["EX_Div"].widget.attrs['readonly'] = True
 
         self.fields['Quantity'].widget.attrs['style'] = 'width:95px;text-align: right;'
         self.fields["Symbol"].widget.attrs['readonly'] = True
         self.fields["Symbol"].widget.attrs['style'] = 'text-align: left;width:95;background-color:Wheat;'
 
-        for field in ['Price', 'Quantity', 'DivAmount']:
+        for field in ['Close', 'Quantity', 'EX_Div']:
             if not self.initial[field]:
                 self.initial[field] = Decimal(0)
             else:
-                self.initial[field] = Decimal(str(self.initial[field])).quantize(Decimal('0.01'))
+                self.initial[field] = Decimal(str(self.initial[field])).quantize(Decimal('0.01'))  # Force 2 dec points
 
 
 ReconciliationFormSet = formset_factory(ReconciliationForm, extra=0)

@@ -87,31 +87,32 @@ def get_equity_list(request):
         investment: str - symbol of the investment
     """
     try:
-        this_date = pd.to_datetime(request.GET.get("date"), utc=True) if 'date' in request else pd.to_datetime("now", utc=True).normalize()
+        this_date = pd.to_datetime(request.GET.get("date")) if 'date' in request.GET else pd.to_datetime("now", utc=True).normalize()
     except:  # DateParseError: should be excplicit
         logger.error("Received a ill formed date %s" % request.GET.get("date"))
         return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
 
     if 'action' in request.GET and request.GET.get('action') == 'SELL':  # limit list to what was owned on this date
-        scope = request.GET.get('scope') if 'scope' in request else 'month'
-        if scope == 'month':
-            this_date = this_date.replace(day=1)  # Set to month start for month scope
         try:
             account = Account.objects.get(id=request.GET.get('account_id'), user=request.user)
         except Account.DoesNotExist:
             logger.error("No account provided with ID %s is not found." % request.GET.get("account_id"))
             return JsonResponse({'status': 'false', 'message': 'Does Not Exist'}, status=404)
+
+        scope = request.GET.get('scope', 'month')
+        if scope == 'month':
+            this_date = this_date.replace(day=1)  # Set to month start for month scope
         df = WealthDF(user=request.user, scope=scope).df
-        df = WealthDF.on_datetime(df, this_date)
-        values = Investment.objects.filter(symbol__in=df.loc[(df['InvType'] == 'Trading') & (df['AccountID'] == account.pk) ]['Symbol'].tolist())
+        df = df.loc[(df['AccountID'] == account.id) & (df['InvType'] == 'Trading') & (df['Date'] == this_date)]
+        values = Investment.objects.filter(symbol__in=df['Symbol'].unique().tolist())
     else:
-        values = Investment.objects.filter(inv_type='Trading').exclude(deactivated_date__lt=this_date)
+        values = Investment.objects.filter(inv_type='Trading')  # todo: add this back .exclude(deactivated_date__lt=this_date)
 
     if request.GET.get("q"):
         query_filter = str(request.GET.get('q'))
-        values = values.filter(Q(symbol__icontains=query_filter) | Q(name__icontains=query_filter))
+        values = values.filter(Q(symbol__icontains=query_filter) | Q(description__icontains=query_filter))
 
-    results = [{'id': e.symbol, 'text': f'{e.symbol} - {e.name}'} for e in values.order_by('symbol')[:10]]
+    results = [{'id': e.symbol, 'text': f'{e.symbol} - {e.description}'} for e in values.order_by('symbol')[:10]]
     return JsonResponse({"results": results})
     # return render(request, "generic_selection.html", {"values": value_dictionary})
 
@@ -146,6 +147,11 @@ def get_equity_values(request):
     investment: str - symbol of the investment
     action:
     """
+    try:
+        account_id = int(request.GET.get('account_id', '0'))
+    except ValueError:
+        logger.debug('Failed to convert %s to an account id' % request.GET.get('account_id'))
+        account_id = 0
 
     investment = request.GET.get('equity_id', None)
     this_date = request.GET.get('date', None)
@@ -159,22 +165,19 @@ def get_equity_values(request):
             this_date = None
 
         try:
-            price = Value.objects.filter(investment=investment, date__lte=this_date).latest('date').close_value
+            price = Value.lookup(this_date, investment)
         except Value.DoesNotExist:
             price = None
-
+    shares = None
     if investment and this_date:
         action = request.GET.get('action', None)
         if action == 'SELL':
             try:
-                investment = Investment.objects.get(pk=investment)
                 df = WealthDF(user=request.user, scope='month').df
                 this_date = this_date.replace(day=1)
-                shares = df.loc[(df['Date'] == this_date) & (df['Symbol'] == investment.symbol)]['Quantity'].item()
-            except Investment.DoesNotExist:
-                shares = None
-        else:
-            shares = None
+                shares = df.loc[(df['Date'] == this_date) & (df['Symbol'] == investment) & (df['AccountID'] == account_id)]['Quantity'].item()
+            except ValueError:
+                logger.error('Failed to lookup shares for %s on date %s for account %s' & (this_date, investment, account_id))
     return JsonResponse({'shares': shares, 'price': price})
 
 

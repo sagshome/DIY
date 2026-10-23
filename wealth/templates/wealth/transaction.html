@@ -11,6 +11,7 @@
             {% if account.portfolio %}
               <em>(Portfolio:{{account.portfolio.name}})</em>
             {% endif %}
+        </h5>
         <form class="ioom_modal_form" action="{{ request.path }}" method="post">
             {% csrf_token %}
             {% if form.non_field_errors %}
