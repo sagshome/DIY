@@ -13,7 +13,8 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Max
 
-from .models import Investment
+from base.models import Inflation, ExchangeRate
+from .models import Account, Investment, Value, clear_caches
 
 logger = logging.getLogger(__name__)
 
@@ -33,4 +34,19 @@ def fail_warn():
         last_value_date__lt=cutoff
     )
 
-    ### over all users,  who have active accounts with any of these investements,  send them an email ping to update the investment is question
+@shared_task
+def wealth_daily_update():
+    # todo: Same as management Task
+    Investment.daily_update()
+    Value.update_dividends()
+    Inflation.update()
+    ExchangeRate.update()
+    for a in Account.objects.all():
+        a.rebuild()
+    clear_caches()
+
+@shared_task
+def wealth_inday_update():
+    # todo: Same as management Task
+    Investment.in_day_update()
+    clear_caches()

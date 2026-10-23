@@ -562,6 +562,10 @@ class Investment(models.Model):
         We are doing this every 15 minutes so lets be quick
         - Tricky,  sometimes we do not get a close,
         - We don't want to update open on a month record (using daily data)
+
+        todo:  We really need to key the in_day update to the market hours of the investment.
+        todo:  Would be nice to increment the cache instead of just blowing it away.  May only impact a few records
+        todo:  Well since I no longer have a domain...  maybe I should just force daily_updates when I care
         """
         current_date = IOOMDates(build=False).day_end
         if not current_date == datetime.now().date():
@@ -569,35 +573,31 @@ class Investment(models.Model):
             return  # Not a 'market' day, no point in trying
 
         api_df = cls.day_range() # DataFrame which is coerced to be first open value and last closed value on this date
-        if not api_df.empty:
-            current_time = api_df['Datetime'].max()
+        if api_df.empty:
+            return  # No data from external API
 
-            for day_scope in [True, False]:
-                value_day = current_date if day_scope else current_date.replace(day=1)
-                api_df['Date'] = value_day
-                values_df = pd.DataFrame(Value.objects.filter(investment__in=Investment.objects.filter(searchable=True),
-                                                              day_scope=day_scope, date=value_day).values(
-                    'id', 'investment', 'date', 'open_value', 'close_value', 'source'))
+        api_df['Dividends'] = 0  # This data is not returned via the interday API,  so just make it 0
 
-                if not values_df.empty:
-                    values_df.rename(columns={"date": "Date"}, inplace=True)
-                else:
-                    values_df = pd.DataFrame(columns=['id', 'Date', 'investment', 'open_value', 'close_value', 'source'])
+        current_time = api_df['Datetime'].max()
 
-                values_df['open_value'] = values_df['open_value'].astype("float64")
-                values_df['close_value'] = values_df['close_value'].astype("float64")
+        api_df['Date'] = current_date
+        values_df = pd.DataFrame(
+            Value.objects.filter(
+            investment__in=Investment.objects.filter(searchable=True),
+            date=current_date).values('id', 'investment', 'date', 'value', 'source', 'ex_dividend')
+            )
 
-                values_df = api_df.merge(values_df, on=['Date', 'investment'], how='left')
-                if not day_scope:  # Don't take the daily open value
-                    values_df['Open'] = values_df["open_value"]
+        if not values_df.empty:
+            values_df.rename(columns={"date": "Date"}, inplace=True)
+        else:
+            values_df = pd.DataFrame(columns=['id', 'Date', 'investment', 'value', 'source', 'ex_dividend'])
 
-                values_df = values_df[(~np.isclose(values_df["Close"], values_df["close_value"], atol=1e-3, rtol=1e-3)) |
-                                      (~np.isclose(values_df["Open"], values_df["open_value"], atol=1e-3, rtol=1e-3))]
+        values_df['value'] = values_df['value'].astype("float64")
+        ndf = api_df.merge(values_df, on=['Date', 'investment'], how='left')
+        ndf = ndf[~np.isclose(ndf["Close"], ndf["value"], atol=1e-3, rtol=1e-3)]
 
-                cls._process_value_diff(day_scope, values_df)
-                Investment.objects.filter(symbol__in=api_df['investment'].tolist()).update(last_updated=current_time)
-                clear_caches()
-            # update existing cached dataframes
+        cls._process_value_diff(ndf)
+        Investment.objects.filter(symbol__in=ndf['investment'].tolist()).update(last_updated=current_time)
         clear_caches()
 
     def limited_update(self):
@@ -1166,12 +1166,13 @@ class Account(BaseContainer):
 
 
     @cached_property
-    def cash_investment(self) -> Investment:
-        try:
-            return Investment.objects.get(symbol=self.cash_investment_symbol)
-        except Investment.DoesNotExist:
-            logger.debug('Unable to find a Cash investment for %s', self)
-            return None
+    def cash_investment(self) -> Union[Investment, None]:
+        if self.acct_type != 'Value':
+            try:
+                return Investment.objects.get(symbol=self.cash_investment_symbol)
+            except Investment.DoesNotExist:
+                logger.error('Unable to find a Cash investment for %s', self)
+        return None
 
     @property
     def cash_investment_symbol(self):

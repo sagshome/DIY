@@ -49,28 +49,28 @@ services:
     image: nginx:latest
     ports:
       - "80:80"
-      - "443:443"
+      # - "443:443"
     build:
       dockerfile: build/nginx-Dockerfile
     container_name: ioom_nginx
     hostname: nginx.itsonlyourmoney.com
-    volumes:
-      - /etc/ioom/certbot/www:/var/www/certbot:ro
-      - /etc/ioom/data:/etc/letsencrypt
+    # volumes:
+    #   - /etc/ioom/certbot/www:/var/www/certbot:ro
+    #   - /etc/ioom/data:/etc/letsencrypt
 
-    depends_on:
-      - certbot
+    # depends_on:
+    #  - certbot
     networks:
       ioom_network:
         ipv4_address: 172.20.0.20
     restart: always
 
-  certbot:
-    image: certbot/certbot
-    container_name: ioom_certbot
-    volumes:
-      - /etc/ioom/certbot/www:/var/www/certbot
-      - /etc/ioom/data:/etc/letsencrypt
+  # certbot:
+  #    image: certbot/certbot
+  #    container_name: ioom_certbot
+  #   volumes:
+  #    - /etc/ioom/certbot/www:/var/www/certbot
+  #    - /etc/ioom/data:/etc/letsencrypt
 
   redis:
     # Since this is not visible outside the docker network.   No need to expose the port

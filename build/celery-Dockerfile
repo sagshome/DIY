@@ -13,3 +13,4 @@ COPY base /app/base
 COPY diy /app/diy
 COPY stocks /app/stocks
 COPY expenses /app/expenses
+COPY wealth /app/wealth
