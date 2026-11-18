@@ -33,7 +33,6 @@ urlpatterns = [
 
     path(r"template/", views.ListTemplates.as_view(), name="expenses_templates"),
     path(r"template/<int:item_pk>/add/", views.AddTemplateView.as_view(), name="add_template",),
-    path(r"template/<int:pk>/delete/", views.DeleteTemplateView.as_view(), name="template_delete",),
     #path(r"template/<int:pk>/edit/", views.edit_template, name="template_edit"),
 
     path("ajax/load-subcategories/", views.load_subcategories, name="ajax-load-subcategories"),
@@ -42,7 +41,6 @@ urlpatterns = [
     path("ajax/expense-pie", views.ExpensePieView.as_view(), name="ajax-expenses_pie"),
     path("ajax/expense-bar", views.ExpenseBarView.as_view(), name="ajax-expense-bar"),  # from expense_chart.js
     path("api/cash_flow", views.cash_flow_chart_v2, name="cash_flow_data"),
-
     path("api/expense/<int:pk>/tags/", views.expense_tags_api, name="set_tags"),
 ]
 

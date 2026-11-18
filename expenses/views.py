@@ -400,11 +400,6 @@ class AddTemplateView(LoginRequiredMixin, ModalMixin, CreateView):
             return JsonResponse({"ok": True, "redirect": self.get_success_url()})
         return JsonResponse({"ok": False, "errors": form.errors}, status=400)
 
-class DeleteTemplateView(LoginRequiredMixin, DeleteView):
-    model = Template
-    template_name = 'expenses/template_confirm_delete.html'
-    success_url = reverse_lazy("expenses_templates")
-
 
 class ItemFormSet(modelformset_factory(Item, form=ItemEditForm, extra=0)):
     def save(self, commit=True):
