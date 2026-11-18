@@ -1,4 +1,4 @@
-{% extends "wealth_base.html" %}
+{% extends "base.html" %}
 {% load static %}
 {% load tz %}
 {% block title %}{% if title %}{{title}}{% else %}IOOM Wealth{% endif %}{% endblock %}
@@ -16,7 +16,7 @@
         </div>
     </div>
     <div>
-        {% include 'wealth/includes/range.html' %}
+        {% include 'base/includes/range.html' %}
     </div>
     <div class="container-fluid">
         <div class="row">

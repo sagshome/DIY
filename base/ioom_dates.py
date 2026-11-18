@@ -52,8 +52,8 @@ vdf_day = t.history(auto_adjust=False, start=dates_df.day_start, end=dates_df.da
 
 """
 
-IOOM_RANGES = ['week', 'month', 'ytd', 'year', '3years', '5years', 'all']
-IOOM_RANGE_STR = ['1 Week', '1 Month', 'Year to Date', '1 Year', '3 Years', '5 Years', 'All Time']
+IOOM_RANGES = ['week', 'month', 'ytd', 'year', '3years', '5years', '7years', 'all']
+IOOM_RANGE_STR = ['1 Week', '1 Month', 'Year to Date', '1 Year', '3 Years', '5 Years', '7 Years', 'All Time']
 IOOM_DEFAULT_RANGE = 'year'
 
 class IOOMDates:
@@ -167,7 +167,7 @@ class IOOMDates:
 
     @staticmethod
     def range_to_scope(range_value: str):
-        if range_value not in IOOM_RANGES or range_value in ['3years', '5years', 'all']:
+        if range_value not in IOOM_RANGES or range_value in ['3years', '5years', '7years', 'all']:
             return 'month'
         return 'day'
 
@@ -192,11 +192,19 @@ class IOOMDates:
             value = self.day_end - relativedelta(years=3)
         elif range_value == '5years':
             value = self.day_end - relativedelta(years=5)
+        elif range_value == '7years':
+            value = self.day_end - relativedelta(years=7)
         else:
             value = self.month_start  # todo: test if this should be force to day=1
             if range_value != 'all':
                 logger.error('Range value of %s requested' % range_value)
         return Timestamp(value)
+
+    def range_end(self, range_value: str) -> Timestamp:
+        """
+        Added for consistency.
+        """
+        return Timestamp(datetime.today().date())
 
     @classmethod
     def ioom_ts(cls, value: Union[Timestamp, datetime, date],

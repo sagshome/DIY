@@ -1,11 +1,12 @@
 from django.urls import path
 
-from . import views
+from . import views, apis
 
 # Base is stocks/
 urlpatterns = [
-    path(r'new_user/', views.profile_create, name='new_account'),
-    path(r'profile/', views.profile_edit, name='profile'),
-    path(r'main/', views.diy_main, name='diy_main'),
-    path(r'get_states/', views.get_state, name='get_states'),
+    path(r"new_user/", views.profile_create, name="new_account"),
+    path(r"profile/", views.profile_edit, name="profile"),
+    path(r"main/", views.diy_main, name="diy_main"),
+    path(r"get_states/", views.get_state, name="get_states"),
+    path(r"api/quick_delete", apis.delete_action, name="quick_delete"),
 ]

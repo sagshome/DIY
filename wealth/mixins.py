@@ -9,92 +9,14 @@ from typing import List, Union
 
 from django.db.models import CharField, QuerySet, Q
 from django.db.models import Value as ORMValue
-
-from django.http import JsonResponse
 from django.http import Http404
 
-from django.shortcuts import redirect
-from django.urls import reverse
-from django.views.generic import View
-
 from base.ioom_dates import IOOMDates, IOOM_RANGES
+from base.mixins import ContextMixinBase
+
 from .dataframes import WealthDF
 from .forms import TransactionForm
 from .models import Account, CashFlow, DividendAmount, Investment, Transaction, Funding, DataSource, ValueBalance
-
-
-class ContextMixinBase:
-    """
-    This must be the last Mixin on the views
-    Ensure the starting point of context
-    Ensure required test variables are defined
-    """
-
-    def setup(self, request, *args, **kwargs):
-        super().setup(request, *args, **kwargs)
-        self.explicit_date = None
-        self.reconcile_view = False
-
-        if 'explicit_date' in self.request.GET:
-            date_parm = self.request.GET.get('explicit_date')
-            formats = ['%Y-%b', '%b-%Y','%b-%y', '%b-%y']
-            for this_format in formats:
-                try:
-                    self.explicit_date = datetime.strptime(date_parm, this_format)
-                    break
-                except ValueError:
-                    pass
-                
-        if 'range' in self.request.GET:
-            wealth_range = self.request.GET.get('range')
-            if wealth_range in IOOM_RANGES:
-                self.request.session['wealth_range'] = wealth_range
-        self.wealth_range = self.request.session.get('wealth_range', 'year')
-
-
-    def get_context_data(self, **kwargs):
-        context = {}
-        context["range"] = self.wealth_range
-        context["range_string"] = IOOMDates.range_to_string(self.wealth_range)
-        context['explicit_date'] = self.explicit_date
-        return context
-
-
-class ModalBaseMixin:
-    """
-    Process Modal Fields,   works with ModalBaseForm.
-    """
-
-    def get_initial(self):
-        initial = super().get_initial()
-        return self.get_modal_data(initial)
-
-    def get_modal_data(self, initial: dict = None):
-        """
-        Set the initial success_url and is_modal values
-        """
-        if not initial:
-            initial = {}
-
-        initial.update({
-            'success_url': self.request.META.get('HTTP_REFERER', self.request.build_absolute_uri(reverse('wealth_home', kwargs={}))),
-            'is_modal': True,
-        })
-        return initial
-
-    def form_valid(self, form):
-
-        url = form.cleaned_data['success_url'] if 'success_url' in form.cleaned_data and form.cleaned_data['success_url'] else reverse('wealth_home')
-        return JsonResponse({
-            "ok": True,
-            "redirect": url
-        })
-
-    def form_invalid(self, form):
-        return JsonResponse({
-            "ok": False,
-            "errors": form.errors
-        })
 
 
 class TransactionMixin:

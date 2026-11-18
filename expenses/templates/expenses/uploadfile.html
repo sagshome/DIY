@@ -1,73 +1,136 @@
 {% extends "base.html" %}
 {% block content %}
-    <link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
+<div class="container-fluid">
+    <div class="row g-4">
 
-    <div class="w3-cell-row">
-        <div id="import-form" class="w3-cell">
-            <h2>Import Expenses</h2>
+        <!-- Import Form -->
+        <div id="import-form" class="col-lg-5 col-xl-4">
+
+            <h2 class="mb-4">Import Expenses</h2>
+
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
+
                 {{ form.non_field_errors }}
 
                 {% for hidden_field in form.hidden_fields %}
                     {{ hidden_field.errors }}
                     {{ hidden_field }}
                 {% endfor %}
-                <div class="w3-grid" style="grid-template-columns:200px 400px auto;">
-                    <div class="w3-padding w3-right-align">{{ form.upload_file.label_tag }}</div>
-                    <div class="w3-padding">{{ form.upload_file }}</div>
-                    <div class="w3-padding w3-red">{{ form.upload_file.errors }}</div>
 
-                    <div class="w3-padding w3-right-align">{{ form.has_headings.label_tag }}</div>
-                    <div class="w3-padding">{{ form.has_headings }}</div>
-                    <div class="w3-padding">{{ form.has_headings.errors }}</div>
-                    <div class="w3-padding" style="grid-column:1/span 2">
-                    <button class="w3-border w3-margin w3-button-medium w3-round-large w3-margin-top w3-green"
-                        type="submit">Submit
+                <div class="row align-items-center mb-3">
+                    <div class="col-sm-4 text-sm-end">
+                        {{ form.upload_file.label_tag }}
+                    </div>
+                    <div class="col-sm-8">
+                        {{ form.upload_file }}
+                        {% if form.upload_file.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.upload_file.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row align-items-center mb-3">
+                    <div class="col-sm-4 text-sm-end">
+                        {{ form.has_headings.label_tag }}
+                    </div>
+                    <div class="col-sm-8">
+                        {{ form.has_headings }}
+                        {% if form.has_headings.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.has_headings.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button class="btn btn-success px-4"
+                            type="submit">
+                        Submit
                     </button>
                 </div>
-        </div>
-                <!-- todo: Add a progress bar -->
-                This typically takes about 5 seconds per 1000 records. Please be patient.
+
+                <p class="text-muted small mt-3">
+                    This typically takes about 5 seconds per 1000 records.
+                    Please be patient.
+                </p>
+
             </form>
         </div>
-        <div class="w3-cell">
-            Without the ability to <b>Upload</b> content this system would be too arduous to use. The
-            <b>Cash</b> Application supports Excel format(<em>.xls, xlsx</em>),  OpenOffice (<em>.ods</em>) and Comma
-            Seperated Value (<em>.csv</em>) files as upload input.
-            <br>
-            In all cases the data is stored in 'rows' of 'columns'.   If your input data has headings on the columns (
-            aka a <em>header row</em>),  then indicated it as such in this form.
-            <br><br>
-            The system will attempt to process your data by reading the column headers or the actual data.  If it
-            can not be determined what each column is,  you will be prompted for guidance and/or conformation.
-            <br><br>If you are crafting your own data.   The following columns are required:
+
+        <!-- Instructions -->
+        <div class="col-lg-7 col-xl-8">
+
+            <h4>Import Instructions</h4>
+
+            <p>
+                Without the ability to <strong>Upload</strong> content,
+                this system would be too arduous to use. The
+                <strong>Cash</strong> Application supports Excel format
+                (<em>.xls, .xlsx</em>), OpenOffice (<em>.ods</em>) and
+                Comma Separated Value (<em>.csv</em>) files as upload input.
+            </p>
+
+            <p>
+                In all cases the data is stored in rows and columns.
+                If your input data has headings on the columns
+                (aka a <em>header row</em>), indicate it as such in this form.
+            </p>
+
+            <p>
+                The system will attempt to process your data by reading
+                the column headers or the actual data. If it cannot
+                determine what each column is, you will be prompted
+                for guidance and/or confirmation.
+            </p>
+
+            <p>
+                If you are crafting your own data, the following
+                columns are required:
+            </p>
+
             <ul>
-                <li><b>Date</b>: Format is YYYY-MM-DD as in 2024-09-27</li>
-                <li><b>Description</b>: This is the description of the transaction</li>
-                <li><b>Amount</b>: A Decimal number,  negative items indicate a refund or return.</li>
-                <li><em>Instead of Amount,  you may provide a 'Debit' and a 'Credit' column</em></li>
+                <li><strong>Date</strong>: Format is YYYY-MM-DD, as in 2024-09-27</li>
+                <li><strong>Description</strong>: Description of the transaction</li>
+                <li><strong>Amount</strong>: A decimal number. Negative items indicate a refund or return.</li>
+                <li><em>Instead of Amount, you may provide a Debit and a Credit column.</em></li>
             </ul>
-            The following columns are optional:
+
+            <p>The following columns are optional:</p>
+
             <ul>
-                <li><b>Category</b>: Must match the predefined IOOM categories</li>
-                <li><b>SubCategory</b>: If not already defined it will be added during the import</li>
-                <li><b>Hidden</b>: Keep a record but do not process this data</li>
-                <li><b>Details</b>: Internal information such as Credit Card Key</li>
-                <li><b>Notes</b>: Arbitrary text (that will be searchable)</li>
+                <li><strong>Category</strong>: Must match the predefined IOOM categories</li>
+                <li><strong>SubCategory</strong>: If not already defined, it will be added during the import</li>
+                <li><strong>Hidden</strong>: Keep a record but do not process this data</li>
+                <li><strong>Details</strong>: Internal information such as Credit Card Key</li>
+                <li><strong>Notes</strong>: Arbitrary text that will be searchable</li>
             </ul>
-            <p>This is the same format used by the <b>Cash</b> Export action.</p>
+
+            <p>
+                This is the same format used by the <strong>Cash</strong>
+                Export action.
+            </p>
+
         </div>
     </div>
-    </div class=w3-row>
-        {% if custom_error %}
-            <a href="{% url 'expense_ignored' %}">
-                <button class="rounded spaced menu-button-primary">Review Ignored</button>
-            </a><br>
+
+    {% if custom_error %}
+        <div class="mt-4">
+            <a href="{% url 'expense_ignored' %}"
+               class="btn btn-outline-primary mb-3">
+                Review Ignored
+            </a>
+
             <div class="alert alert-danger">
-                <h2>Errors</h2>
+                <h4 class="alert-heading">Errors</h4>
                 {{ custom_error }}
             </div>
-        {% endif %}
-    </div>
+        </div>
+    {% endif %}
+
+</div>
+
 {% endblock content %}

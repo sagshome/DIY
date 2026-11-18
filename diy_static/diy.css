@@ -20,6 +20,7 @@ body {
     background: white;
     width: 250px;
 }
+
 /* For small devices (width less than 768px, e.g., phones) */
 @media (max-width: 1200px) {
   body {
@@ -61,6 +62,7 @@ button.diy-button-auto {
 input.right {
         text-align-last: right;
 }
+
 button.diy-button {
     background-color: transparent; /* no background color */
     border: 1px solid lightgrey; /* thin  border */
@@ -188,3 +190,41 @@ th, td {
     text-align: left; /* Align text to the left
 }
 */
+
+#tl-toolbar {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+}
+
+#tl-toolbar #tl-length,
+#tl-toolbar #tl-search,
+#tl-toolbar #tl-return {
+    flex: 0 0 auto;
+}
+
+#tl-toolbar .dt-length,
+#tl-toolbar .dt-search {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+#tl-toolbar .dt-length label,
+#tl-toolbar .dt-search label {
+    margin: 0;
+}
+
+#tl-toolbar .dt-search input {
+    width: 180px;
+}
+
+#rl_table_wrapper {
+    width: 100%;
+    margin-left: 0;
+}
+
+.ioom-description {
+    width: 100%;
+    max-width: 600px;
+}

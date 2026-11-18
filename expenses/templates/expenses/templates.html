@@ -1,52 +1,76 @@
 {% extends "base.html" %}
 {% block title %}Expense Templates{% endblock %}
+{% load static %}
 {% block content %}
-<!-- todo: Maybe I should not rely on this. -->
-<script src="https://www.kryogenix.org/code/browser/sorttable/sorttable.js"></script>
-
-<div class="w3-row">
-    <div class="w3-third">
+<div class="container-fluid">
+    <div class="row">
          <h2>Template List</h2>
     </div>
-    <div class="w3-third">
-        <p>Click on heading to sort the table</p>
+    <div class="row">
+        <div id="tl-toolbar" class="d-flex align-items-center gap-3 mb-3">
+            <div id="tl-length"></div>
+            <div id="tl-search"></div>
+            <a id="tl-return" href="{% url 'expense_main' %}" class="btn btn-outline-primary btn-sm">Return to Main</a>
+        </div>
     </div>
-    <div class="w3-third">
-        <a href="{% url 'expense_main' %}"><button class="w3-bar-item w3-button w3-round-xlarge w3-margin w3-light-blue">Return to Main</button></a>
-    </div>
+    <!--   <table class="sortable table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">-->
+    <table id="rl_table" class="table w-auto">
+        <thead style="background:#eee;">
+            <th></th>
+            <th>Type</th>
+            <th>Expression</th>
+            <th>Used</th>
+            <th>Category</th>
+            <th>Subcategory</th>
+            <th>Spent</th>
+        </thead>
+        {% for template in template_list %}
+            <tr id="row-XA-{{ template.id }}" data-id="{{template.id}}" data-key="Template" class="ioom-action-row">
+                <td>
+                    <i class="text-danger bi bi-trash ioom-delete-action"></i>
+                </td>
+                <td>{{template.type}}</td>
+                <td>{{template.expression}}</td>
+                <td>{{template.count}}</td>
+                <td>{{template.category}}</td>
+                <td>{{template.subcategory}}</td>
+                <td>{{template.amount|floatformat:'0g'}}</td>
+            </tr>
+       {% endfor %}
+    </table>
 </div>
+<script>
+    $(document).ready(function() {
+        var tx_table = $('#rl_table').DataTable({
+            searching: true,
+            pageLength: 50,
+            ordering: true,
+            layout: {
+                topStart: "pageLength",
+                topEnd: "search",
+                bottomStart: 'info',
+                bottomEnd: 'paging',
+            },
+            initComplete: function () {
+                const wrapper = this.api().table().container();
 
-<!--   <table class="sortable table table-bordered table-accent-1 table-striped table-hover width-full col-padding-sm text-sm">-->
-<table class="sortable table table-striped table-accent-1 width-full col-padding-md text-sm">
-    <tr class="w3-margin-bottom">
+               document.querySelector('#tl-length')
+                    .append(wrapper.querySelector('.dt-length'));
 
-        <th width="7%"></th>
-        <th width="7%"></th>
-        <th width="5%">Type</th>
-        <th width="30%">Expression</th>
-        <th>Used</th>
-        <th>Category</th>
-        <th>Subcategory</th>
-        <th width="5%">Ignore</th>
-        <th>Spent</th>
+                document.querySelector('#tl-search')
+                    .append(wrapper.querySelector('.dt-search'));}
 
-    </tr>
-    {% for template in template_list %}
-        <tr>
-            <td><a href="{% url 'template_edit' template.id %}"><button class="w3-button-small w3-round-large w3-orange">Update</button></a></td>
-            <td><a href="{% url 'template_delete' template.id %}"><button class="w3-button-small w3-round-large w3-red">Delete</button></a></td>
+            // "dom": "lrtip"
+        });
+    });
 
-            <td>{{template.type}}</td>
-            <td>{{template.expression}}</td>
-            <td>{{template.count}}</td>
-            <td>{{template.category}}</td>
-            <td>{{template.subcategory}}</td>
-            <td>{{template.ignore}}</td>
-            <td>{{template.amount|floatformat:'2g'}}</td>
-        </tr>
-   {% endfor %}
-</table>
 
+        // Filter only the 'Name' column (index 0)
+        //$('#symsearch').on('keyup', function() {
+        //    tx_table.column(3).search(this.value).draw();
+        //});
+
+</script>
 {% endblock %}
 
 {% block help_content %}
@@ -59,4 +83,5 @@
 </p>
 <p>It is best practice to sort by the Used column and delete the templates that only have 1 or 2 usages.   It may
 speed up future imports.</p>
+
 {% endblock %}

@@ -38,14 +38,15 @@ from django.views.generic.dates import DateMixin
 from base.utils import adjust_date
 from base.ioom_dates import IOOMDates, IOOM_RANGES
 from base.models import Profile
+from base.mixins import ContextMixinBase, ModalBaseMixin
 from base.views import BaseDeleteView
 
-from .mixins import ContextMixinBase, ModalBaseMixin, TransactionMixin, Transaction2Mixin, WealthSummaryMixin, ReconcileMonthMixin
+from .mixins import TransactionMixin, Transaction2Mixin, WealthSummaryMixin, ReconcileMonthMixin
 from .dataframes import WealthDF
 from .models import Account, Dividend, DividendAmount, Portfolio, Position, Investment, Value, Transaction, BaseContainer, Funding, CashFlow, DataSource, ValueBalance, clear_caches
 
 #from .tasks import equity_new_estimates
-from .forms import ModalBase, DividendAmountFormSet, TransactionForm, ModalBaseForm, MonthReconcileForm, SimpleReconcileFormSet, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountEditForm, UploadFileForm, AccountForm, TransactionSetValueForm, SimpleReconcileForm, AddEquityForm, ReconciliationFormSet, DividendAmountForm
+from .forms import DividendAmountFormSet, TransactionForm, MonthReconcileForm, SimpleReconcileFormSet, PortfolioForm, AccountCloseForm, TransactionEditForm, AccountEditForm, UploadFileForm, AccountForm, TransactionSetValueForm, SimpleReconcileForm, AddEquityForm, ReconciliationFormSet, DividendAmountForm
 from .importers import BaseImporter
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ def get_stale_investments(df) -> list[str]:
     return result
 
 
-class AccountAddView(ModalBaseMixin, LoginRequiredMixin, CreateView):
+class AccountAddView(LoginRequiredMixin, ModalBaseMixin, CreateView):
     model = Account
     template_name = 'base/basic_modal_form_table.html'
     form_class = AccountForm
@@ -202,7 +203,6 @@ class AccountAddView(ModalBaseMixin, LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Create'
         context['view_noun'] = 'Account'
-        context['help_file'] = 'stocks/help/account.html'
         return context
 
     def get_initial(self):
@@ -234,7 +234,6 @@ class AccountCloseView(LoginRequiredMixin, ModalBaseMixin, UpdateView):
 
         context['hide_new_xa'] = True
         context['table_title'] = f'{self.object.account_name} (Last 5)'
-        context['help_file'] = 'stocks/help/account_close.html'
 
         return context
 
@@ -420,7 +419,6 @@ class AccountDateReconcileView(ModalBaseMixin, LoginRequiredMixin, ContextMixinB
         context = super().get_context_data(**kwargs)
         context['account'] = self.account
         context['form'] = ModalBaseForm(initial=self.get_modal_data())
-        context['help_file'] = 'stocks/help/account_close.html'
         context['date'] = self.view_date
         return context
 
@@ -546,7 +544,6 @@ class AccountDetailView(LoginRequiredMixin, TransactionMixin, WealthSummaryMixin
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['view_type'] = 'Chart'
-        context['help_file'] = 'stocks/help/container_detail.html'
 
         dfo = WealthDF(self.request.user, date_range=context['range'])
         df = dfo.by_range(context['range'])
@@ -590,7 +587,6 @@ class AccountEdit(LoginRequiredMixin, ModalBaseMixin, UpdateView, DateMixin):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Edit'
         context['view_noun'] = 'Account'
-        context['help_file'] = 'stocks/help/add_account.html'
         return context
 
 
@@ -812,7 +808,6 @@ class PortfolioAdd(LoginRequiredMixin, ModalBaseMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Create'
         context['view_noun'] = 'Portfolio'
-        context['help_file'] = 'stocks/help/portfolio.html'
         return context
 
     def get_initial(self):
@@ -868,7 +863,6 @@ class PortfolioDetailView(LoginRequiredMixin, WealthSummaryMixin, DetailView):
         context = super().get_context_data(**kwargs)
 
         context['view_type'] = 'Chart'
-        context['help_file'] = './help/container_detail.html'
 
         dfo = WealthDF(self.request.user, date_range=context['range'])
         df = dfo.by_range(context['range'])
@@ -910,7 +904,6 @@ class PortfolioEdit(LoginRequiredMixin, ModalBaseMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         context['view_verb'] = 'Edit'
         context['view_noun'] = 'Portfolio'
-        context['help_file'] = 'stocks/help/add_account.html'
         return context
 
 
@@ -980,7 +973,6 @@ class PortfolioTableView(LoginRequiredMixin, WealthSummaryMixin, DetailView):
 class TransactionDeleteView(LoginRequiredMixin, ModalBaseMixin, DeleteView):
     model = Transaction
     template_name = 'base/basic_confirm_delete.html'
-    form_class = ModalBase
 
     def get_object(self, queryset=None):
         return super().get_object(queryset=self.model.objects.filter(account__user=self.request.user))
@@ -1006,7 +998,6 @@ class WealthDetailMain(LoginRequiredMixin, WealthSummaryMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['help_file'] = 'wealth/help/wealth_chart.html'
         context['view_type'] = 'Chart'
 
         dfo = WealthDF(self.request.user, date_range=context['range'])

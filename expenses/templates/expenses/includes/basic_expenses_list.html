@@ -1,0 +1,195 @@
+{% block content %}
+    {% if object_list %}
+        <table id="exp-list" class="table w-auto">
+            <caption>List of Expense/Income Items</caption>
+            <thead style="background:#eee;">
+                <tr>
+                    <th>Actions</th>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Category</th>
+                    <th>SubCategory</th>
+                    <th>Split</th>
+                    <th>Amortized</th>
+                    <th>Notes</th>
+                    <th>Tags</th>
+                </tr>
+            </thead>
+            {% for record in object_list %}
+                <tr>
+                    <td>
+                        <a class="text-primary help-cell"
+                           href="{% url 'expense_edit' record.id %}"
+                           data-bs-toggle="tooltip"
+                           data-bs-placement="right"
+                           title="Edit Item"
+                           data-modal><i class="fa fa-pencil"></i></a>
+                        <a class="text-danger"
+                           href="{% url 'expense_delete' record.id %}"
+                           data-bs-toggle="tooltip"
+                           data-bs-placement="right"
+                           title="Delete"
+                            data-modal><i class="fa fa-trash"></i></a>
+                        {% if not record.is_split %}
+                            <a class="text-primary"
+                               href="{% url 'expense_split' record.id %}"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="right"
+                               title="Split Record"
+                               data-modal><i class="fa fa-columns"></i></a>
+                        {% else %}
+                            <a class="text-warning"
+                                   href="{% url 'expense_unsplit' record.id %}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Recursively unsplit records"
+                                   data-modal><i class="fa fa-columns"></i></a>
+                        {% endif %}
+                        {% if record.amortized %}
+                            <a class="text-warning" href="{% url 'expense_unamortize' record.id %}"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="right"
+                               title="Restore original Item (remove amortization)"
+                               data-modal><i class="fa fa-line-chart"></i></a>
+                        {% else %}
+                            <a class="text-primary" href="{% url 'expense_amortize' record.id %}"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="right"
+                               title="Amortize Item"
+                               data-modal><i class="fa fa-line-chart"></i></a>
+                        {% endif %}
+
+                    </td>
+                    <td>{{record.date}}</td>
+                    <td>{{record.description}}</td>
+                    <td>{{record.amount}}</td>
+                    <td>{% if record.category %}{{record.category}}{% endif %}</td>
+                    <td>{% if record.subcategory %}{{record.subcategory}}{% endif %}</td>
+                    <td>{% if record.is_split %}<i class="fa fa-check"></i>{% endif %}</td>
+                    <td>{% if record.amortized %}<i class="fa fa-check"></i>{% endif %}</td>
+                    <td>{% if record.notes %}{{record.notes}}{% endif %}</td>
+                    <td class="tag-cell">
+                        <div class="tag-display mb-1">
+                                <button type="button" class="btn btn-sm border-0 edit-tags bg-body" data-expense-id="{{ record.id }}">
+                                    <i class="fa fa-tags"></i>
+                                </button>
+
+                                {% for tag in record.tags.all %}
+                                    <span class="badge bg-info text-dark me-1">{{ tag.value }}</span>
+                                {% endfor %}
+                        </div>
+
+                        <div class="tag-editor d-none mt-2 border rounded p-2">
+                            {% for tag in tags %}
+                                <div class="form-check">
+                                    <input class="form-check-input tag-checkbox"
+                                           type="checkbox"
+                                           value="{{ tag.id }}"
+                                           id="tag-{{ record.id }}-{{ tag.id }}"
+
+                                           {% if tag in record.tags.all %} checked {% endif %}
+                                            >
+                                    <label class="form-check-label" for="tag-{{ record.id }}-{{ tag.id }}">
+                                        {{ tag.value }}
+                                    </label>
+                            </div>
+                            {% endfor %}
+                            <div class="mt-2 text-center">
+                                <button type="button" class="btn btn-sm btn-primary save-tags">Save</button>
+                                <button type="button" class="btn btn-sm btn-secondary cancel-tags">Cancel</button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <div>
+            No Expense or Income Records matching this criteria
+        </div>
+    {% endif %}
+    <script>
+        $(document).ready(function () {
+            var table = $('#exp-list').DataTable({
+                "pageLength": 50,
+                "searching": true,
+                "ordering": true
+            });
+       });
+            document.addEventListener('click', async function (e) {
+                const editBtn = e.target.closest('.edit-tags');
+                if (editBtn) {
+                    const cell = editBtn.closest('.tag-cell');
+                    cell.querySelector('.tag-editor')
+                        .classList.remove('d-none');
+                    editBtn.classList.add('d-none');
+                    return;
+                }
+
+                const cancelBtn = e.target.closest('.cancel-tags');
+                if (cancelBtn) {
+                    const cell = cancelBtn.closest('.tag-cell');
+                    cell.querySelector('.tag-editor')
+                        .classList.add('d-none');
+                    cell.querySelector('.edit-tags')
+                        .classList.remove('d-none');
+                    return;
+                }
+
+                const saveBtn = e.target.closest('.save-tags');
+                if (saveBtn) {
+                    const cell = saveBtn.closest('.tag-cell');
+                    const expenseId =
+                        cell.querySelector('.edit-tags').dataset.expenseId;
+                    // collect checked tags
+                    const tagIds = [];
+                    cell.querySelectorAll('.tag-checkbox:checked')
+                        .forEach(cb => {
+                            tagIds.push(cb.value);
+                        });
+                    // POST
+                    const response = await fetch(
+                        `/expenses/api/expense/${expenseId}/tags/`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCSRFToken(),
+                            },
+                            body: JSON.stringify({
+                                tags: tagIds
+                            })
+                        }
+                    );
+
+                    const data = await response.json();
+                    // update badges
+                    const display =
+                        cell.querySelector('.tag-display');
+
+                    display.innerHTML = '<button type="button" class="btn btn-sm border-0 edit-tags bg-body" data-expense-id=' + expenseId + '><i class="fa fa-tags"></i></button>'
+                    //display.innerHTML = ''
+                    data.tags.forEach(tag => {
+
+                        display.innerHTML += `
+                        <span class="badge bg-info text-dark me-1">
+                            ${tag.value}
+                        </span>
+                    `;
+                    });
+
+                    //
+                    // hide editor
+                    //
+
+                    cell.querySelector('.tag-editor')
+                        .classList.add('d-none');
+
+                    cell.querySelector('.edit-tags')
+                        .classList.remove('d-none');
+                }
+            });
+
+    </script>
+{% endblock %}

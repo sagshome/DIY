@@ -1,45 +1,119 @@
-{% extends "base_bs.html" %}
-{% block title %}Expense Assignment{% endblock %}
-{% load expenses_tags %}
+{% extends "base.html" %}
+{% block title %}Expenses{% endblock %}
 {% load static %}
 
 {% block content %}
-    <div class="container-fluid">
-        {% if warnings %}
-            <div class="container-fluid bg-warning">
-                <p>{{warnings}} - <a href="{% url 'expenses_assign' %}">Assign Expense Categories</a> </p>
-            </div>
-        {% endif %}
+    {% include 'base/includes/range.html' %}
+        <!-- todo:  add a trend line
+            todo: make the colours match in the two charts.   Maybe sort by category/subcategory name
+            -->
+    <div>
+        <button id="chart-colapse-button"
+                class="btn btn-link"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#ioom_chart">
+            Charts: <i id="ioom-chart-colapse-text" class="bi bi-chevron-down"></i>
+        </button>
     </div>
-    <form method="post" id="itemForm"
-          data-subcategories-url="{% url 'ajax-load-subcategories' %}"
-          novalidate>
-        {% csrf_token %}
-        <div class="container-fluid row">
-            {% include 'expenses/includes/expenses_search_bar.html' %}
+
+    <div class="container-fluid row collapse" id="ioom_chart">
+        <div class="p-2 col-auto" style="height:310px;" >
+                <canvas id="pieChart"></canvas>
+                <div>Total: ${{total | floatformat:'0g'}}</div>
         </div>
-        <div class="container-fluid row">
-                <div class="p-2 col-auto" style="height:310px;" >
-                    <canvas id="pieChart"></canvas>
-                    <p>Total: ${{total | floatformat:'0g'}}</p>
-                </div>
-                <div class="p-2 col" style="height:310px;">
-                    <canvas id="barChart"></canvas>
-                </div>
+        <div class="p-2 col" style="height:310px;">
+                <canvas id="barChart"></canvas>
         </div>
-        <div class="p-4 container-fluid row">
-            <div id="expense_list">
-                {% include 'expenses/includes/expenses_list.html' %}
-            </div>
+        <div class="pt-4">
+            <a id="ioom-add-income" class="btn btn-outline-primary btn-sm" role="button">Include Income</a>
+            <a id="ioom-reset-category" class="btn btn-outline-primary btn-sm" role="button">Reset Categories</a>
+            <a id="ioom-reset-range" class="btn btn-outline-primary btn-sm" role="button">Reset Range</a>
         </div>
-    </form>
+    </div>
+
+    <div class="p-4 container-fluid row">
+        <div id="expense_list">
+            {% include 'expenses/includes/basic_expenses_list.html' %}
+        </div>
+    </div>
 
     <script src="{% static 'expenses.js' %}"></script>
     <script src="{% static 'expense_charts.js' %}"></script>
     <script>
-        $(document).ready(function() {
+        document.addEventListener('DOMContentLoaded', function () {
+
+            const chart = document.getElementById('ioom_chart');
+            const icon = document.getElementById('ioom-chart-colapse-text');
+
+            // Restore previous state (default is expanded)
+            const isOpen = sessionStorage.getItem('ioom_chart_open') !== 'false';
+
+            if (isOpen) {
+                chart.classList.add('show');
+            }
+
+            function updateIcon(open) {
+                icon.classList.toggle('bi-chevron-down', open);
+                icon.classList.toggle('bi-chevron-right', !open);
+            }
+
+            updateIcon(isOpen);
+
+            // Save state whenever Bootstrap finishes its transition
+            chart.addEventListener('shown.bs.collapse', function () {
+                sessionStorage.setItem('ioom_chart_open', 'true');
+                updateIcon(true);
+            });
+
+            chart.addEventListener('hidden.bs.collapse', function () {
+                sessionStorage.setItem('ioom_chart_open', 'false');
+                updateIcon(false);
+            });
+
             expense_charts('bar', 'barChart', 'Stacked - Expenses over time', false);
-            expense_charts('pie', 'pieChart', 'Breakdown - by Category', false)
+            expense_charts('pie', 'pieChart', 'Breakdown - by Category', false);
+
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('income') === 'true') {
+                const elem = document.getElementById('ioom-add-income')
+                elem.innerText = 'Exclude Income'
+            }
+            if (params.get('month') === null) {
+                hideDiv('ioom-reset-range')
+            }
+            if (params.get('search_category') === null) {
+                hideDiv('ioom-reset-category')
+            }
+        });
+
+        document.addEventListener('click',function (event) {
+            if (event.target.matches('#ioom-add-income')) {
+                event.preventDefault();
+                const url = new URL(window.location.href);
+                if (event.target.innerHTML === 'Include Income') {
+                    url.searchParams.set('income', 'true');
+                    event.target.innerHTML = 'Exclude Income';
+                } else {
+                    url.searchParams.set('income', 'false');
+                    event.target.innerHTML = 'Include Income';
+                }
+                window.location.href = url.toString();
+            }
+            if (event.target.matches('#ioom-reset-range')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('month')
+                window.location.href = url.toString();
+            }
+            if (event.target.matches('#ioom-reset-category')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('search_subcategory')
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('search_subcategory') === null || params.get('search_subcategory') === '- ALL -') {
+                    url.searchParams.delete('search_category');
+                }
+                window.location.href = url.toString();
+            }
         });
     </script>
 {% endblock %}

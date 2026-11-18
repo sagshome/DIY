@@ -1,11 +1,11 @@
-{% extends "wealth_base.html" %}
+{% extends "base.html" %}
 {% block title %}{% if title %}{{title}}{% else %}IOOM Data{% endif %}{% endblock %}
 
 {% block content %}
     {% include 'wealth/includes/wealth_summary_header.html' %}
     {% include 'wealth/includes/actions.html' %}
     {% include 'wealth/includes/data_chart.html' %}
-    {% include 'wealth/includes/range.html' %}
+    {% include 'base/includes/range.html' %}
     {% if not container or container.container_type == 'Portfolio' %}
         {% include './includes/wealth_summary_list.html' %}  <!-- List o' stuff -->
     {% endif %}

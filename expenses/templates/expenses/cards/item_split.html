@@ -1,0 +1,91 @@
+<div class="card shadow-sm mb-3">
+    <div class="card-header">
+        {{ action }} Expense
+    </div>
+    <div class="container-fluid" role="alert" name="ioom_nonfield_errors"></div>
+
+    <div class="card-body p-2">
+        <form method="post" class="ioom_modal_form" action="{{request.path}}">
+            {% csrf_token %}
+            {{ modal_form.caller }}
+            {% for hidden_field in form.hidden_fields %}
+                {% if hidden_field.errors %}
+                    <div class="container-fluid alert alert-warning" role="alert">
+                        {{ hidden_field.errors }}
+                    </div>
+                {% endif %}
+                {{ hidden_field }}
+            {% endfor %}
+
+            <div class="row g-3">
+                <div class="col-md-3">
+                    {{ form.date }}
+                </div>
+                <div class="col-md-7 ioom-description">
+                    {{ form.description }}
+                </div>
+                <div class="col-md-2">
+                    {{ form.amount }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Categories</label>
+                    {{ form.category }}
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">SubCategory</label>
+                    {{ form.subcategory }}
+                </div>
+                <div class="col-md-4 align-middle">
+                    <label class="form-label">Hide Entry</label>
+                    {{ form.ignore }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Note</label>
+                    {{ form.notes }}
+                </div>
+
+            </div>
+
+            <hr>
+
+            <div class="d-flex justify-content-end gap-2">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn btn-danger ioom-cancel">Cancel</button>
+            </div>
+        </form>
+        <hr>
+        {% if siblings %}
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <strong>Record Split With</strong>
+                </div>
+                {% for sibling in siblings %}
+                    <div class="col-md-2">{{ sibling.category }}</div>
+                    <div class="col-md-2">{{ sibling.subcategory }}</div>
+                    <div class="col-md-2">{{ sibling.amount }}</div>
+                    <div class="col-6">{{ sibling.notes }}</div>
+                {% endfor %}
+            </div>
+            <hr>
+        {% endif %}
+        {% if amortized %}
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <strong>Original Record</strong>
+                </div>
+                <div class="col-md-3">{{ amortized.date }}</div>
+                <div class="col-md-7 text-truncate">{{ amortized.description }}</div>
+                <div class="col-md-2">{{ amortized.amount }}</div>
+                <div class="col-md-4"><em>Category:</em>{{ amortized.category }}</div>
+                <div class="col-md-4"><em>SubCategory:</em>{{ amortized.subcategory }}</div>
+                <div class="col-md-4"><em>Hidden Entry:</em>{{ amortized.ignore }}</div>
+                {% if amortized.notes %}
+                    <div class="col-12 text-truncate">{{ amortized.notes }}</div>
+                {% endif %}
+            </div>
+            <hr>
+        {% endif %}
+    </div>
+</div>
+

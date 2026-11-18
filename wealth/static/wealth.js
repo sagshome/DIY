@@ -1,23 +1,5 @@
-const colors = [
-    '#4e79a7',
-    '#f28e2b',
-    '#59a14f',
-    '#e15759',
-    '#b07aa1',
-    '#76b7b2',
-    '#edc949',
-];
-
 let ioomChart;
 
-function getCSRFToken() {
-    const name = "csrftoken=";
-    return document.cookie
-        .split(";")
-        .map(c => c.trim())
-        .find(c => c.startsWith(name))
-        ?.substring(name.length) || null;
-}
 
 function wealth_detail(range, object_type, object_id, options, compare, scope) {
 
@@ -265,8 +247,8 @@ function wealth_data(range, object_type, object_id, options) {
 
                 label: series.name,
                 data: series.data,
-                borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length] + '40',
+                borderColor: ioomColors[index % ioomColors.length],
+                backgroundColor: ioomColors[index % ioomColors.length] + '40',
                 fill: false,
                 tension: 0.1
             }));
@@ -354,103 +336,6 @@ function summary_chart(range, object_type, object_id) {
             console.log('Error occurred' + data);
         }
     });
-}
-
-function hideDiv(divId) {
-    var div = document.getElementById(divId);
-    if (div === null) {
-    } else {
-        div.style.display = "none";
-    }
-}
-
-function showDiv(divId) {
-    var div = document.getElementById(divId);
-    if (div === null) {
-    } else {
-        div.style.display = "table-row";
-    }
-}
-
-function show_hide() {
-
-    let action_value = $("#id_action").val();
-    let repeat_value = $("#id_repeat").val();
-    let equity_value = $("#id_equity").val();
-
-    if ((action_value === 'FUND' || action_value === 'REDEEM')) {
-        hideDiv('equityRow');
-        hideDiv('priceRow');
-        hideDiv('quantityRow');
-        showDiv('valueRow');
-
-        hideDiv('toAccountRow');
-        showDiv('repeatRow')
-
-    } else if ((action_value === 'TRANS_IN' || action_value === 'TRANS_OUT')) {  // Transfer In/Out
-        showDiv('equityRow');
-        hideDiv('priceRow');
-        hideDiv('repeatRow');
-        if (equity_value === "") {
-            showDiv('valueRow');
-            hideDiv('quantityRow')
-        } else {
-            showDiv('quantityRow');
-            hideDiv('valueRow')
-        }
-        showDiv('toAccountRow');
-    } else if ((action_value === 'BUY' || action_value === 'SELL' || action_value === 'REDIV')) {
-        showDiv('equityRow');
-        showDiv('priceRow');
-        showDiv('quantityRow');
-        hideDiv('valueRow');
-
-        hideDiv('toAccountRow');
-        hideDiv('repeatRow')
-    } else if ((action_value === 'VALUE' || action_value === 'BALANCE')) {
-        hideDiv('equityRow');
-        hideDiv('priceRow');
-        hideDiv('quantityRow');
-        showDiv('valueRow');
-        hideDiv('repeatRow')
-        hideDiv('toAccountRow')
-
-    } else {
-
-        hideDiv('equityRow');
-        hideDiv('priceRow');
-        hideDiv('quantityRow');
-        hideDiv('valueRow');
-        hideDiv('repeatRow')
-        hideDiv('toAccountRow')
-    }
-    if (repeat_value === 'yes') {
-        showDiv('numberRow');
-    } else {
-        hideDiv('numberRow');
-    }
-}
-
-function set_spinner() {
-    showDiv("spinner-text")
-    var t = setInterval(function () {
-        var ele = document.getElementById('spinner-text');
-        ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
-    }, 1000);
-}
-
-function set_class_spinner(spinner_id) {
-    that_id = spinner_id + '-spinner'
-    showDiv(that_id)
-        var t = setInterval(function () {
-        var ele = document.getElementById(that_id);
-        ele.style.opacity = (ele.style.opacity == 0 ? 1 : 0);
-    }, 1000);
-
-}
-
-function clear_spinner() {
-    hideDiv("spinner-text")
 }
 
 function update_cash(call_api) {
@@ -606,102 +491,7 @@ function initModalControls(container) {
 }
 
 
-async function processTransactionResult(form) {
-    const res = await fetch(form.getAttribute('action'), {
-        method: "POST",
-        body: new FormData(form),
-    });
-
-    const data = await res.json();
-
-    if (data.redirect) {
-        window.location.href = data.redirect;
-    } else {
-        clear_spinner()
-        Object.entries(data.errors).forEach(([field, messages]) => {
-
-            let input = document.querySelector(`[name="${field}"]`);
-            if (!input) {
-                input = document.querySelector(`[name="ioom_nonfield_errors"]`)
-                if (!input) {
-                    console.log(field, messages)
-                } else {
-                    input.classList.add('alert')
-                    input.classList.add('alert-warning')
-                    input.style.whiteSpace = 'pre-wrap'
-                    input.textContent = field + ": " + messages.join(' ') + "\n";
-
-                }
-            } else {
-                input.classList.add('is-invalid');
-                // bootstrap error div
-                let errorDiv = input.parentNode.querySelector('.invalid-feedback');
-                if (!errorDiv) {
-                    errorDiv = document.createElement('div');
-                    errorDiv.className = 'invalid-feedback';
-                    input.parentNode.appendChild(errorDiv);
-                }
-
-                errorDiv.textContent = messages.join(' ');
-            }
-        });
-    }
-}
-
-
-document.addEventListener('submit', function (e) {
-    const modal = document.getElementById('mainModal');
-
-    // ignore if not inside modal
-    if (!modal.contains(e.target)) return;
-
-    if (e.target.matches('.ioom_modal_form')) {
-
-        e.preventDefault();
-
-        input = document.querySelector(`[name="ioom_nonfield_errors"]`)
-        if (input) {
-            input.classList.remove('alert')
-            input.classList.remove('alert-warning')
-            input.style.whiteSpace = 'pre-wrap'
-            input.textContent = ""
-        }
-        processTransactionResult(e.target);
-    }
-});
-
-// Generic form error handler (for formsets)
-function displayFormErrors(errors) {
-    // Clear errors from the previous attempt
-    document.querySelectorAll('.is-invalid').forEach(el => {
-        el.classList.remove('is-invalid');
-    });
-
-    document.querySelectorAll('.invalid-feedback').forEach(el => {
-        el.textContent = '';
-    });
-
-    errors.forEach(error => {
-        // Django formset field name, e.g. form-0-quantity
-        const inputName = `form-${error.index}-${error.field}`;
-        const input = document.querySelector(
-            `[name="${inputName}"]`
-        );
-
-        if (!input) return;
-
-        input.classList.add('is-invalid');
-        input.textContext = error.messages.join(' ');
-        const feedback = input.parentElement.querySelector('.invalid-feedback');
-
-        if (feedback) {
-            feedback.textContent = error.messages.join(' ');
-        }
-    });
-}
-
 /// Stuff for data pages  (used, main-data,  account, and portfolio
-
 function populate_monthly_data(this_date, this_object, this_object_type) {
     const reconcileDate = this_date;
     const reconcileAcct = this_object;
@@ -728,6 +518,7 @@ function populate_monthly_data(this_date, this_object, this_object_type) {
         .catch(error => console.error(error));
 }
 
+// Support for Next/Previous pages
 document.addEventListener('click', async function (event) {
 
     if (event.target.matches('#jump-previous')) {
@@ -753,74 +544,3 @@ document.addEventListener('click', async function (event) {
         }
     }
 });
-
-/// Stuff for reconcile_month.html
-document.addEventListener('submit', function (event) {
-    if (event.target.matches('#reconcile-form') || event.target.matches('#equity-reconciliation')) {
-        event.preventDefault();
-
-        const form = event.target;
-        fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form)
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('POST failed');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.ok) {
-                    // POST succeeded
-                } else {
-                    // Django rejected the POST
-                    console.log(data);
-                    displayFormErrors(data.errors);
-                }
-            })
-            .catch(error => console.error(error));
-    }
-
-});
-
-/// Styff for Transaction List
-
-document.addEventListener('click', async function (event) {
-    const icon = event.target.closest('.ioom-delete-action');
-
-    if (icon) {
-        event.preventDefault();
-
-        const row = icon.closest('tr');
-        if (!row) return;
-
-        row.classList.add('deleting-row');
-
-        try {
-            const response = await fetch(
-                `/wealth/api/quick_delete?action_id=${row.dataset.id}&action_type=${row.dataset.key}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCSRFToken(),
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            if (!response.ok) {
-                console.error('Delete failed' + response.status);
-                row.classList.remove('deleting-row');
-                return;
-            }
-
-            row.classList.add('deleted-row');
-            icon.style.display = 'none';
-
-        } catch (err) {
-            console.error('Request error', err);
-            row.classList.remove('deleting-row');
-        }
-    }
-})

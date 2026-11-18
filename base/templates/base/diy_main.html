@@ -1,19 +1,18 @@
 {% extends "base.html" %}
 {% load static %}
 
-
 {% block content %}
     <p>Welcome {{ request.user }}</p>
     <form method="post" id="itemForm" novalidate>
         {% csrf_token %}
 
         {% if form.errors %}
-            <div class="w3-panel w3-red">
+            <div class="">
                 {{ form.errors }}
             </div>
         {% endif %}
 
-        <div class="w3-container w3-cell w3-cell-bottom">
+        <div class="">
             Period:<br>{{ form.period }}
         </div>
         <div class="w3-container w3-cell w3-cell-bottom">

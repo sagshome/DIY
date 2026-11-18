@@ -1,0 +1,30 @@
+<button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#ioom_chart">
+    Chart:
+    <i class="bi bi-chevron-up"></i>
+</button>
+<div class="collapse show" id="ioom_chart">
+    <div style="height: 300px;">
+                <div class="container-fluid row">
+                <div class="p-2 col-auto" style="height:310px;" >
+                    <canvas id="pieChart"></canvas>
+                    <p>Total: ${{total | floatformat:'0g'}}</p>
+                </div>
+                <div class="p-2 col" style="height:310px;">
+                    <canvas id="barChart"></canvas>
+                </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'expenses.js' %}"></script>
+<script src="{% static 'expense_charts.js' %}"></script>
+
+<script>
+    $(document).ready(function() {
+        expense_charts('bar', 'barChart', 'Stacked - Expenses over time', false);
+        expense_charts('pie', 'pieChart', 'Breakdown - by Category', false)
+    });
+
+</script>
+
+

@@ -72,3 +72,10 @@ class ProfileForm(BaseProfileForm):
         super().__init__(*args, **kwargs)
         self.fields["email"].widget.attrs['readonly'] = True
         self.fields["email"].widget.attrs['style'] = 'background-color:Wheat'
+
+
+
+class ModalForm(forms.Form):
+    caller = forms.URLField(required=False, widget=forms.HiddenInput())
+
+

@@ -7,28 +7,29 @@ import os
 import pandas as pd
 import uuid
 
-from datetime import datetime
-from dateutil import relativedelta
+from dateutil.relativedelta import relativedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
 from django.db.models import Q, Sum
 from django.db.models.functions import TruncMonth, TruncQuarter, TruncYear
 from django.forms import modelformset_factory, formset_factory
-from django.http import JsonResponse, HttpResponse
-from django.shortcuts import render, HttpResponseRedirect, reverse, get_object_or_404, redirect
-from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, UpdateView, FormView, ListView
+from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse_lazy, reverse
+from django.views.generic import CreateView, DeleteView, DetailView, UpdateView, ListView, View
 
+from base.mixins import ModalMixin, RangeMixin
 from base.models import COLORS, PALETTE
-from base.utils import DateUtil, label_to_values, date_to_label, set_simple_cache, load_dataframe
-from base.views import BaseDeleteView
+from base.utils import DateUtil, date_to_label, set_simple_cache, load_dataframe
+
 from expenses.importers import import_dataframe, find_headers_errors
-from expenses.forms import SubCategoryForm, ItemForm, ItemAddForm, ItemEditForm, TemplateForm, ItemListEditForm, SearchForm, UploadFileForm, UploadColumnForm, TagForm
+from expenses.forms import ItemForm, ItemAddForm, ItemAmortizeForm, ItemEditForm, ItemSplitForm, TemplateForm, SearchForm, UploadFileForm, UploadColumnForm, SubCategoryFormSet, TagFormSet
+from expenses.mixins import SearchMixin, ExpenseMixin
 from expenses.models import Item, Category, SubCategory, ItemTag, Template, DEFAULT_CATEGORIES
 
 from django.http import JsonResponse
@@ -37,103 +38,304 @@ from django.views.decorators.http import require_POST
 logger = logging.getLogger(__name__)
 
 
-class SubCategoryAdd(LoginRequiredMixin, CreateView):
-    model = SubCategory
-    form_class = SubCategoryForm
-    template_name = 'expenses/subcategory.html'
-
-    def get_success_url(self):
-        try:
-            url = self.request.POST["success_url"]
-        except KeyError:
-            url = reverse('expense_main')
-        return url
+class ItemAdd(LoginRequiredMixin, ModalMixin, CreateView):
+    model = Item
+    form_class = ItemAddForm
+    success_url = reverse_lazy('expense_main')
+    template_name = 'expenses/cards/item_form.html'
 
     def get_initial(self):
         super().get_initial()
         self.initial['user'] = self.request.user.id
         return self.initial
 
-    def form_valid(self, form):
-        self.object = form.save(commit=False)
-        self.object.user = self.request.user
-        self.object.save()
-        return HttpResponseRedirect(self.get_success_url())
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
+        context['action'] = 'Add'
+        context['help_file'] = "expenses/help/item.html"
         return context
 
-
-class SubCategoryDelete(BaseDeleteView):
-    model = SubCategory
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=SubCategory.objects.filter(user=self.request.user))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['object_type'] = 'SubCategory'
-        context['extra_text'] = 'Deleting a SubCategory is permanent - All assignments will be removed.'
-        return context
+    def post(self, request, *args, **kwargs):
+        form = self.get_form()
+        if form.is_valid():
+            form.save()
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
 
 
-class SubCategoryList(LoginRequiredMixin, ListView):
-    model = SubCategory
-
-    def get_queryset(self):
-        return SubCategory.objects.filter(user=self.request.user).order_by('category__name', 'name')
-
-
-class TagAdd(LoginRequiredMixin, CreateView):
-    model = ItemTag
-    form_class = TagForm
-    template_name = 'expenses/tag.html'
-
-    def get_success_url(self):
-        try:
-            url = self.request.POST["success_url"]
-        except KeyError:
-            url = reverse('expense_main')
-        return url
-
-    def get_initial(self):
-        super().get_initial()
-        self.initial['user'] = self.request.user.id
-        return self.initial
+class ItemDelete(LoginRequiredMixin, ModalMixin, DeleteView):
+    model = Item
+    template_name = 'base/basic_confirm_delete.html'
+    success_url = reverse_lazy('expense_main')
 
     def form_valid(self, form):
-        self.object = form.save(commit=False)
-        self.object.user = self.request.user
-        self.object.save()
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['success_url'] = self.request.META.get('HTTP_REFERER', '/')
-        return context
-
-
-class TagDelete(BaseDeleteView):
-    model = ItemTag
+        self.object.delete()
+        return JsonResponse({"ok": True, "redirect": self.get_success_url()})
 
     def get_object(self, queryset=None):
-        return super().get_object(queryset=ItemTag.objects.filter(user=self.request.user))
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['object_type'] = 'Tag'
-        context['extra_text'] = 'Deleting a Tag is permanent - All assignments will be removed.'
+        context['extra_text'] = 'Deleting an Expense/Income Item may not persist if you redo an import.  Perhaps you should just use edit and ignore this record.'
+        context['object_type'] = 'Expense'
         return context
 
 
-class TagList(LoginRequiredMixin, ListView):
-    model = ItemTag
+class ItemDups(LoginRequiredMixin, ExpenseMixin, ListView):
+    model = Item
+    template_name = 'expenses/listdups.html'
 
     def get_queryset(self):
-        return ItemTag.objects.filter(user=self.request.user).order_by('value')
+        df = pd.DataFrame(Item.objects.filter(user=self.request.user).values().order_by('id'))
+        df = df[df.duplicated(subset=['description', 'date', 'amount'], keep=False)].sort_values(['date', 'description'])
+        # todo: This does not belong here but it is after 11PM
+        Item.objects.filter(id__in=df['id']).delete()
+        return Item.objects.filter(id__in=df['id']).order_by('date', 'description')
 
+
+class ItemEdit(LoginRequiredMixin, ModalMixin, UpdateView):
+    model = Item
+    form_class = ItemEditForm
+    template_name = "expenses/cards/item_form.html"
+    success_url = reverse_lazy('expense_main')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context['action'] = 'Edit'
+        if self.object.split:
+            context['siblings'] = Item.objects.filter(split_id=self.object.split_id).exclude(pk=self.object.pk)
+        context['amortized'] = self.object.amortized
+        return context
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        form = self.get_form()
+        if form.is_valid():
+            obj = form.save()
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+
+class ItemSplit(LoginRequiredMixin, ModalMixin, UpdateView):
+    model = Item
+    form_class = ItemSplitForm
+    template_name = "expenses/cards/item_split.html"
+    success_url = reverse_lazy('expense_main')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['action'] = 'Split'
+        if self.object.split:
+            context['siblings'] = Item.objects.filter(split_id=self.object.split_id).exclude(pk=self.object.pk)
+        context['amortized'] = self.object.amortized
+        return context
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        original = copy.copy(self.object)
+        form = self.get_form()
+        if form.is_valid():
+            form.save(commit=False)
+            original.create_split_items(form)
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+
+class ItemUnSplit(LoginRequiredMixin, ModalMixin, DetailView):
+    model = Item
+    template_name = 'base/modals/basic_confirm.html'
+    success_url = reverse_lazy('expense_main')
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['card_header'] = 'Rollback Split Item Records'
+        context['card_body'] = 'This record, and the other records it was split with will all be rolled back to the original record.'
+        return context
+
+    def post(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj:
+            if obj.split:
+                obj.split.destroy_split()
+
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": True, "errors": "Failed to lookup"})
+
+
+class ItemUnAmortize(LoginRequiredMixin, ModalMixin, DetailView):
+    model = Item
+    template_name = 'base/modals/basic_confirm.html'
+    success_url = reverse_lazy('expense_main')
+
+    def get_object(self, queryset=None):
+        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['card_header'] = 'Remove Amortization Item Records'
+        context['card_body'] = 'This record, and the other records that were amortized will all be rolled back to the original record.'
+        return context
+
+    def post(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj:
+            if obj.amortized:
+                obj.unamortize()
+
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": True, "errors": "Failed to lookup"})
+
+
+class ItemAmortize(LoginRequiredMixin, ModalMixin, View):
+    form_class = ItemAmortizeForm
+    template_name = "expenses/cards/item_amortize.html"
+    success_url = reverse_lazy('expense_main')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = get_object_or_404(
+            Item,
+            pk=kwargs['pk'],
+            user=request.user
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['action'] = 'Amortize'
+        context['instance'] = self.object
+        return context
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data()
+        context['form'] = self.form_class()
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(data=request.POST)
+        if form.is_valid():
+            self.object.amortize(form.cleaned_data['periods'], form.cleaned_data['direction'])
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+
+#class SubCategoryUpdateView(ModalBaseMixin, LoginRequiredMixin, ExpenseMixin, ContextMixinBase, FormView):
+class SubCategoryUpdateView(LoginRequiredMixin, ExpenseMixin, View):
+    template_name = "base/modals/basic_modal_formset_table.html"
+
+    def get_queryset(self):
+        return SubCategory.objects.filter(user=self.request.user)
+
+    def get(self, request, *args, **kwargs):
+        formset = SubCategoryFormSet(queryset=self.get_queryset())
+        return render(request, self.template_name, {"formset": formset})
+
+    def post(self, request, *args, **kwargs):
+        formset = SubCategoryFormSet(request.POST, queryset=self.get_queryset(), user=request.user)
+
+        if not formset.is_valid():
+            errors = []
+            for i, form in enumerate(formset):
+                for field, messages in form.errors.items():
+                    errors.append(
+                        {
+                            "field": field,
+                            "index": i,
+                            "messages": messages,
+                        }
+                    )
+
+            return JsonResponse({"ok": False, "errors": errors})
+            '''
+            return JsonResponse({
+                "ok": False,
+                "errors": formset.errors,
+            })
+            '''
+        changed = []
+        for form in formset:
+            if form.has_changed():
+                changed.append({
+                    "pk": form.instance.pk,
+                    "fields": form.changed_data,
+                    "is_new": form.instance.pk is None,
+                })
+
+        formset.save()
+
+        return JsonResponse({
+            "ok": True,
+            "close": True,
+        })
+
+
+class TagUpdateView(LoginRequiredMixin, ExpenseMixin, View):
+    template_name = "base/modals/basic_modal_formset_table.html"
+
+    def get_queryset(self):
+        return ItemTag.objects.filter(user=self.request.user)
+
+    def get(self, request, *args, **kwargs):
+        formset = TagFormSet(queryset=self.get_queryset())
+        return render(request, self.template_name, {"formset": formset})
+
+    def post(self, request, *args, **kwargs):
+        formset = TagFormSet(request.POST, queryset=self.get_queryset(), user=request.user)
+
+        if not formset.is_valid():
+            errors = []
+            for i, form in enumerate(formset):
+                for field, messages in form.errors.items():
+                    errors.append(
+                        {
+                            "field": field,
+                            "index": i,
+                            "messages": messages,
+                        }
+                    )
+
+            return JsonResponse({"ok": False, "errors": errors})
+        changed = []
+        for form in formset:
+            if form.has_changed():
+                changed.append({
+                    "pk": form.instance.pk,
+                    "fields": form.changed_data,
+                    "is_new": form.instance.pk is None,
+                })
+
+        formset.save()
+
+        return JsonResponse({
+            "ok": True,
+            "close": True,
+        })
 
 @login_required
 @require_POST
@@ -157,60 +359,7 @@ def expense_tags_api(request, pk):
     })
 
 
-class ItemAdd(LoginRequiredMixin, CreateView):
-    model = Item
-    form_class = ItemAddForm
-    success_url = reverse_lazy('expense_main')
-
-    def get_initial(self):
-        super().get_initial()
-        self.initial['user'] = self.request.user.id
-        return self.initial
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['action'] = 'Add'
-        context['help_file'] = "expenses/help/item.html"
-
-        return context
-
-
-class ItemDelete(LoginRequiredMixin, DeleteView):
-    model = Item
-    template_name = 'expenses/item_confirm_delete.html'
-    success_url = reverse_lazy('expense_main')
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
-
-
-class ItemEdit(LoginRequiredMixin, UpdateView):
-    model = Item
-    form_class = ItemEditForm
-    success_url = reverse_lazy('expense_main')
-
-    def get_object(self, queryset=None):
-        return super().get_object(queryset=Item.objects.filter(user=self.request.user))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['action'] = 'Edit'
-        if self.object.parent:
-            context['children'] = self.object.parent.all()
-
-        if self.object.split_from:
-            context['split_from'] = self.object.split_from.all()
-        context['help_file'] = "expenses/help/item.html"
-        return context
-
-
-class AssignCategory(LoginRequiredMixin, UpdateView):
-    model = Item
-    form_class = ItemForm
-    success_url = reverse_lazy("expense_upload")
-
-
-class ListTemplates(LoginRequiredMixin, ListView):
+class ListTemplates(LoginRequiredMixin, ExpenseMixin, ListView):
     model = Template
     template_name = 'expenses/templates.html'
 
@@ -222,21 +371,11 @@ class ListTemplates(LoginRequiredMixin, ListView):
         return context
 
 
-class ItemDups(LoginRequiredMixin, ListView):
-    model = Item
-    template_name = 'expenses/listdups.html'
-
-    def get_queryset(self):
-        df = pd.DataFrame(Item.objects.filter(user=self.request.user).values().order_by('id'))
-        df = df[df.duplicated(subset=['description', 'date', 'amount'], keep=False)].sort_values(['date', 'description'])
-        return Item.objects.filter(id__in=df['id']).order_by('date', 'description')
-
-
-class AddTemplateView(LoginRequiredMixin, CreateView):
+class AddTemplateView(LoginRequiredMixin, ModalMixin, CreateView):
     model = Template
     form_class = TemplateForm
     success_url = reverse_lazy('expenses_assign')
-    template_name = 'expenses/template_form.html'
+    template_name = 'base/modals/basic_card.html'
 
     def get_initial(self):
         super().get_initial()
@@ -250,10 +389,16 @@ class AddTemplateView(LoginRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['action'] = 'Create'
+        context['action'] = 'Create Template'
         context['success_url'] = self.request.META.get('HTTP_REFERER', reverse('expenses_assign'))
         return context
 
+    def post(self, request, *args, **kwargs):
+        form = self.get_form()
+        if form.is_valid():
+            form.save()
+            return JsonResponse({"ok": True, "redirect": self.get_success_url()})
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
 
 class DeleteTemplateView(LoginRequiredMixin, DeleteView):
     model = Template
@@ -261,7 +406,7 @@ class DeleteTemplateView(LoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("expenses_templates")
 
 
-class ItemFormSet(modelformset_factory(Item, form=ItemListEditForm, extra=0)):
+class ItemFormSet(modelformset_factory(Item, form=ItemEditForm, extra=0)):
     def save(self, commit=True):
         # Call the original save method to save the forms in the formset
         super(ItemFormSet, self).save(commit=commit)
@@ -271,213 +416,205 @@ class ItemFormSet(modelformset_factory(Item, form=ItemListEditForm, extra=0)):
             # Perform your custom action here
             pass
 
-@login_required
-def edit_template(request, pk: int):
-    obj = get_object_or_404(Template, pk=pk)
-
-    # ItemFormSet = modelformset_factory(Item, form=ItemListEditForm, extra=0)
-    template_form = TemplateForm(instance=obj)
-
-    if request.method == "POST":
-        formset = ItemFormSet(request.POST)
-        if formset.is_valid():
-            formset.save()
-        if template_form.is_valid():
-            template_form.save()
-        return HttpResponseRedirect(reverse('expenses_templates'))
-
-    formset = ItemFormSet(queryset=Item.objects.filter(template=obj))
-
-    return render(request, "expenses/template.html", {
-        'template_form': template_form,
-        'formset': formset,
-        'view_verb': 'Update',
-        'success_url': request.META.get('HTTP_REFERER', reverse('expenses_templates')),
-        'me': obj,
-    })
-
 
 def cash_help(request):
     return render(request, 'expenses/includes/help.html', {'success_url': request.META.get('HTTP_REFERER', '/')})
 
-@login_required
-def delete_action(request):
-    """
-    Just a quick delete
-    """
-    action_id = request.GET.get("action_id", None)
-    action = Item.objects.filter(id=action_id, user=request.user)
-    if action.count() == 1:
-        action.delete()
-        return HttpResponse(status=200)
-    return HttpResponse(status=404)
+
+class ExpenseMainView(LoginRequiredMixin, ExpenseMixin, SearchMixin, RangeMixin, ListView):
+    model = Item
+    template_name = 'expenses/main.html'
+
+    def get_context_data(self, **kwargs):
+        total = self.object_list.aggregate(Sum('amount'))['amount__sum']
+        total_length = self.object_list.count()
+        missing = self.object_list.filter(category__isnull=True).count()
+        self.object_list = self.object_list.order_by('-date', '-id')[0:299]
+        context = super().get_context_data(**kwargs)
+        context['total'] = total
+        if total_length != self.object_list.count():
+            context['info'] = f'Item list has been truncated - {total_length - self.object_list.count()} records omitted.  Use the charts above to filter the list to see a subset of records.'
+        if missing:
+            context['warnings'] = f' {missing} Expense Items have not been processed. Use <a href="{reverse_lazy('expenses_assign')}">Assign Expense Categories</a> to assign categories'
+
+        context['tags'] = ItemTag.objects.filter(user=self.request.user)
+        #format_html('Please review the information at <a href="{}">{}</a>', reverse_lazy('expenses_assign'), 'Assign Expenses')
+        # f'{missing} Expense Items have not been processed. <a href="{reverse_lazy('expenses_assign')}">Assign Expense Categories</a>'
+        return context
 
 
-@login_required
-def expense_main(request):
-    """
-    This view support both a search to refresh the data and pagination.   If I change the critera,   I need to
-    reset the pagintor to page 1.
-    """
-    search_for = False
-    default_end = datetime.now().date()
-    default_start = datetime.now().replace(year=datetime.now().year - 7).date().replace(day=1)
+class ExpensePieView(LoginRequiredMixin, ExpenseMixin, SearchMixin, RangeMixin, ListView):
+    model = Item
 
-    try:
-        page_size = int(request.GET.get('pagesize', 50))
-    except ValueError:
-        page_size = 50
-
-    if request.GET:
-        if 'span' in request.GET:
-            new_start, new_end = label_to_values(request.GET['span'])
-            if new_start:  # Just incase the data was ill formatted ?
-                default_start = new_start
-                default_end = new_end
-
-        if 'category' in request.GET:
-            try:
-                search_for = Category.objects.get(name=request.GET['category'])
-            except Category.DoesNotExist:
-                logger.error('Intial Category does not exist:%s' % request.GET['category'])
-
-    initial = {'search_ignore': 'No',
-               'search_start_date': default_start,
-               'search_end_date': default_end,
-               'show_list': 'Hide'}
-
-    if search_for:
-        initial['search_category'] = search_for.name
-
-    warnings = {}
-    search_form = SearchForm(initial=initial)
-
-    total = 0
-    if request.method == "POST":
-        search_form = SearchForm(request.POST)
-        formset = ItemFormSet(request.POST)
-        if search_form.is_valid() and formset.is_valid():
-            search_dict = search_form.cleaned_data
-            search_dict['income'] = 'true' if search_dict['search_category'] == 'Income' else 'false'
-            super_set = Item.filter_search(Item.objects.filter(user_id=request.user.id), search_form.cleaned_data).order_by('-date').prefetch_related('tags')
-
-            total = super_set.aggregate(Sum('amount'))['amount__sum']
-            formset.save()
-            formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+    def render_to_response(self, context, **response_kwargs):
+        labels = []
+        data = []
+        show_sub = False if self.category == "- ALL -" else True
+        if show_sub:
+            category_list = (
+                self.object_list.order_by("subcategory__name")
+                .values_list("subcategory__name", flat=True)
+                .distinct()
+            )
         else:
+            category_list = (
+                self.object_list.order_by("category__name")
+                .values_list("category__name", flat=True)
+                .distinct()
+            )
+
+        for category in category_list:
+            if show_sub:
+                item = (
+                    self.object_list.filter(subcategory__name=category)
+                    .order_by("subcategory__name")
+                    .aggregate(sum=Sum("amount"))
+                )
+            else:
+                item = (
+                    self.object_list.filter(category__name=category)
+                    .order_by("category__name")
+                    .aggregate(sum=Sum("amount"))
+                )
+
+            labels.append(category)
+            value = int(item["sum"])
+            data.append(value)
+        return JsonResponse({"data": data, "labels": labels, "colors": COLORS})
+
+
+class ExpenseBarView(LoginRequiredMixin, ExpenseMixin, SearchMixin, RangeMixin, ListView):
+    model = Item
+
+    def render_to_response(self, context, **response_kwargs):
+        show_sub = False if self.category == "- ALL -" else True
+
+        if self.object_list.count() == 0:
+            return JsonResponse({"datasets": [], "labels": []})
+
+        first_date = self.object_list.earliest("date").date.replace(day=1)
+        last_date = self.object_list.latest("date").date.replace(day=1)
+
+        months = []
+        labels = []
+        month_dict = {}
+        next_date = first_date
+        while next_date <= last_date:
+            months.append(next_date)
+            labels.append(date_to_label(next_date, "MONTH"))
+            month_dict[next_date] = len(months) - 1
+            next_date = next_date + relativedelta(months=1)
+
+        if show_sub:
+            raw_data = (
+                self.object_list.annotate(month=TruncMonth("date"))
+                .values("month")
+                .annotate(sum=Sum("amount"))
+                .values("month", "sum", "subcategory__name")
+                .order_by("subcategory__name")
+            )
+        else:
+            raw_data = (
+                self.object_list.annotate(month=TruncMonth("date"))
+                .values("month")
+                .annotate(sum=Sum("amount"))
+                .values("month", "sum", "category__name")
+                .order_by("category__name")
+            )
+
+        colors = COLORS.copy()
+        colors.reverse()
+
+        initial_data = [0 for i in range(len(months))]
+        datasets = []
+
+        data_dict = {}
+        for element in raw_data:
+            name = (
+                element["subcategory__name"] if show_sub else element["category__name"]
+            )
+            this_date = element["month"]
+            if name not in data_dict:
+                datasets.append(
+                    {
+                        "label": name,
+                        "data": initial_data.copy(),
+                        "stack": "stack",
+                        "backgroundColor": colors.pop(),
+                    }
+                )
+                data_dict[name] = len(datasets) - 1
+            try:
+                datasets[data_dict[name]]["data"][month_dict[element["month"]]] += (
+                    element["sum"]
+                )
+            except KeyError:
+                logger.error("Failed on %s" % element)
+
+        return JsonResponse({"datasets": datasets, "labels": labels, "colors": COLORS})
+
+
+class DetailEditView(LoginRequiredMixin, SearchMixin, ExpenseMixin, View):
+    template_name = 'expenses/detail_edit.html'
+    assigning = False
+
+    def setup(self, request, *args, **kwargs):
+        super().setup(request, *args, **kwargs)
+
+        self.action = request.POST.get('action', 'search')
+
+        if self.action == 'save':
+            pass # Process the existing formset
+
+        elif self.action == 'search':
             pass
 
-    else:
 
-        super_set = Item.objects.filter(
-            ignore=False, user=request.user, date__gte=default_start, date__lte=default_end).order_by('-date').prefetch_related('tags')
-        if search_for:
-            super_set = super_set.filter(category=search_for)
-            total = super_set.aggregate(Sum('amount'))['amount__sum']
-            formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+    def get_context_data(self):
+        context = super().get_context_data(**self.kwargs)
+        context['tags'] = ItemTag.objects.all().order_by('value'),
+        context['help_file'] = 'expenses/help/main.html'
+        context['assigning'] = self.assigning
+        return context
+
+    def get_formset(self, filters, data=None):
+        if self.assigning:
+            Item.apply_templates(self.request.user)
+
+        full_list = Item.filter_search(Item.objects.filter(user=self.request.user), filters)[:300]
+        if data:
+            return ItemFormSet(data, initial=full_list)
+        return ItemFormSet(queryset=full_list)
+
+    def get(self, request, *args, **kwargs):
+
+        context = self.get_context_data()
+        if self.assigning:
+            self.default_search['search_category'] = '- NONE -'
+
+        context['search_form'] = SearchForm(request.GET or self.default_search)
+        if context['search_form'].is_valid():
+            context["formset"] = self.get_formset(context['search_form'].cleaned_data)
         else:
-            total = super_set.aggregate(Sum('amount'))['amount__sum']
-            formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+            context['formset'] = self.get_formset(self.default_search)
+        return render(request, self.template_name, context)
 
-    unassigned = Item.unassigned(user=request.user)
-    if unassigned.count() != 0:
-        warnings = f'{unassigned.count()} Expense Items have not been processed.'
-
-    return render(request, "expenses/main.html", {
-        'warnings': warnings,
-        'formset': formset,
-        'search_form': search_form,
-        'total': total,
-        'tags': ItemTag.objects.all().order_by('value'),
-        'help_file': 'expenses/help/main.html'
-    })
-
-
-
-@login_required
-def expense_split(request):
-    """
-    This view support both a search to refresh the data and pagination.   If I change the critera,   I need to
-    reset the pagintor to page 1.
-    """
-    search_for = False
-    default_end = datetime.now().date()
-    default_start = datetime.now().replace(year=datetime.now().year - 7).date().replace(day=1)
-
-    try:
-        page_size = int(request.GET.get('pagesize', 200))
-    except ValueError:
-        page_size = 50
-
-    if request.GET:
-        if 'span' in request.GET:
-            new_start, new_end = label_to_values(request.GET['span'])
-            if new_start:  # Just incase the data was ill formatted ?
-                default_start = new_start
-                default_end = new_end
-
-        if 'category' in request.GET:
-            try:
-                search_for = Category.objects.get(name=request.GET['category'])
-            except Category.DoesNotExist:
-                logger.error('Intial Category does not exist:%s' % request.GET['category'])
-
-    initial = {'search_ignore': 'No',
-               'search_start_date': default_start,
-               'search_end_date': default_end,
-               'show_list': 'Hide'}
-
-    if search_for:
-        initial['search_category'] = search_for.name
-
-    warnings = {}
-    search_form = SearchForm(initial=initial)
-
-    total = 0
-    if request.method == "POST":
-        search_form = SearchForm(request.POST)
-        formset = ItemFormSet(request.POST)
-        if search_form.is_valid() and formset.is_valid():
-            search_dict = search_form.cleaned_data
-            search_dict['income'] = 'true' if search_dict['search_category'] == 'Income' else 'false'
-            super_set = Item.filter_search(Item.objects.filter(user_id=request.user.id), search_form.cleaned_data).order_by('-date').prefetch_related('tags')
-
-            total = super_set.aggregate(Sum('amount'))['amount__sum']
-            formset.save()
-            formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
+    def post(self, request, *args, **kwargs):
+        # Nov 11,  what if I change the search and what does that do to the formset ??? 
+        context = self.get_context_data()
+        context['search_form'] = SearchForm(request.GET or self.default_search)
+        if context['search_form'].is_valid():
+            formset = self.get_formset(context['search_form'].cleaned_data, data=request.POST)
+            if formset.is_valid():
+                formset.save()
+                context["formset"] = self.get_formset(self.default_search)
         else:
-            pass
+            context["formset"] = self.get_formset(self.default_search, data=request.POST)
 
-    else:
+        if self.assigning:
+            return redirect('expense_main')
 
-        super_set = Item.objects.filter(
-            user=request.user, split_id__isnull=False).order_by('-date').prefetch_related('tags')
-        if search_for:
-            super_set = super_set.filter(category=search_for)
-            total = super_set.aggregate(Sum('amount'))['amount__sum']
-            formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
-        else:
-            total = super_set.aggregate(Sum('amount'))['amount__sum']
-            formset = ItemFormSet(queryset=Item.objects.filter(
-                id__in=list(super_set.order_by('-date').values_list('id', flat=True)[:page_size])).order_by('-date'))
-
-    unassigned = Item.unassigned(user=request.user)
-    if unassigned.count() != 0:
-        warnings = f'{unassigned.count()} Expense Items have not been processed.'
-
-    return render(request, "expenses/main.html", {
-        'warnings': warnings,
-        'formset': formset,
-        'search_form': search_form,
-        'total': total,
-        'tags': ItemTag.objects.all().order_by('value'),
-        'help_file': 'expenses/help/main.html'
-    })
+        return render(request, self.template_name, context)
 
 
 class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
@@ -489,43 +626,6 @@ class AssignFormSet(modelformset_factory(Item, form=ItemForm, extra=0)):
         if commit:
             # Perform your custom action here
             pass
-
-
-@login_required
-def assign_expenses(request):
-    Item.apply_templates(user=request.user)
-    max_size = 50
-
-    search_form = SearchForm(initial={'search_ignore': 'No',
-                                      'search_category': '- NONE -',
-                                      'search_subcategory': '- NONE -'})
-
-    basic_filter = Item.objects.filter(user=request.user).filter(Q(category__isnull=True) | Q(subcategory__isnull=True)).exclude(ignore=True)
-    count = basic_filter.count()
-    if request.method == "POST":
-        search_form = SearchForm(request.POST)
-        formset = AssignFormSet(request.POST)
-        if search_form.is_valid() and formset.is_valid():
-            formset.save()
-            if "submit-type" in request.POST and request.POST["submit-type"].startswith('Template-'):
-                index = request.POST["submit-type"].split('Template-')
-                if index[1]:
-                    return HttpResponseRedirect(reverse('add_template', kwargs={'item_pk': index[1]}))
-
-            filtered_set = Item.filter_search(basic_filter, search_form.cleaned_data)
-            count = filtered_set.count()
-            queryset = Item.objects.filter(id__in=list(filtered_set.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')
-            formset = AssignFormSet(queryset=queryset)
-            if count == 0:
-                return HttpResponseRedirect(reverse('expense_main'))
-    else:
-        queryset = Item.objects.filter(id__in=list(basic_filter.order_by('-date').values_list('id', flat=True)[:max_size])).order_by('-date')
-        formset = AssignFormSet(queryset=queryset)
-
-    return render(request, "expenses/assign_category.html", {"formset": formset,
-                                                             "search_form": search_form,
-                                                             "count": count,
-                                                             "help_file": "expenses/help/assign_category.html"})
 
 
 @login_required
@@ -733,6 +833,7 @@ def load_subcategories_search(request):
     return render(request, "expenses/includes/search_options.html", {"options": default})
 
 
+'''
 def load_categories_search(request):
     default = copy.copy(DEFAULT_CATEGORIES)
     for category in Category.objects.all().order_by("name").values_list('name', flat=True):
@@ -741,155 +842,7 @@ def load_categories_search(request):
     default.append(('', '------'))
     default.append(('Income', 'Income'))
     return render(request, "expenses/includes/search_options.html", {"options": default})
-
-
-@login_required
-def expense_pie(request):
-    """
-    Return the json data that will be used to build a pie chart
-    - If we are showing all Categories,  then the pie segments will be based on the categories if we have selected a specific category,  then the
-      segments will be based on subcategories.
-    - If we
-
-    """
-    data = []
-    labels = []
-    colours = []
-    super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
-    show_sub = False if request.GET['search_category'] == '- ALL -' else True
-    if show_sub:
-        category_list = super_set.order_by('subcategory__name').values_list('subcategory__name', flat=True).distinct()
-    else:
-        category_list = super_set.order_by('category__name').values_list('category__name', flat=True).distinct()
-
-    for category in category_list:
-        if show_sub:
-            item = super_set.filter(subcategory__name=category).aggregate(sum=Sum('amount'))
-        else:
-            item = super_set.filter(category__name=category).aggregate(sum=Sum('amount'))
-
-        labels.append(category)
-        value = int(item['sum'])
-        data.append(value)
-    return JsonResponse({'data': data, 'labels': labels, 'colors': COLORS})
-
-
-@login_required
-def expense_bar(request):
-    """
-    Build the chart.js data for a bar chart based on the standard search_filter
-    """
-    super_set = Item.filter_search(Item.objects.filter(user=request.user), request.GET)
-    show_sub = False if request.GET['search_category'] == '- ALL -' else True
-    if super_set.count() == 0:
-        return JsonResponse({'datasets': [], 'labels': []})
-
-    first_date = super_set.earliest('date').date.replace(day=1)
-    last_date = super_set.latest('date').date.replace(day=1)
-
-    months = []
-    labels = []
-    month_dict = {}
-    next_date = first_date
-    while next_date <= last_date:
-        months.append(next_date)
-        labels.append(date_to_label(next_date, 'MONTH'))
-        month_dict[next_date] = len(months) - 1
-        next_date = next_date + relativedelta.relativedelta(months=1)
-
-    if show_sub:
-        raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month', 'sum', 'subcategory__name')
-    else:
-        raw_data = super_set.annotate(month=TruncMonth('date')).values('month').annotate(sum=Sum('amount')).values('month',
-                                                                                                                   'sum',
-                                                                                                                   'category__name')
-
-    colors = COLORS.copy()
-    colors.reverse()
-
-    initial_data = [0 for i in range(len(months))]
-    datasets = []
-
-    data_dict = {}
-    for element in raw_data:
-        name = element['subcategory__name'] if show_sub else element['category__name']
-        this_date = element['month']
-        if name not in data_dict:
-            datasets.append({'label': name,
-                             'data': initial_data.copy(),
-                             'stack': 'stack',
-                             'backgroundColor': colors.pop()})
-            data_dict[name] = len(datasets) - 1
-        try:
-            datasets[data_dict[name]]['data'][month_dict[element['month']]] += element['sum']
-        except KeyError:
-            logger.error('Failed on %s' % element)
-
-    return JsonResponse({'datasets': datasets, 'labels': labels, 'colors': COLORS})
-
-
-@login_required
-def cash_flow_chart(request):
-    """
-    Build the chart data required for the timespan with the following data
-    1.  Income
-    2.  Expenses
-    """
-
-    date_util = DateUtil(period=request.GET.get('period'), span=request.GET.get('span'))
-    show_trends = True if request.GET.get('trends') == 'Show' else False
-    income = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date, category__name='Income')
-    expense = Item.objects.filter(user=request.user, ignore=False, date__gte=date_util.start_date).exclude(category__name='Income')
-
-    key = 'period'
-    if date_util.is_quarter:
-        income_set = income.annotate(period=TruncQuarter('date')).values('period').annotate(total=Sum('amount')).order_by('period')
-        expense_set = expense.annotate(period=TruncQuarter('date')).values('period').annotate(total=Sum('amount')).order_by('period')
-    elif date_util.is_year:
-        income_set = income.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
-        expense_set = expense.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
-    elif date_util.is_month:
-        income_set = income.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
-        expense_set = expense.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
-    else:
-        key = 'date'
-        income_set = income.values('date').annotate(total=Sum('amount')).order_by('date')
-        expense_set = expense.values('date').annotate(total=Sum('amount')).order_by('date')
-
-    # Data is in a list of [{'period': date, 'total': Decimal()}...] - A bit messy so lets make it a real dictionary
-    dates = date_util.dates({'income': 0, 'expenses': 0})
-    for element in income_set:
-        dates[element[key]]['income'] = float(element['total'])
-    for element in expense_set:
-        dates[element[key]]['expenses'] = float(element['total'])
-
-    # Lets get the data back to lists
-    labels = []
-    expenses = []
-    income = []
-    for key in dates.keys():
-        labels.append(date_util.date_to_label(key))
-        expenses.append(dates[key]['expenses'])
-        income.append(dates[key]['income'])
-
-    data_sets = [
-        {'label': 'Expenses', 'fill': False, 'data': expenses, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'], 'tension': 0.1},
-        {'label': 'Income', 'fill': False, 'data': income, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'], 'tension': 0.1}]
-
-    if show_trends:
-        x_indices = np.arange(len(dates))
-        slope, intercept = np.polyfit(x_indices, expenses, 1)
-        # Calculate trend line points
-        expense_trend = [slope * x + intercept for x in x_indices]
-        slope, intercept = np.polyfit(x_indices, income, 1)
-        income_trend = [slope * x + intercept for x in x_indices]
-        data_sets.append({'label': 'Expense-Trend', 'fill': False, 'data': expense_trend, 'borderColor': PALETTE['coral'], 'backgroundColor': PALETTE['coral'],
-                          'borderDash': [5, 5]})
-        data_sets.append({'label': 'Income-Trend', 'fill': False, 'data': income_trend, 'borderColor': PALETTE['olive'], 'backgroundColor': PALETTE['olive'],
-                          'borderDash': [5, 5]})
-
-    return JsonResponse({'labels': labels, 'datasets': data_sets})
-
+'''
 
 @login_required
 def cash_flow_chart_v2(request):

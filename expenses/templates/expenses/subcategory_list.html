@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Expense Templates{% endblock %}
+{% block navbar %}{% endblock navbar %}
+{% block footer %}{% endblock footer %}
 {% block content %}
 <!-- todo: Maybe I should not rely on this. -->
 <script src="https://www.kryogenix.org/code/browser/sorttable/sorttable.js"></script>
@@ -18,7 +20,7 @@
     </tr>
     {% for subcategory in subcategory_list %}
         <tr>
-            <td><a href="{% url 'subcategory_delete' subcategory.id %}"><button class="w3-button-small w3-round-large w3-red">Delete</button></a></td>
+            <td><a href="{% url 'subcategory_delete' subcategory.id %}" data-modal><button class="w3-button-small w3-round-large w3-red">Delete</button></a></td>
             <td>{{ subcategory.count }}</td>
             <td>{{subcategory.category}}</td>
             <td>{{subcategory.name}}</td>
@@ -26,7 +28,7 @@
    {% endfor %}
 </table>
     <div class="w3-row">
-        <a href="{% url 'subcategory_add' %}">
+        <a href="{% url 'subcategory_add' %}" data-modal>
                 <button class="diy-button-auto diy-blue" type="button">New SubCategory</button>
             </a>
 

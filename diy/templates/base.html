@@ -6,153 +6,280 @@
     <!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="icon" href="{% static 'favicon.ico' %}">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'diy.css' %}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link href="https://cdn.datatables.net/v/bs5/dt-3.1.4/datatables.min.css" rel="stylesheet" integrity="sha384-T3JGdaD/z50MkBHdHHSDpnf7fv+lt9j85rrcFkblCUiWKgWvYBCIzijesG0e7o+h" crossorigin="anonymous">
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/v/bs5/dt-3.1.4/datatables.min.js" integrity="sha384-D7Wdxh64tfBXMVK2xBhC5SkY7LNTaYJfLdvpJ8OUg7zBN2gVk2d4muRqhJkloYCG" crossorigin="anonymous"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.1/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
-
-    <link rel="stylesheet" href="{% static 'w3-css/w3.css' %}">
-    <link rel="stylesheet" href="{% static 'diy.css' %}">
-
-    <!-- DataTables JS -->
-
-    <style>
-        body {
-            font-family: "Lato", sans-serif
-        }
-    </style>
     <script src="{% static 'diy.js' %}"></script>
-
 </head>
 <body>
-{% block navbar %}
-    <div class="w3-top">
-        <div class="w3-bar w3-black w3-card">
-            <div class="w3-hide-small">
-                <a href="{% url 'diy_main' %}" class="w3-bar-item w3-button w3-padding-large">Home</a>
-                <div class="w3-dropdown-hover">
-                    <button class="w3-padding-large w3-button w3-black" title="Expenses">Cash <i
-                            class="fa fa-caret-down"></i></button>
-                    <div class="w3-dropdown-content w3-bar-block w3-card-4">
-                        <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large">Cash Home</a>
-                        <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">New Expense</a>
-                        <hr class="w3-hide-small">
-                        <a href="{% url 'subcategory_list' %}"
-                           class="w3-bar-item w3-button w3-padding-large w3-hide-small">Personal Categories</a>
+<div class="container-fluid">
+    {% block navbar %}
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'home_page' %}">IOOM</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
+                    aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{% url 'expense_main' %}">Money</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{% url 'wealth_home' %}">Wealth</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{% url 'portfolio_home' %}">Wealth(v0)</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            Actions
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            {% if wealth_context %}
+                                <li><a class="dropdown-item" data-modal href="{% url 'wealth_upload' %}">Import</a></li>
+                                <li><a class="dropdown-item" href="#">Another action</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item" href="#">Something else here</a></li>
+                            {% elif expense_context %}
+                                <li><a class="dropdown-item" href="{% url 'expense_add' %}" data-modal>New Item</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'subcategory_updates' %}" data-modal>List SubCategories</a></li>
+                                <li><a class="dropdown-item" href="{% url 'tag_updates' %}" data-modal>List Tags</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'detail_edit' %}">Edit View</a></li>
+                                <li><a class="dropdown-item" href="{% url 'expenses_templates' %}">List Templates</a></li>
+                                <li><a class="dropdown-item" href="{% url 'expense_dups' %}">Show Duplicate Records</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'expenses_upload' %}" data-modal>Import</a></li>
+                                <li><a class="dropdown-item" href="{% url 'expenses_export' %}" data-modal>Export</a></li>
+                            {% else %}
+                                <li><a class="dropdown-item" href="{% url 'expense_add' %}" data-modal>Add Expense</a></li>
 
-                        <a href="{% url 'expenses_templates' %}"
-                           class="w3-bar-item w3-button w3-padding-large w3-hide-small">Show Templates</a>
-                        <a href="{% url 'expenses_upload' %}"
-                           class="w3-bar-item w3-button w3-padding-large w3-hide-small">Import</a>
-                        <a href="{% url 'expenses_export' %}"
-                           class="w3-bar-item w3-button w3-padding-large w3-hide-small">Export</a>
-                    </div>
-                </div>
-                <div class="w3-dropdown-hover">
-                    <button class="w3-padding-large w3-button w3-black" title="Investments">Stocks <i
-                            class="fa fa-caret-down"></i></button>
-                    <div class="w3-dropdown-content w3-bar-block w3-card-4">
-                        <a href="{% url 'portfolio_home' %}" class="w3-bar-item w3-button w3-padding-large">Wealth
-                            Home</a>
-                        <hr class="w3-hide-small">
-                        <a href="{% url 'add_equity' %}"
-                           class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Request new
-                            Equity/Fund</a>
-                        <a href="{% url 'portfolio_upload' %}"
-                           class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Import</a>
-                        <a href="{% url 'stocks_export' %}"
-                           class="w3-hide-small w3-bar-item w3-button w3-padding-large w3-hide-small">Export</a>
-                    </div>
-                </div>
-                {% if request.user.is_authenticated %}
-                    <a href="{% url 'profile' %}"
-                       class="w3-bar-item w3-button w3-padding-large w3-hide-small">Profile</a>
-                {% endif %}
-            </div>
-            <div class="w3-hide-medium w3-hide-large">
-                <div class="w3-dropdown-hover">
-                    <button class="w3-padding-large w3-button w3-black" title="Expenses">IOOM <i
-                            class="fa fa-caret-down"></i></button>
-                    <div class="w3-dropdown-content w3-bar-block w3-card-4">
-                        <a href="{% url 'diy_main' %}" class="w3-bar-item w3-button w3-padding-large">Home</a>
-                        <a href="{% url 'expense_main' %}" class="w3-bar-item w3-button w3-padding-large">Cash</a>
-                        <a href="{% url 'expense_add' %}" class="w3-bar-item w3-button w3-padding-large">--> New
-                            Transaction</a>
-                        <a href="{% url 'stocks_main' %}" class="w3-bar-item w3-button w3-padding-large">Wealth</a>
-                    </div>
-                </div>
-            </div>
-            <button onclick=toggle_help() class="w3-bar-item w3-button w3-padding-large" title="Help">HELP</button>
-            <div class="w3-right">
-                {% if request.user.is_authenticated %}
-                    <form title="log out" action="{% url 'logout' %}" method="post">
-                        {% csrf_token %}
-                        <button class="w3-bar-item w3-button w3-padding-large">LOGOUT</button>
-                    </form>
-                {% endif %}
+                            {% endif %}
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link" role="button" onclick="toggle_help()">Help ?</span>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Disabled</a>
+                    </li>
+                    {% if stale_warning %}
+                    <li class="nav-item dropdown fw-bold">
+                        <a class="nav-link text-info dropdown-toggle" href="#" id="stale-nbD" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            Stale Data Warning !
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="stale-state-nbD">
+                            {% for row in stale_warning %}
+                            <li><a class="dropdown-item" href="#">{{row}}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" tabindex="-1" aria-disabled="false">Login</a>
+                    </li>
+
+                </ul>
+                <form class="d-flex">
+                    <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
+                    <button class="btn btn-outline-success" type="submit">Search</button>
+                </form>
             </div>
         </div>
+    </nav>
+    {% endblock navbar %}
+</div>
+{% if warnings %}
+    <div class="container-fluid alert alert-warning" role="alert">
+        {{ warnings | safe }}
     </div>
-{% endblock navbar %}
-<div class="w3-content " style="max-width:2000px;margin-top:46px">
-    <div class="w3-container">
-        <div id="DIYHelpContent" style="display:none">
+{% endif %}
+<div id="DIYHelpContent" style="display:none">
+    <div class="mx-3 p-3 border rounded-3 shadow-sm">
+        {% block help_content %}
             <div>
-                {% block help_content %}
-                    <div class="w3-margin-left w3-small">
-                        {% if help_file %}
-                            {% include help_file %}
-                        {% else %}
-                            {% include 'base/blahblah.html' %}
-                            <p class="w3-margin-left"> No "Help" is provided for this page. If you have any questions please contact me at
-                                <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">ItsOnlyOurMoney@gmail.com</a>.
-                            </p>
-                        {% endif %}
-                    </div>
-                {% endblock %}
+                {% if help_file %}
+                    {% include help_file %}
+                {% else %}
+                    {% include 'base/blahblah.html' %}
+                    <p class="w3-margin-left"> No "Help" is provided for this page. If you have any questions please contact me at
+                        <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">ItsOnlyOurMoney@gmail.com</a>.
+                    </p>
+                {% endif %}
             </div>
-            <div>
-                <button onclick=toggle_help()
-                        class="w3-margin-left w3-margin-top w3-button-small w3-round-large diy-button" title="Close">
-                    Close
-                </button>
-            </div>
-        </div>
+        {% endblock %}
     </div>
-    <div class="w3-container">
-        {% block content %}
-        {% endblock content %}
+    <div class="mx-3 p-3">
+        <button onclick=toggle_help() class="btn btn-outline-warning btn-sm">Close</button>
     </div>
 </div>
+
+<div class="modal fade" id="mainModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content" id="mainModalContent">
+      <!-- content gets injected here -->
+    </div>
+  </div>
 </div>
+<div class="container-fluid pt-2 pb-2">
+    {% block content %}
+        NO CONTENT
+    {% endblock content %}
+</div>
+{% if info %}
+    <div class="container-fluid alert alert-warning" role="alert">
+        {{ info | safe }}
+    </div>
+{% endif %}
+
 {% block footer %}
-    <div class="w3-margin-top w3-grey w3-row">
-        <div class="w3-container w3-third w3-small w3-margin-top">{% include 'base/blahblah.html' %}</div>
-        <div class="w3-container w3-third w3-center"><p>© 2025 <a href="mailto:itsonlyourmoney@gmail.com"
-                                                                  target="_blank">Scott Sargent</a><br>Rainy Day
-            Development</p></div>
-        <div class="w3-container w3-third w3-small">
-            <h5>Useful Links</h5>
-            <ul>
-                <li><a href="https://finance.yahoo.com/">Yahoo Finance</a></li>
-                <li><a href="https://www.alphavantage.co/">Alpha Vantage</a></li>
-                <li><a href="https://www.morningstar.ca/ca/">Morning Star</a></li>
-                <li><a href="https://www.bankofcanada.ca/rates/related/inflation-calculator/">Inflation Calculator</a>
-                </li>
-            </ul>
+    <div class="container">
+        <div class="row justify-content-start">
+            <div class="col-12 col-lg-4">
+                Blah blah blah
+            </div>
+            <div class="col-12 col-lg-4">
+                <p>© 2026 <a href="mailto:itsonlyourmoney@gmail.com" target="_blank">Scott Sargent</a><br>Rainy Day Development</p>
+            </div>
+            <div class="col-12 col-lg-4">
+                <h5>Useful Links</h5>
+                <ul>
+                    <li><a href="https://finance.yahoo.com/">Yahoo Finance</a></li>
+                    <li><a href="https://www.morningstar.ca/ca/">Morning Star</a></li>
+                    <li><a href="https://www.bankofcanada.ca/rates/related/inflation-calculator/">Inflation Calculator</a>
+                    </li>
+                </ul>
+            </div>
         </div>
-
     </div>
 {% endblock footer %}
+<script>
+    async function processModalResult(form) {
+        const res = await fetch(form.getAttribute('action'), {
+            method: "POST",
+            body: new FormData(form),
+        });
+        if (res.status === 200) {
+            const data = await res.json();
+
+            if (data.redirect) {
+                window.location.href = data.redirect;
+            } else {
+                clear_spinner()
+                Object.entries(data.errors).forEach(([field, messages]) => {
+
+                    let input = document.querySelector(`[name="${field}"]`);
+                    if (!input) {
+                        input = document.querySelector(`[name="ioom_nonfield_errors"]`)
+                        if (!input) {
+                            console.log(field, messages)
+                        } else {
+                            input.classList.add('alert')
+                            input.classList.add('alert-warning')
+                            input.style.whiteSpace = 'pre-wrap'
+                            input.textContent = field + ": " + messages.join(' ') + "\n";
+
+                        }
+                    } else {
+                        input.classList.add('is-invalid');
+                        // bootstrap error div
+                        let errorDiv = input.parentNode.querySelector('.invalid-feedback');
+                        if (!errorDiv) {
+                            errorDiv = document.createElement('div');
+                            errorDiv.className = 'invalid-feedback';
+                            input.parentNode.appendChild(errorDiv);
+                        }
+
+                        errorDiv.textContent = messages.join(' ');
+                    }
+                });
+            }
+        } else {
+            console.error(res)
+        }
+    }
+
+    document.addEventListener('change', function (event) {
+        if (event.target.matches('.diy-category')) {
+
+            const category_value = event.target.value;
+            const categoryId = event.target.id
+            let subcategoryId = categoryId.replace('category', 'subcategory')
+            console.log('Hit API in base.html:230')
+
+            $.ajax({
+                url: '/expenses/ajax/load-subcategories/',  // on class diy-category - replace on altered diy-category's id.   would work on a list or a single
+                data: {
+                    'category': category_value
+                },
+                success: function (data) {
+                    $(`#${subcategoryId}`).html(data);
+                },
+                error: function (ts) {
+                    console.log(ts.responseText)
+                }
+            });
+        }
+    });
+
+    document.addEventListener('submit', function (e) {
+        const modal = document.getElementById('mainModal');
+
+        // ignore if not inside modal
+        if (!modal.contains(e.target)) return;
+
+        if (e.target.matches('.ioom_modal_form')) {
+
+            e.preventDefault();
+
+            input = document.querySelector(`[name="ioom_nonfield_errors"]`)
+            if (input) {
+                input.classList.remove('alert')
+                input.classList.remove('alert-warning')
+                input.style.whiteSpace = 'pre-wrap'
+                input.textContent = ""
+            }
+            processModalResult(e.target);
+        }
+    });
+
+    document.addEventListener('click', async (e) => {
+        const el = e.target.closest('[data-modal]');
+        if (!el) return;
+
+        e.preventDefault();
+
+        const html = await (await fetch(el.href)).text();
+        const container = document.querySelector('#mainModalContent');
+        container.innerHTML = html;
+        //initModalControls(container)
+
+        new bootstrap.Modal('#mainModal').show();
+
+        });
+
+
+</script>
 </body>

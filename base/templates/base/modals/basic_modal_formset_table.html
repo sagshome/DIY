@@ -1,0 +1,50 @@
+<form class="generic_modal_formset" method="post" action="{{ request.path }}">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+        {{ formset.management_form }}
+        {% if formset.errors.errors %}
+            <div class="w3-panel w3-red">
+                {% for dict in formset.error_messages %}
+                    {% for error in dict.values %}
+                        {{ error }}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        {% endif %}
+        <table class="table table-striped caption-top">
+            <caption><b>{{table_caption}}</b></caption>
+            {% for this_form in formset %}
+                {% if forloop.first %}
+                    <tr>
+                        <th></th>
+                        {% for heading in this_form.visible_fields %}
+                            <th>{{heading.label}}</th>
+                        {% endfor %}
+                        <th></th>
+                    </tr>
+                {% endif %}
+
+                <tr>
+
+                    {% for field in this_form.visible_fields %}
+                        {% if forloop.first %}
+                            <td>
+                                {% for hidden_field in this_form.hidden_fields %}
+                                    {{ hidden_field.errors }}
+                                    {{ hidden_field }}
+                                {% endfor %}
+
+
+                            </td>
+                        {% endif %}
+                        <td>
+                            {{ field }}<div class="w3-red invalid-feedback"></div>
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </table>
+    <button type="submit" class="btn btn-primary ioom-redirect">Save Changes</button>
+    <button type="button" class="btn btn-danger ioom-cancel">Cancel</button>
+</form>

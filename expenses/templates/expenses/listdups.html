@@ -1,4 +1,4 @@
-{% extends "base_bs.html" %}
+{% extends "base.html" %}
 {% block title %}Duplicates{% endblock %}
 {% load expenses_tags %}
 {% load static %}
@@ -23,13 +23,13 @@
                 </tr>
                 </thead>
             {% endif %}
-            <tr id="{{item.id}}" data-id="{{item.id}}">
+            <tr id="row-XA-{{ template.id }}" data-id="{{item.id}}" data-key="Item" class="ioom-action-row">
                 <td><i class="bi bi-trash ioom-delete-action"></i></td>
                 <td>{{item.date}}</td>
                 <td>{{item.description}}</td>
                 <td>{{item.amount}}</td>
-                <td>{{item.category}}</td>
-                <td>{{item.subcategory}}</td>
+                <td>{% if item.category %}{{item.category}}{% endif %}</td>
+                <td>{% if item.subcategory %}{{item.subcategory}}{% endif %}</td>
                 <td>{{item.ignore}}</td>
                 <td>{{item.split}}</td>
                 <td>{{item.amortized}}</td>
@@ -41,9 +41,7 @@
             </tr>
         {% endfor %}
     </table>
-
     <script>
-
         $(document).ready(function() {
             var tx_table = $('#dup-list').DataTable({
                 "pageLength": 50,  // Show 25 rows per page
@@ -61,46 +59,5 @@
                 .find(c => c.startsWith(name))
                 ?.substring(name.length) || null;
         }
-
-        document.querySelectorAll(".ioom-delete-action").forEach(icon => {
-            icon.addEventListener("click", async function (e) {
-                e.preventDefault();
-                // access row if needed
-                const row = this.closest("tr");
-
-                if (row) {
-                    const elem = document.getElementById(row.id)
-                    console.log("trash clicked", elem.dataset.id);
-                    row.classList.add("deleting-row");
-                    try {
-                        const response = await fetch(
-                            `/expenses/api/quick_delete/?action_id=${elem.dataset.id}`,
-                            {
-                                method: "POST",
-                                headers: {
-                                    "X-CSRFToken": getCSRFToken(),
-                                    "Content-Type": "application/json"
-                                }
-                            }
-                        );
-
-                        if (!response.ok) {
-                            console.error("Delete failed", response.status);
-                            return;
-                        }
-
-                        // success → strike through row
-                        row.classList.add("deleted-row");
-
-                        // optional: hide trash icon
-                        this.style.display = "none";
-
-                    } catch (err) {
-                        console.error("Request error", err);
-                    }
-
-                    }
-            });
-        });
     </script>
 {% endblock %}

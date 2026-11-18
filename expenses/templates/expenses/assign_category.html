@@ -1,4 +1,4 @@
-{% extends "base_bs.html" %}
+{% extends "base.html" %}
 {% load static %}
 {% block title %}Expense Assignment{% endblock %}
 {% block content %}
@@ -14,7 +14,7 @@
                 {{ error }}
             {% endfor %}
         {% endfor %}
-        <table id="formset" class="table w3-striped">
+        <table id="formset" class="table w-auto">
             {% for form in formset.forms %}
                 {% if forloop.first %}
                     <thead>
@@ -35,17 +35,45 @@
                         <td>
                             {# Include the hidden fields in the form #}
                             {% if forloop.first %}
-                                <a href="{% url 'expense_delete' form.instance.id %}"><i class="fa fa-trash"></i></a>
+                                <a class="text-primary help-cell"
+                                   href="{% url 'expense_edit' form.instance.id %}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Edit Item"
+                                   data-modal><i class="fa fa-pencil"></i></a>
+                                <a class="text-danger"
+                                   href="{% url 'expense_delete' form.instance.id %}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Delete"
+                                    data-modal><i class="fa fa-trash"></i></a>
+                                {% if not form.instance.is_split %}
+                                    <a class="text-primary"
+                                       href="{% url 'expense_split' form.instance.id %}"
+                                       data-bs-toggle="tooltip"
+                                       data-bs-placement="right"
+                                       title="Split Record"
+                                       data-modal><i class="fa fa-columns"></i></a>
+                                {% else %}
+                                    <a class="text-warning"
+                                           href="{% url 'expense_unsplit' form.instance.id %}"
+                                           data-bs-toggle="tooltip"
+                                           data-bs-placement="right"
+                                           title="Recursively unsplit records"
+                                           data-modal><i class="fa fa-columns"></i></a>
+                                {% endif %}
+                                <a class="text-primary" href="{% url 'expense_delete' form.instance.id %}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Amortize Item"
+                                   data-modal><i class="fa fa-line-chart"></i></a>
+
                                 {% for hidden in form.hidden_fields %}
                                     {{ hidden }}
                                 {% endfor %}
                             {% endif %}
                             {{ field.errors.as_ul }}
-                            {% if field.name == 'description' %}
-                                <a href="{% url 'expense_edit' form.instance.id %}">{{ field }}</a>
-                            {% else %}
-                                {{ field }}
-                            {% endif %}
+                            {{ field }}
 
                         </td>
                         {% if field.name == 'amount' %}

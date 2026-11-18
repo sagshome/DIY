@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Detail Edit{% endblock %}
+{% load expenses_tags %}
+{% load static %}
+
+{% block content %}
+    {% include 'expenses/includes/expenses_search_bar.html' %}
+    <form method="post" id="bulkForm" novalidate>
+        {% csrf_token %}
+        <div class="p-4 container-fluid row">
+            <div id="expense_list">
+                {{ formset.management_form }}
+                {% if form.non_field_errors %}
+                    <div class="container-fluid alert alert-warning" role="alert">
+                        {% for error in form.non_field_errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <button type="submit" name="action" value="save" class="btn btn-sm btn-success">Save Changes</button>
+
+                <table id="exp-list" class="table w-auto">
+                    {% for form in formset.forms %}
+                        {% if forloop.first %}
+
+                        <tr id="bulk-row" class="table-secondary">
+                            <td><input type="checkbox" id="apply-all"> All</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td><select name="bulk-category" class="diy-category" id="bulk-category">
+                                <option value="" selected="">---------</option>
+                                <option value="1">Food</option>
+                                <option value="2">Utilities</option>
+                                <option value="3">Housing</option>
+                                <option value="4">Healthcare</option>
+                                <option value="5">Recreation</option>
+                                <option value="6">Transportation</option>
+                                <option value="7">Personal Care</option>
+                                <option value="9">Other</option>
+                                <option value="10">Income</option>
+                            </select></td>
+                            <td><select id="bulk-subcategory" name="bulk-subcategory" class="diy-subcategory">
+                                <div id="bulk-subcat-list"> <option value="" selected="">---------</option></div>
+                            </select></td>
+                            <td><input type="checkbox" name="bulk-ignore" id="bulk-ignore"></td>
+
+                            <td>
+                                <textarea name="bulk-notes" cols="15" rows="1" id="bulk-notes"></textarea>
+                            </td>
+                            {% if assigning %}<td></td>{% endif %}
+                            <td>
+                                <button type="button" class="btn btn-sm border-0 edit-tags bg-body"><i class="fa fa-tags"></i></button>
+                            </td>
+
+                            <td><button type="button" class="btn btn-sm btn-primary" id="apply-bulk">Apply Bulk Changes</button></td>
+                        </tr>
+                        <thead style="background:#eee;">
+                            <tr>
+                                <th></th>  <!-- Actions -->
+                                <th>Date</th>  <!-- Date -->
+                                <th>Description</th>  <!-- Description -->
+                                <th>Amount</th>  <!-- Amount -->
+                                <th>ShortCuts</th>
+                                {% for field in form.visible_fields %}
+                                    <th>{{ field.label|capfirst }}</th>
+                                {% endfor %}
+                                {% if assigning %}<th>Create<br>Template</th>{% endif %}
+                                <th></th>  <!-- Tags -->
+                            </tr>
+                        </thead>
+
+                        {% endif %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="row-select">
+                                <a class="text-primary help-cell"
+                                   href="{% url 'expense_edit' form.instance.id %}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Edit Item"
+                                   data-modal><i class="fa fa-pencil"></i></a>
+                                <a class="text-danger"
+                                   href="{% url 'expense_delete' form.instance.id %}"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Delete"
+                                    data-modal><i class="fa fa-trash"></i></a>
+                                {% if not form.instance.is_split %}
+                                    <a class="text-primary"
+                                       href="{% url 'expense_split' form.instance.id %}"
+                                       data-bs-toggle="tooltip"
+                                       data-bs-placement="right"
+                                       title="Split Record"
+                                       data-modal><i class="fa fa-columns"></i></a>
+                                {% else %}
+                                    <a class="text-warning"
+                                           href="{% url 'expense_unsplit' form.instance.id %}"
+                                           data-bs-toggle="tooltip"
+                                           data-bs-placement="right"
+                                           title="Recursively unsplit records"
+                                           data-modal><i class="fa fa-columns"></i></a>
+                                {% endif %}
+                        {% if form.instance.amortized %}
+                            <a class="text-warning" href="{% url 'expense_unamortize' form.instance.id %}"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="right"
+                               title="Restore original Item (remove amortization)"
+                               data-modal><i class="fa fa-line-chart"></i></a>
+                        {% else %}
+                            <a class="text-primary" href="{% url 'expense_amortize' form.instance.id %}"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="right"
+                               title="Amortize Item"
+                               data-modal><i class="fa fa-line-chart"></i></a>
+                        {% endif %}
+
+                            </td>
+                            <td>{{ form.instance.date}}</td>
+                            <td>{{ form.instance.description}}</td>
+                            <td>{{ form.instance.amount}}</td>
+                            {% for field in form.visible_fields %}
+                                {% if field.name == 'category' %}
+                                    <td>
+                                        <span onclick="setValues(this, 'Housing', 'Other')"><i title="Housing - Other"
+                                                                                               class="fa fa-home"></i></span>
+                                        <span onclick="setValues(this, 'Housing', 'Maintenance')"><i
+                                                title="Housing - Maintenance" class="fa fa-wrench"></i></span>
+                                        <span onclick="setValues(this, 'Food', 'TakeOut')"><i title="Food - Takeout"
+                                                                                              class="fa fa-cutlery"></i></span>
+                                        <span onclick="setValues(this, 'Food', 'Dinning')"><i title="Food - Dinning"
+                                                                                              class="fa fa-glass"></i></span>
+                                        <span onclick="setValues(this, 'Food', 'Grocery')"><i title="Food - Grocery"
+                                                                                              class="fa fa-shopping-cart"></i></span>
+                                        <span onclick="setValues(this, 'Transportation', 'Fuel')"><i
+                                                title="Transportation - Fuel" class="fa fa-car"></i></span>
+                                        <span onclick="setValues(this, 'Personal Care', 'Clothing')"><i
+                                                title="Personal Care - Clothing" class="fa fa-male"></i></span>
+                                        <span onclick="setValues(this, 'Recreation', 'Other')"><i title="Recreation - Other"
+                                                                                                  class="fa fa-smile-o"></i></span>
+                                        <span onclick="setValues(this, 'Recreation', 'Camping')"><i title="Recreation - Camping"
+                                                                                                    class="fa fa-free-code-camp"></i></span>
+                                        <span onclick="setValues(this, 'Other', 'Unknown')"><i title="Other - Unknown"
+                                                                                               class="fa fa-question-circle"></i></span>
+                                    </td>
+                                {% endif %}
+
+                                <td {% if field.name == 'ignore' or field.name == 'is_split' or field.name == 'is_amortized' %} class="w3-center" {% endif %}>
+                                    {{ field.errors.as_ul }}
+                                    {{ field }}
+                                </td>
+
+                            {# Include the hidden fields in the form #}
+                                {% if forloop.last %}
+                                   {% if assigning %}
+                                        <td>
+                                            <a class="text-primary help-cell"
+                                                href="{% url 'add_template' form.instance.id %}"
+                                                data-bs-toggle="tooltip"
+                                                 data-bs-placement="right"
+                                                title="Create a Template"
+                                            data-modal><i class="fa fa-copy"></i></a>
+                                        </td>
+                                    {% endif %}
+
+                                    <td class="tag-cell">
+                                        <!-- CURRENT TAGS -->
+                                        <div class="tag-display mb-1">
+                                            <button type="button" class="btn btn-sm border-0 edit-tags bg-body" data-expense-id="{{ form.instance.id }}">
+                                                <i class="fa fa-tags"></i>
+                                            </button>
+
+                                            {% for tag in form.instance.tags.all %}
+                                                <span class="badge bg-info text-dark me-1">{{ tag.value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="tag-editor d-none mt-2 border rounded p-2">
+                                            {% for tag in tags %}
+                                                <div class="form-check">
+                                                    <input
+                                                        class="form-check-input tag-checkbox"
+                                                        type="checkbox"
+                                                        value="{{ tag.id }}"
+                                                        id="tag-{{ form.instance.id }}-{{ tag.id }}"
+
+                                                        {% if tag in form.instance.tags.all %}
+                                                            checked
+                                                        {% endif %}
+                                                    >
+                                                    <label class="form-check-label" for="tag-{{ form.instance.id }}-{{ tag.id }}">
+                                                        {{ tag.value }}
+                                                    </label>
+                                                </div>
+                                            {% endfor %}
+                                        <div class="mt-2 text-center">
+                                            <button type="button" class="btn btn-sm btn-primary save-tags">Save</button>
+                                            <button type="button" class="btn btn-sm btn-secondary cancel-tags">Cancel</button>
+                                        </div>
+
+                                </div>
+
+                                    </td>
+                                    {% for hidden in form.hidden_fields %}
+                                        {{ hidden }}
+                                    {% endfor %}
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </table>
+                <button type="submit" name="action" value="save" class="btn btn-sm btn-success">Save Changes</button>
+            </div>
+        </div>
+    </form>
+    <script src="{% static 'expenses.js' %}"></script>
+    <script>
+
+        document.getElementById('apply-all').addEventListener('click', function () {
+            const applyval = document.getElementById('apply-all').checked;
+            document.querySelectorAll('.row-select').forEach(cb => {
+                cb.checked = applyval
+            })
+        });
+
+        document.getElementById('apply-bulk').addEventListener('click', function () {
+            const cat = document.getElementById('bulk-category').value;
+            const subcat = document.getElementById('bulk-subcategory').value;
+            const ignore = document.getElementById('bulk-ignore').checked;
+            const notes = document.getElementById('bulk-notes').value;
+
+            document.querySelectorAll('.row-select:checked').forEach(cb => {
+                const row = cb.closest('tr');
+                row.querySelector('[id$="-category"]').value = cat
+                row.querySelector('[id$="-subcategory"]').value = subcat
+                row.querySelector('[id$="-ignore"]').checked=ignore
+                row.querySelector('[id$="-notes"]').value=notes
+
+                row.classList.add('table-warning'); // mark dirty
+            });
+        });
+
+    </script>
+{% endblock content %}

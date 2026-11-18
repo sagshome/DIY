@@ -10,9 +10,10 @@ from typing import Union
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q, Sum, QuerySet
 
+from base.ioom_dates import IOOMDates, IOOM_RANGES
 from base.utils import label_to_values
 # Create your models here.
 
@@ -256,37 +257,60 @@ class Item(models.Model):
     def is_amortized(self) -> bool:
         return Item.objects.filter(amortized=self).count() != 0
 
-    def split_item(self, amount: float, description: str) -> str:
-        if amount > self.amount:
-            error = 'Attempted to split %s with too large of an amount %s' % (self, amount)
-            logger.error(error)
-            return error
 
-        if not description:
-            description = self.description
+    #@transaction.atomic
+    def create_split_items(self, form):
+        # Hide the original
+        parent_id = self.id  # Save these because the save() seems to wipe it out.
+        parent_amount = self.amount
 
-        # new item
-        Item.objects.create(date=self.date,
-                            description=description,
-                            amount=amount,
-                            category=None,
-                            subcategory=None,
-                            ignore=False,
-                            details=self.details,
-                            user=self.user,
-                            split=self)
-        # remaining item
-        if self.amount - amount != 0:
-            Item.objects.create(date=self.date,
-                                description=self.description,
-                                amount=self.amount - amount,
-                                category=None,
-                                subcategory=None,
-                                ignore=self.ignore,
-                                details=self.details,
-                                user=self.user,
-                                split=self)
-        return ''
+        self.ignore = True
+        self.save(update_fields=['ignore'])
+
+        # Create first split record
+        new = form.save(commit=False)
+        new.pk = None
+        new.ignore = False
+        new.split_id = parent_id
+        if not new.notes:
+            new.notes = 'Split Record'
+        if new.amount ==  0:
+            new.ignore = True
+        new.save()
+
+
+        # Create second split record
+        second = copy.copy(self)
+        second.pk = None
+        second._state.adding = True  # Trick or tell django this is a new record
+        second.amount = parent_amount - new.amount
+        second.split_id = parent_id
+        second.ignore = False
+        if not second.notes:
+            second.notes = 'Split Record'
+        if second.amount ==  0:
+            second.ignore = True
+        second.save()
+
+
+    def _delete_split_children(self):
+        children = Item.objects.filter(split=self)
+
+        for child in children:
+            # Delete any grandchildren first
+            child._delete_split_children()
+
+            # Then delete this child
+            child.delete()
+
+    @transaction.atomic
+    def destroy_split(self):
+        """
+        This needs to be recursive since records that are split can also be split.   Deleting a split record
+        """
+        self._delete_split_children()
+        self.ignore = False
+        self.save(update_fields=['ignore'])
 
     def amortize(self, months:int, direction:str = 'forward') -> str:
         if self.amortized:
@@ -323,10 +347,12 @@ class Item(models.Model):
 
         return ''
 
-    def deamortize(self):
-        Item.objects.filter(amortized=self).delete()
-        self.ignore = False
-        self.save()
+    def unamortize(self):
+        original = self.amortized
+
+        Item.objects.filter(amortized=original).delete()
+        original.ignore = False
+        original.save()
 
     def apply_template(self, template: Template = None) -> bool:
         """
@@ -436,7 +462,7 @@ class Item(models.Model):
                 item_filter = item_filter.filter(Q(description__icontains=search_str) |
                                                  Q(notes__icontains=search_str) |
                                                  Q(tags__value__icontains=search_str))
-        if 'search_category' in search_dict:
+        if 'search_category' in search_dict and search_dict['search_category']:
             if search_dict['search_category'] != '- ANY -':
                 if search_dict['search_category'] == 'Income':
                     item_filter = item_filter.filter(category__name='Income')
@@ -448,27 +474,36 @@ class Item(models.Model):
                     elif category != '- ALL -':
                         item_filter = item_filter.filter(category__name=category)
 
-        if 'search_subcategory' in search_dict:
+        if 'search_subcategory' in search_dict and search_dict['search_subcategory']:
             if search_dict['search_subcategory'] == '- NONE -':
                 item_filter = item_filter.filter(subcategory__isnull=True)
             elif search_dict['search_subcategory'] != '- ALL -':
                 item_filter = item_filter.filter(subcategory__name=search_dict['search_subcategory'])
 
-        if 'search_ignore' in search_dict:
+        if 'search_ignore' in search_dict and search_dict['search_ignore']:
             if search_dict['search_ignore'] == 'Yes':
                 item_filter = item_filter.filter(ignore=True)
             elif search_dict['search_ignore'] == 'No':
                 item_filter = item_filter.filter(ignore=False)
-        if 'search_span' in search_dict and search_dict['search_span']:
-            start_date, end_date = label_to_values(search_dict['search_span'])
-            if start_date:
-                item_filter = item_filter.filter(date__gte=search_dict['search_start_date'], date__lte=end_date)
-            else:
-                logger.error('Invalid search_span: %s' % search_dict['search_span'])
-        if 'search_start_date' in search_dict and search_dict['search_start_date']:
-            item_filter = item_filter.filter(date__gte=search_dict['search_start_date'])
-        if 'search_end_date' in search_dict and search_dict['search_end_date']:
-            item_filter = item_filter.filter(date__lte=search_dict['search_end_date'])
+        else:  # Default
+            item_filter = item_filter.filter(ignore=False)
+
+        if 'month' in search_dict and search_dict['month']:
+            try:
+                month = datetime.strptime(search_dict['month'], "%Y-%b")
+                item_filter = item_filter.filter(date__gte=month, date__lt=month + relativedelta(months=1))
+            except ValueError:
+                 logger.error('Ignoring invalid month %s' % search_dict['month'])
+        elif 'range' in search_dict and search_dict['range']:
+            if search_dict['range'] in IOOM_RANGES:
+                dates = IOOMDates(build=False)
+                item_filter = item_filter.filter(date__gte=dates.range_start(search_dict['range']),
+                                                 date__lt=dates.range_end(search_dict['range']))
+        else:
+            if 'search_start_date' in search_dict and search_dict['search_start_date']:
+                item_filter = item_filter.filter(date__gte=search_dict['search_start_date'])
+            if 'search_end_date' in search_dict and search_dict['search_end_date']:
+                item_filter = item_filter.filter(date__lte=search_dict['search_end_date'])
 
         if 'search_amount' in search_dict and search_dict['search_amount']:  # todo: fix bug if 0
             if search_dict['search_amount_qualifier'] == 'equal':

@@ -1,0 +1,23 @@
+<!--
+    This page is useful for a DetailView
+
+    card_head is the header
+    card_body can contain HTML markup
+ -->
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header">
+        {{ card_header }}
+    </div>
+    <div class="card-body p-2">
+        <p>{{ card_body | safe }}</p>
+        <form method="post" class="ioom_modal_form" action="{{request.path}}">
+            {% csrf_token %}
+            {{ modal_form.caller }}
+            <div class="d-flex justify-content-end gap-2">
+                    <button type="submit" class="btn btn-primary ioom-redirect">Confirm</button>
+                    <button type="submit" class="btn btn-danger ioom-cancel">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>

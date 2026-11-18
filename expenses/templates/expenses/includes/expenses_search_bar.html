@@ -1,35 +1,37 @@
 {% load static %}
 {% block content %}
     {% if search_form %}
-        {% if search_form.errors %}
-            <div class="container-fluid alert alert-warning" role="alert">
-                {% for error in search_form.errors %}
-                    {{ error }}
-                {% endfor %}
-            </div>
-        {% endif %}
-            <ul class="list-group list-group-horizontal list-group-flush">
-                <li class="list-group-item">Hidden:<br>{{ search_form.search_ignore }}</li>
-                <li class="list-group-item">Category:<br>{{ search_form.search_category }}</li>
-                <li class="list-group-item">Subcategory:<br>{{ search_form.search_subcategory }}</li>
-                <li class="list-group-item">Search From:<br>{{ search_form.search_start_date }}</li>
-                <li class="list-group-item">Search Until:<br>{{ search_form.search_end_date }}</li>
-                <li class="list-group-item">Amount:<br>{{ search_form.search_amount_qualifier }}{{ search_form.search_amount }}</li>
-                <li class="list-group-item">Text and Tags:<br>{{ search_form.search_description }}</li>
-                <li class="list-group-time"><div class="d-flex justify-content-center align-items-center" style="height: 100%;">
-                    <button type="Save" class="btn btn-sm btn-success">Reapply<br>Filter</button>
-                </div></li>
-            </ul>
+        <form method="get">
+            {% if search_form.errors %}
+                <div class="container-fluid alert alert-warning" role="alert">
+                    {% for error in search_form.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+                <ul class="list-group list-group-horizontal list-group-flush">
+                    <li class="list-group-item">Hidden:<br>{{ search_form.search_ignore }}</li>
+                    <li class="list-group-item">Category:<br>{{ search_form.search_category }}</li>
+                    <li class="list-group-item">Subcategory:<br>{{ search_form.search_subcategory }}</li>
+                    <li class="list-group-item">Search From:<br>{{ search_form.search_start_date }}</li>
+                    <li class="list-group-item">Search Until:<br>{{ search_form.search_end_date }}</li>
+                    <li class="list-group-item">Amount:<br>{{ search_form.search_amount_qualifier }}{{ search_form.search_amount }}</li>
+                    <li class="list-group-item">Text and Tags:<br>{{ search_form.search_description }}</li>
+                    <li class="list-group-time"><div class="d-flex justify-content-center align-items-center" style="height: 100%;">
+                        <button type="submit" name="action" value="search" class="btn btn-sm btn-primary">Search</button>
+                    </div></li>
+                </ul>
+        </form>
     {% endif %}
     <script>
         $(document).ready(function () {
             document.getElementById("id_search_category").addEventListener("change", function () {
-                let category_id = document.getElementById("id_search_category")
-                let subcategory_id = document.getElementById("id_search_subcategory")
-                let category = $(category_id).val()
+                console.log('Hit api in expense_search_bar')
+                const category = document.getElementById("id_search_category").value
+                const subcategory_id = document.getElementById("id_search_subcategory")
 
                 $.ajax({
-                    url: '{% url 'ajax-load-subcategories-search' %}',
+                    url: '{% url "ajax-load-subcategories-search" %}',
                     data: {category: category},
                     success: function (data) {
                         $(subcategory_id).html(data);

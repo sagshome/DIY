@@ -9,25 +9,15 @@ from django.forms import formset_factory, inlineformset_factory, modelformset_fa
 from django.core.validators import MinValueValidator
 from django.db import models
 
+
 from base.utils import ReadonlyFieldsMixin, append_styles
 from decimal import Decimal
 from django.forms.widgets import HiddenInput
-
-
 
 def popover_html(label, content):
     return label + ' <a tabindex="0" role="button" data-toggle="popover" data-html="true" \
                             data-trigger="hover" data-placement="auto" data-content="' + content + '"> \
                             <span class="glyphicon glyphicon-info-sign"></span></a>'
-
-
-class ModalBase:
-    success_url = forms.URLField(required=False, widget=forms.HiddenInput())
-    is_modal = forms.BooleanField(required=False, widget=forms.HiddenInput())
-
-
-class ModalBaseForm(ModalBase, forms.Form):
-    pass
 
 
 class TransactionChoices(models.IntegerChoices):
@@ -196,10 +186,10 @@ class TransactionForm(forms.Form):
     object_id = forms.IntegerField(required=False, widget=forms.HiddenInput())  # needed for Edits
     note = forms.CharField(required=False, max_length=128, help_text='An optional short description of the event')
 
-    repeat = forms.ChoiceField(choices=[('no', 'No'), ('yes', 'Yes'),])
-    number = forms.IntegerField(label='Num. of Repeats', max_value=11, min_value=1, required=False)
+    repeat = forms.ChoiceField(choices=[('no', 'No'), ('yes', 'Yes'),], help_text="Select Yes if you wish to have the item appear more then once")
+    number = forms.IntegerField(label='Num. of Repeats', max_value=11, min_value=1, required=False, help_text="Choose how many months this should repeat for.  Max is 11")
     investment = forms.ModelChoiceField(required=False, queryset=Investment.objects.filter(inv_type='trading'), widget=forms.Select(attrs={'class': 'select2-field'}))
-    date: date = forms.DateField(required=True, widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}), input_formats=["%Y-%m-%d"])
+    date: date = forms.DateField(required=True, widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}), input_formats=["%Y-%m-%d"], help_text="When this happened")
     price = forms.DecimalField(required=False)
     quantity = forms.DecimalField(required=False)
     value = forms.DecimalField(required=False)

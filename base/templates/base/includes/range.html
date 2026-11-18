@@ -1,0 +1,37 @@
+<div id="range_buttons" class="btn-group" role="group" aria-label="Time range">
+    <button disabled class=".text-nowrap btn btn-light"><span class="d-none d-md-inline">Range Filter:</span>
+    <span class="d-md-none"></span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'week' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="week"><span class="d-none d-md-inline">1 Week</span>
+    <span class="d-md-none">1W</span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'month' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="month"><span class="d-none d-md-inline">1 Month</span>
+    <span class="d-md-none">1M</span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'ytd' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="ytd">YTD</button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'year' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="year">1 Year</span>
+    <span class="d-md-none">1Y</span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '3years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="3years"><span class="d-none d-md-inline">3 Year</span>
+    <span class="d-md-none">3Y</span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '5years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="5years"><span class="d-none d-md-inline">5 Year</span>
+    <span class="d-md-none">5Y</span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == '7years' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="7years"><span class="d-none d-md-inline">7 Year</span>
+    <span class="d-md-none">7Y</span></button>
+    <button type="button" class=".text-nowrap btn btn-sm {% if range == 'all' %}btn-outline-primary{% else %}btn-outline-secondary{% endif %}" data-value="all">All</button>
+</div>
+
+<script>
+    document.querySelectorAll('#range_buttons button').forEach(button => {
+        button.addEventListener('click', function () {
+            // Remove primary class from all
+            document.querySelectorAll('.btn-outline-primary').forEach(b =>
+                b.classList.replace('btn-outline-primary', 'btn-outline-secondary')
+            );
+            // Set clicked button as primary
+            this.classList.replace('btn-outline-secondary', 'btn-outline-primary');
+            const selectedValue = this.getAttribute('data-value');
+            console.log('Range change triggered - ' + selectedValue);
+            const url = new URL(window.location.href);
+            url.searchParams.set('range', selectedValue);
+            window.location.href = url.toString();
+            // range_api(selectedValue);  // must be provided by the including template
+        });
+    });
+</script>

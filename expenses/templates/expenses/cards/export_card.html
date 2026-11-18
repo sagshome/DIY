@@ -1,0 +1,27 @@
+<div class="card shadow-sm mb-3">
+    <div class="card-header">
+        IOOM Export
+    </div>
+
+    <div class="card-body p-2">
+        <form method="post" class="ioom_modal_form" action="{{request.path}}">
+            {% csrf_token %}
+            {{ modal_form.caller }}
+            {% for hidden_field in form.hidden_fields %}
+                {% if hidden_field.errors %}
+                    <div class="container-fluid alert alert-warning" role="alert">
+                        {{ hidden_field.errors }}
+                    </div>
+                {% endif %}
+                {{ hidden_field }}
+            {% endfor %}
+
+            <hr>
+
+            <div class="d-flex justify-content-end gap-2">
+                    <button type="submit" class="btn btn-primary">Export</button>
+                    <button type="button" class="btn btn-danger ioom-cancel">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>

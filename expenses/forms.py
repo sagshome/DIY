@@ -1,11 +1,13 @@
 import copy
 import os
 import re
+
 from django import forms
-from django.forms import formset_factory
+from django.forms import modelformset_factory, BaseModelFormSet
 from django.db.models import Q
 from django.db.utils import ProgrammingError, OperationalError
 
+from base.mixins import BootstrapFormMixin
 from expenses.models import Item, SubCategory, ItemTag, Template, Category, DEFAULT_CATEGORIES
 from expenses.importers import DEFAULT, EXTRA
 
@@ -39,12 +41,11 @@ class SubCategoryForm(forms.ModelForm):
     class Meta:
         model = SubCategory
         fields = ("category", "name", "user")
-        widgets = {
-            'user': forms.HiddenInput(),
-        }
+        widgets = {'user': forms.HiddenInput()}
 
-    def __init__(self, *args, **kwargs):  # pragma: no cover
+    def __init__(self, *args, user=None, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
+        self.user = user
 
         # Adjusted to make W3C.CSS look nicer
         self.fields["category"].widget.attrs['style'] = 'height:28.5px;'
@@ -53,9 +54,38 @@ class SubCategoryForm(forms.ModelForm):
     def clean_name(self):
         category = self.cleaned_data['category']
         name = self.cleaned_data['name'].capitalize()
-        if SubCategory.objects.filter(category=category, name=name).filter(Q(user__isnull=True) | Q(user_id=self.initial['user'])).exists():
+        if (
+            SubCategory.objects.exclude(pk=self.instance.pk)
+            .filter(category=category, name=name)
+            .filter(Q(user__isnull=True) | Q(user=self.user))
+            .exists()
+        ):
             raise forms.ValidationError('This subcategory already exists')
         return name
+
+
+class BaseSubCategoryFormSet(BaseModelFormSet):
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["user"] = self.user
+        return kwargs
+
+    def save_new(self, form, commit=True):
+        form.instance.user = self.user
+        return super().save_new(form, commit=commit)
+
+
+SubCategoryFormSet = modelformset_factory(
+    SubCategory,
+    form=SubCategoryForm,
+    formset=BaseSubCategoryFormSet,
+    extra=1,
+    can_delete=True,
+)
 
 
 class TagForm(forms.ModelForm):
@@ -66,17 +96,42 @@ class TagForm(forms.ModelForm):
             'user': forms.HiddenInput(),
         }
 
-    def __init__(self, *args, **kwargs):  # pragma: no cover
+    def __init__(self, *args, user=None, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
+        self.user = user
 
         # Adjusted to make W3C.CSS look nicer
         self.fields["value"].widget.attrs['style'] = 'height:28.5px;'
 
     def clean_value(self):
         value = self.cleaned_data['value']
-        if ItemTag.objects.filter(value=value, user=self.initial['user']).exists():
+        if ItemTag.objects.exclude(pk=self.instance.pk).filter(value=value, user=self.user).exists():
             raise forms.ValidationError('This Tag already exists')
         return value
+
+
+class BaseTagFormSet(BaseModelFormSet):
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["user"] = self.user
+        return kwargs
+
+    def save_new(self, form, commit=True):
+        form.instance.user = self.user
+        return super().save_new(form, commit=commit)
+
+
+TagFormSet = modelformset_factory(
+    ItemTag,
+    form=TagForm,
+    formset=BaseTagFormSet,
+    extra=1,
+    can_delete=True,
+)
 
 
 class SearchForm(forms.Form):
@@ -85,8 +140,8 @@ class SearchForm(forms.Form):
     - Need to build a subcategory choice list so I can remove non-unique values
     """
 
-    search_category = forms.ChoiceField(choices=get_categories())
-    search_subcategory = forms.ChoiceField(choices=get_subcategories())
+    search_category = forms.ChoiceField(required=False, choices=get_categories())
+    search_subcategory = forms.ChoiceField(required=False, choices=get_subcategories())
     """
     search_category = forms.ChoiceField(choices=DEFAULT_CATEGORIES)
     search_subcategory = forms.ChoiceField(choices=DEFAULT_CATEGORIES)
@@ -94,30 +149,23 @@ class SearchForm(forms.Form):
     search_ignore = forms.ChoiceField(required=False, choices=[(None, '---'), ('Yes', 'Yes'), ('No', 'No')])
     search_start_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
     search_end_date = forms.DateField(required=False, widget=forms.TextInput(attrs={'type': 'date'}))
-    search_amount_qualifier = forms.ChoiceField(label='', choices=[('gte', '>='), ('equal', '=='), ('lte', '<=')])
+    search_amount_qualifier = forms.ChoiceField(required=False, label='', choices=[('gte', '>='), ('equal', '=='), ('lte', '<=')])
     search_amount = forms.DecimalField(required=False)
     search_description = forms.CharField(required=False, max_length=80)
+    range = forms.CharField(required=False, max_length=16)
+    month = forms.CharField(required=False, max_length=16)
+
     # view = forms.ChoiceField(choices=[('chart', 'Chart'), ('list', 'List'), ('both', 'Both')])
     # template = forms.CharField(max_length=50, required=False)  # Change to a real template in clean
 
     def __init__(self, *args, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
-        # Adjusted to make W3C.CSS look nicer
-        self.fields["search_amount"].widget.attrs['style'] = 'width:100px;height:28.5px;'
-        self.fields["search_amount_qualifier"].widget.attrs['style'] = 'height:28.5px;'
-        self.fields["search_start_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
-        self.fields["search_end_date"].widget.attrs['style'] = 'width:120px;height:28.5px;'
-        self.fields["search_amount_qualifier"].widget.attrs['style'] = 'height:28.5px;'
-        self.fields["search_category"].widget.attrs['style'] = 'height:28.5px;'
-        self.fields["search_subcategory"].widget.attrs['style'] = 'height:28.5px;'
-        self.fields["search_ignore"].widget.attrs['style'] = 'height:28.5px;'
-
-        self.fields["search_category"].widget.attrs['class'] = 'diy-search-category'  # Used in the search javascript
+        self.fields["search_category"].widget.attrs['class'] = 'diy-search-category'  # Used in the search JavaScript
         self.fields["search_subcategory"].widget.attrs['class'] = 'diy-search-subcategory'
 
 
-class TemplateForm(forms.ModelForm):
+class TemplateForm(BootstrapFormMixin, forms.ModelForm):
 
     # template_type = forms.ChoiceField(label="Type", required=False, choices=Template.CHOICES)
 
@@ -133,10 +181,10 @@ class TemplateForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["type"].widget.attrs['style'] = 'width:110px;'
         self.fields["expression"].widget.attrs['style'] = 'width:400px;'
-        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
+        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search JavaScript
         self.fields["category"].widget.attrs['style'] = 'width:125px;'
         self.fields["subcategory"].widget.attrs['style'] = 'width:125px;'
-        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'  # Used in the search javascript
+        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'  # Used in the search JavaScript
 
     def clean_expression(self):
         if self.cleaned_data['expression'].find('$') != -1:
@@ -165,7 +213,7 @@ class TemplateForm(forms.ModelForm):
         return self.cleaned_data
 
 
-class UploadColumnForm(forms.Form):
+class UploadColumnForm(BootstrapFormMixin, forms.Form):
 
     heading = forms.ChoiceField(choices=tuple(list({'ignore': '-----'}.items()) + list(DEFAULT.items()) + list(EXTRA.items())))
 
@@ -190,7 +238,7 @@ class UploadColumnForm(forms.Form):
                 longest_value = len(longest_value)
                 ch_size = longest_value if longest_value > 22 else 22
         except TypeError:
-            pass  # Non string,  use defautl of ch_size
+            pass  # Non string,  use default of ch_size
         except ValueError:
             pass
 
@@ -200,7 +248,7 @@ class UploadColumnForm(forms.Form):
             self.fields[f"example{index}"].widget.attrs['readonly'] = True
 
 
-class UploadFileForm(forms.Form):
+class UploadFileForm(BootstrapFormMixin, forms.Form):
     has_headings = forms.TypedChoiceField(coerce=lambda x: x == 'True', choices=((False, 'No'), (True, 'Yes')))
     upload_file = forms.FileField(label="Expenses File:")
 
@@ -212,135 +260,146 @@ class UploadFileForm(forms.Form):
         return cleaned_file
 
 
-class BaseItemForm(forms.ModelForm):
+class BaseItemForm(BootstrapFormMixin, forms.ModelForm):
     """
-    All Item Forms have these fields so let treat them consistantly
+    All Item Forms have these fields so let treat them consistently
     """
-
-    def __init__(self, *args, **kwargs):  # pragma: no cover
-        super().__init__(*args, **kwargs)
-
-        self.fields["date"].widget.attrs['style'] = 'width:95px;background-color:Wheat'
-        self.fields["date"].widget.attrs['readonly'] = True
-
-        self.fields["description"].widget.attrs['style'] = 'width:600px;background-color:Wheat'
-        self.fields["description"].widget.attrs['readonly'] = True
-
-        self.fields["amount"].widget.attrs['style'] = 'width:80px;background-color:Wheat'
-        self.fields["amount"].widget.attrs['readonly'] = True
-        self.fields["amount"].widget.attrs['class'] = 'w3-right-align'
-
-        self.fields["category"].widget.attrs['class'] = 'diy-category'  # Used in the search javascript
-        self.fields["subcategory"].widget.attrs['class'] = 'diy-subcategory'  # Used in the search javascript
-
-        if "ignore" in self.fields:
-            self.fields["ignore"].label = 'Hidden'
+    pass
 
 
-class ItemListEditForm(BaseItemForm):
-    is_split = forms.BooleanField(required=False, label='Split')
-    is_amortized = forms.BooleanField(required=False, label='Leveled')
-
-    # amortized_expense = forms.BooleanField()
-
-    class Meta:  # pragma: no cover
-        model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "is_split", "is_amortized",
-                  "notes")
-        widgets = {
-          'notes': forms.Textarea(attrs={'rows':1, 'cols':15}),
-        }
-
-    def __init__(self, *args, **kwargs):  # pragma: no cover
-        super().__init__(*args, **kwargs)
-
-        if self.instance.is_split:
-            self.fields['is_split'].initial = True
-        else:
-            self.fields['is_split'].initial = False
-        self.fields["is_split"].widget.attrs['disabled'] = 'disabled'
-
-        if self.instance.is_amortized:
-            self.fields['is_amortized'].initial = True
-        else:
-            self.fields['is_amortized'].initial = False
-        self.fields["is_amortized"].widget.attrs['disabled'] = 'disabled'
-
-    def clean(self):
-        super().clean()
-        if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
-            raise forms.ValidationError(f'Error: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
-
-
-class ItemAddForm(BaseItemForm):
+class ItemListEditForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Item
-        fields = ("user", "date", "description", "amount", "category", "subcategory", "ignore")
+        fields = ("category", "subcategory", "ignore", "notes")
         widgets = {
-            'user': forms.HiddenInput(),
-            'date': forms.TextInput(attrs={'type': 'date'}),
+            "notes": forms.TextInput(),
         }
 
-    def __init__(self, *args, **kwargs):  # pragma: no cover
+    def __init__(self, *args, user=None, **kwargs):  # pragma: no cover
         super().__init__(*args, **kwargs)
 
-        self.fields["date"].widget.attrs['style'] = 'width:95px;'
-        self.fields["date"].widget.attrs['readonly'] = False
+        self.user = user
+        self.fields["category"].widget.attrs['class'] += ' diy-category'  # Used in the search JavaScript
+        self.fields["subcategory"].widget.attrs['class'] += ' diy-subcategory'  # Used in the search JavaScript
 
-        self.fields["description"].widget.attrs['style'] = 'width:500px;'
-        self.fields["description"].widget.attrs['readonly'] = False
-
-        self.fields["amount"].widget.attrs['style'] = 'width:80px;'
-        self.fields["amount"].widget.attrs['readonly'] = False
-        self.fields["amount"].widget.attrs['class'] = 'w3-right-align'
-
-
-class ItemEditForm(BaseItemForm):
-    amortize_type = forms.ChoiceField(required=False, choices=(('backward', 'Past - Historic Savings'),
-                                                                             ('forward', 'Future budget item'),
-                                                                             ('around', 'Split expense around the date')))
-    amortize_months = forms.IntegerField(required=False)
-    s_amount = forms.DecimalField(required=False)
-    s_description = forms.CharField(required=False)
-
-
-    class Meta:  # pragma: no cover
-        model = Item
-        fields = ("date", "description", "amount", "category", "subcategory", "ignore",
-                  "amortize_months", "amortize_type", "s_amount", "s_description", "notes")
-
-    def __init__(self, *args, **kwargs):  # pragma: no cover
-        super().__init__(*args, **kwargs)
-
-        self.fields["amortize_months"].widget.attrs['style'] = 'width:100px;'
-        self.fields["s_amount"].widget.attrs['style'] = 'width:100px;'
-        self.fields["s_description"].widget.attrs['style'] = 'width:400px;'
-
-    def clean(self):
-        super().clean()
-        if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
-            raise forms.ValidationError(f'Warning: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
-
-        if self.cleaned_data["amortize_months"] and self.cleaned_data["amortize_months"] != 0:
-            if self.instance.amortized:
-                raise forms.ValidationError(
-                    f'Error: this item is already amortized')
-            self.instance.amortize(self.cleaned_data["amortize_months"], direction=self.cleaned_data["amortize_type"])
-            self.cleaned_data["ignore"] = True
+        if self.is_bound:
+            category_id = self.data.get("category")
         else:
-            if self.instance.parent and self.cleaned_data["amortize_months"] == 0:
-                self.instance.deamortize()
-                self.cleaned_data["ignore"] = False
+            category_id = self.instance.category_id if self.instance.pk else None
 
-        if self.cleaned_data["s_amount"]:
-            if self.instance.was_split:
-                raise forms.ValidationError(
-                    f'Error: this item is already split')
+        self.fields["subcategory"].queryset = (
+            SubCategory.objects.filter(category_id=category_id).filter(Q(user__isnull=True) | Q(user=self.user))
+            if category_id
+            else SubCategory.objects.none()
+        )
 
-            result = self.instance.split_item(self.cleaned_data["s_amount"], self.cleaned_data["s_description"])
-            if result:
-                raise forms.ValidationError(result)
-            self.cleaned_data["ignore"] = True
+
+class ItemAddForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = Item
+        fields = ("user", "date", "description", "amount", "category", "subcategory", "ignore", "notes")
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2, "style": "resize: none; overflow-y: auto;"}),
+            "date": forms.TextInput(attrs={"type": "date"}),
+            'user': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):  # pragma: no cover
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+        if self.is_bound:
+            category_id = self.data.get("category")
+        else:
+            category_id = self.instance.category_id if self.instance.pk else None
+
+        self.fields["subcategory"].queryset = (
+            SubCategory.objects.filter(category_id=category_id).filter(Q(user__isnull=True) | Q(user=self.user))
+            if category_id
+            else SubCategory.objects.none()
+        )
+
+        self.fields["category"].widget.attrs['class'] += ' diy-category'  # Used in the search JavaScript
+        self.fields["subcategory"].widget.attrs['class'] += ' diy-subcategory'  # Used in the search JavaScript
+
+class ItemAmortizeForm(BootstrapFormMixin, forms.Form):
+
+    choices = (
+        ('backward', 'Backward'),
+        ('forward', 'Forward'),
+        ('around', 'Around'),
+    )
+    direction = forms.ChoiceField(choices=choices, label='How to amortize', help_text="Backward, over previous months,  Forward for later months,  Around both before and after")
+    periods = forms.IntegerField(label='Num. of Periods', min_value=2, required=False, help_text="Choose how many months this should be amortized over")
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+class ItemSplitForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = Item
+        fields = ("date", "description", "amount", "category", "subcategory", "ignore", "notes")
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2, "style": "resize: none; overflow-y: auto;"}),
+            "date": forms.TextInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):  # pragma: no cover
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if self.is_bound:
+            category_id = self.data.get("category")
+        else:
+            category_id = self.instance.category_id if self.instance.pk else None
+
+        self.fields["subcategory"].queryset = (
+            SubCategory.objects.filter(category_id=category_id).filter(Q(user__isnull=True) | Q(user=self.user))
+            if category_id
+            else SubCategory.objects.none()
+        )
+
+
+    def clean_amount(self):
+        """
+        You can split 100% of a record,   which would leave the other record at 0,  that gives you the opportunity
+        to rename description and change date.   I added this in as a feature not a bug
+        """
+        if self.cleaned_data['amount'] < 0 or self.cleaned_data['amount'] > self.instance.amount:
+            raise forms.ValidationError("Amount must be greater then 0 and not more then the original amount")
+        return self.cleaned_data['amount']
+
+    def clean_date(self):
+        if self.cleaned_data['date'] > self.instance.date:
+            raise forms.ValidationError("Date can not be later then the original value")
+        return self.cleaned_data['date']
+
+
+class ItemEditForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = Item
+        fields = ("category", "subcategory", "ignore", "notes")
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2, "style": "resize: none; overflow-y: auto;"}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):  # pragma: no cover
+        super().__init__(*args, **kwargs)
+
+        self.user = user
+        self.fields["category"].widget.attrs['class'] += ' diy-category'  # Used in the search JavaScript
+        self.fields["subcategory"].widget.attrs['class'] += ' diy-subcategory'  # Used in the search JavaScript
+
+        if self.is_bound:
+            category_id = self.data.get("category")
+        else:
+            category_id = self.instance.category_id if self.instance.pk else None
+
+        self.fields["subcategory"].queryset = (
+            SubCategory.objects.filter(category_id=category_id).filter(Q(user__isnull=True) | Q(user=self.user))
+            if category_id
+            else SubCategory.objects.filter(Q(user__isnull=True) | Q(user=self.user))
+        )
 
 
 class ItemForm(BaseItemForm):
@@ -388,18 +447,3 @@ class ItemForm(BaseItemForm):
         if self.cleaned_data["subcategory"] and not self.cleaned_data["category"]:
             raise forms.ValidationError(f'Warning: Subcategory {self.cleaned_data["subcategory"]} missing Category.')
 
-
-class SingleItemForm(ItemForm):
-
-    direction_choices = ((None, '----'),
-                         ('forward', 'future'),
-                         ('backward', 'back'),
-                         ('around', 'split'))
-
-    direction = forms.ChoiceField(required=False, choices=direction_choices)
-    months = forms.IntegerField(min_value=2, required=False)
-
-
-class ClassifyItemForm(forms.Form):
-    item = forms.CharField(label="Item Description", disabled=True)
-    category = forms.ChoiceField()

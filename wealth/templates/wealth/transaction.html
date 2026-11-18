@@ -1,4 +1,4 @@
-﻿{% extends "wealth_base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}IOOM Transaction{% endblock %}
 {% load static %}
 {% block navbar %}{% endblock navbar %}
@@ -34,8 +34,9 @@
             <table class="table table-borderless">
                 <thead><tr></tr><tr></tr><tr></tr></thead>
                 <tbody>
-                <tr>
-                    <td class="diy-label">Date:</td>
+                <tr {% if form.date.help_text %} data-bs-toggle="tooltip" data-bs-placement="right" title="{{ form.date.help_text }}" class="help-cell" {% endif %}>
+                    <td class="diy-label">Date:
+                    </td>
                     <td>{{ form.date}}</td>
                     <td>{{ form.date.errors }}</td>
                 </tr>

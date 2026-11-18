@@ -12,7 +12,6 @@ urlpatterns = [
     path("debug/", views.debug),
     path("debug_clear/", views.debug_clear),
 
-    path(r"api/quick_delete", apis.delete_action, name="quick_delete"),
     # path(r'api/search/', apis.search_equity, name='equity_search'),
     # path(r'api/search_add/', apis.search_equity_add, name='equity_search_add'),
     path(r"api/equity_list/", apis.get_equity_list, name="wealth_equity_list"),

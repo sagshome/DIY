@@ -1,5 +1,25 @@
 coverage run --source=expenses manage.py test expenses
+
 coverage report -m
+
+* Major things to do
+  * Fix HELP system
+    * Page views
+    * Hover Text
+  * Go to Modal's for all data entry pages  
+  * Get a trim down, mobile UI
+    * Make it non-login useful
+    * Track views based on session id
+    * Provide useful scenerios  (what if)
+  * Fix performance
+  * Removed Stocks (or at least make if V1)
+  * Expenses
+    * Standardize on Ranges (and scope?)
+    * Make Bulk edit its own thing
+    * Make Find Dups a functon
+    * Make Find Splits
+    * Make Find Leveled
+  * Do something with that cool Search Box
 
 # Tracking Wealth #
 * Contributions are used to calculate Growth
